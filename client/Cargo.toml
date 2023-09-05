@@ -1,0 +1,15 @@
+[package]
+name = "client"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# Arkworks Deps
+ark-bn254="0.4.0"
+ark-ed-on-bn254="0.4.0"
+ark-ec="0.4.2"
+ark-ff="0.4.2"
+ark-std="0.4.0"
+

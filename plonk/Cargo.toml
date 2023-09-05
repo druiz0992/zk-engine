@@ -1,0 +1,41 @@
+[package]
+name = "plonk"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# Arkworks Deps
+ark-bn254="0.4.0"
+ark-ed-on-bn254="0.4.0"
+ark-ec="0.4.2"
+ark-ff="0.4.2"
+ark-std="0.4.0"
+
+# Jellyfish Deps
+jf-plonk = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
+jf-relation = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
+jf-utils = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
+jf-primitives = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
+
+poseidon-ark = {git = "https://github.com/arnaucube/poseidon-ark.git", branch = "main"}
+
+
+[dev-dependencies]
+criterion = "0.3"
+
+
+[features]
+default = ["parallel"]
+std = ["ark-std/std", "ark-ff/std", "ark-ec/std", "jf-primitives/std", "jf-relation/std", "jf-utils/std"]
+parallel = ["ark-ff/parallel", "ark-ec/parallel", "jf-primitives/parallel", "jf-utils/parallel", "jf-relation/parallel"]
+
+
+[profile.bench]
+opt-level = 3
+
+
+[[bench]]
+name = "circuit_benchmarks"
+harness = false
