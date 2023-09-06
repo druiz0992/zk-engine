@@ -12,10 +12,16 @@ jobs:
       - name: Cancel Previous Runs
         uses: styfle/cancel-workflow-action@0.11.0
 
+      # - name: Give GitHub Actions access to Torus-ZK/jellyfish
+      #   uses: webfactory/ssh-agent@v0.5.4
+      #   with:
+      #     ssh-private-key: ${{ secrets.ORG_PRIVATE_SSH_DEPLOY_KEY }}
+
       - name: Give GitHub Actions access to Torus-ZK/jellyfish
-        uses: webfactory/ssh-agent@v0.5.4
-        with:
-          ssh-private-key: ${{ secrets.SECRET_REPO_DEPLOY_KEY }}
+        id: configure-ssh
+        run: |
+          eval `ssh-agent -s`
+          ssh-add - <<< '${{ secrets.ORG_PRIVATE_SSH_DEPLOY_KEY }}'
 
       - name: Checkout Repository
         uses: actions/checkout@v3
