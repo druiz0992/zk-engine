@@ -1,0 +1,59 @@
+name: Build
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel Previous Runs
+        uses: styfle/cancel-workflow-action@0.11.0
+
+      # - name: Give GitHub Actions access to Torus-ZK/jellyfish
+      #   uses: webfactory/ssh-agent@v0.5.4
+      #   with:
+      #     ssh-private-key: ${{ secrets.ORG_PRIVATE_SSH_DEPLOY_KEY }}
+
+      - name: Give GitHub Actions access to Torus-ZK/jellyfish
+        id: configure-ssh
+        run: |
+          eval `ssh-agent -s`
+          ssh-add - <<< '${{ secrets.ORG_PRIVATE_SSH_DEPLOY_KEY }}'
+
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          components: rustfmt
+
+      - name: Cache Cargo Dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Cargo Format
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+
+      - name: Cargo Check
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --all --all-targets --all-features -- -D warnings
+
+      - name: Cargo Clippy
+        uses: actions-rs/clippy-check@v1
+        with:
+          args: --all --all-targets --all-features -- -D warnings
+
+      - name: Cargo Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test

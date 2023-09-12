@@ -1,1 +1,1 @@
-mod mint;
+pub mod mint;

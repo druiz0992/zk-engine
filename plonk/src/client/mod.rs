@@ -1,2 +1,1 @@
-mod circuits;
-mod private_inputs;
+pub mod circuits;

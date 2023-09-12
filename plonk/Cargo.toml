@@ -14,7 +14,7 @@ ark-ff="0.4.2"
 ark-std="0.4.0"
 
 # Jellyfish Deps
-jf-plonk = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
+jf-plonk = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master", features = ["test-srs"]}
 jf-relation = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
 jf-utils = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
 jf-primitives = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
@@ -23,7 +23,7 @@ poseidon-ark = {git = "https://github.com/arnaucube/poseidon-ark.git", branch = 
 
 
 [dev-dependencies]
-criterion = "0.3"
+criterion = "0.5.1"
 
 
 [features]
