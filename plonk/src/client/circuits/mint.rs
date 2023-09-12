@@ -14,11 +14,12 @@ use crate::primitives::circuits::poseidon::{PoseidonGadget, PoseidonParams, Pose
 // commitments: Vec<ScalarField>
 // nullifiers: Vec<ScalarField>
 // secrets: Vec<ScalarField>
+// C is the number of output commitments
 pub fn mint_circuit<E, P, const C: usize>(
     value: [P::ScalarField; C],
     token_id: [P::ScalarField; C],
     token_nonce: [P::ScalarField; C],
-    token_owner: TEAffine<E>,
+    token_owner: [TEAffine<E>; C],
 ) -> Result<PlonkCircuit<P::ScalarField>, CircuitError>
 where
     E: TECurveConfig,
@@ -32,8 +33,8 @@ where
             value[i],
             token_id[i],
             token_nonce[i],
-            token_owner.x,
-            token_owner.y,
+            token_owner[i].x,
+            token_owner[i].y,
         ]
         .iter()
         .map(|&v| circuit.create_variable(v))
@@ -70,7 +71,7 @@ mod test {
             [value],
             [token_id],
             [token_nonce],
-            token_owner,
+            [token_owner],
         )?;
         let poseidon = Poseidon::new();
         let public_commitment = poseidon

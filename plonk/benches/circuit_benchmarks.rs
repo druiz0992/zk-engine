@@ -56,7 +56,7 @@ pub fn benchmark_mint(c: &mut Criterion) {
                 [value],
                 [token_id],
                 [token_nonce],
-                token_owner,
+                [token_owner],
             )
             .unwrap();
             circuit.finalize_for_arithmetization().unwrap();
@@ -73,7 +73,7 @@ pub fn benchmark_mint(c: &mut Criterion) {
                 [value, value],
                 [token_id, token_id],
                 [token_nonce, token_nonce],
-                token_owner,
+                [token_owner, token_owner],
             )
             .unwrap();
             circuit.finalize_for_arithmetization().unwrap();
