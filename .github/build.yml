@@ -1,10 +1,11 @@
 name: Build
 
 on:
-  pull_request:
+#  pull_request:
   push:
     branches:
       - gha_testing
+      - master
 jobs:
   build:
     runs-on: ubuntu-latest
