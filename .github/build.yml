@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches:
-      - master
+      - gha_testing
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -25,6 +25,13 @@ jobs:
 
       - name: Checkout Repository
         uses: actions/checkout@v3
+
+      - name: Checkout Jellyfish Repository
+        uses: actions/checkout@v3
+        with:
+          path: jellyfish
+          repository: Torus-ZK/jellyfish
+          ref: master
 
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
