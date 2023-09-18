@@ -36,7 +36,7 @@ jobs:
         run: |
           touch ~/.ssh/config
           cat << EOF > ~/.ssh/config
-          Host github.com-jellyfish
+          Host jellyfish.github.com
                   Hostname github.com
                   IdentityFile=~/.ssh/jellyfish_deploy_key
           EOF
@@ -46,7 +46,7 @@ jobs:
       #   env:
       #     SSH_AUTH_SOCK: /tmp/ssh_agent.sock
       #   run: |
-      #     git clone git@github.com-jellyfish:Torus-ZK/jellyfish.git
+      #     git clone git@jellyfish.github.com:Torus-ZK/jellyfish.git
 
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
