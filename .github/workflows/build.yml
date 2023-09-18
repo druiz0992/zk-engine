@@ -4,7 +4,6 @@ on:
   pull_request:
   push:
     branches:
-      - gha_co_jellyfish
       - master
 jobs:
   build:
@@ -86,4 +85,4 @@ jobs:
           SSH_AUTH_SOCK: /tmp/ssh_agent.sock
         run: |
           ssh-add -D
-          rm -Rf ~/.ssh/*
+          rm -Rf ~/.ssh/* 
