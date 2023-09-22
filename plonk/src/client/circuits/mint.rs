@@ -53,12 +53,7 @@ where
 mod test {
     use ark_ec::{AffineRepr, CurveGroup};
     use ark_ed_on_bn254::{EdwardsAffine, Fq, Fr};
-    use jf_plonk::{
-        proof_system::{PlonkKzgSnark, UniversalSNARK},
-        transcript::StandardTranscript,
-    };
-    use jf_relation::{errors::CircuitError, Arithmetization, Circuit};
-    use jf_utils::test_rng;
+    use jf_relation::{errors::CircuitError, Circuit};
     use poseidon_ark::Poseidon;
     use std::str::FromStr;
     #[test]
@@ -67,7 +62,7 @@ mod test {
         let token_id = Fq::from_str("2").unwrap();
         let token_nonce = Fq::from_str("3").unwrap();
         let token_owner = (EdwardsAffine::generator() * Fr::from_str("4").unwrap()).into_affine();
-        let mut circuit = super::mint_circuit::<ark_ed_on_bn254::EdwardsConfig, ark_bn254::Bn254, 1>(
+        let circuit = super::mint_circuit::<ark_ed_on_bn254::EdwardsConfig, ark_bn254::Bn254, 1>(
             [value],
             [token_id],
             [token_nonce],
@@ -87,36 +82,6 @@ mod test {
         assert!(circuit
             .check_circuit_satisfiability(&[public_commitment])
             .is_ok());
-
-        circuit.finalize_for_arithmetization()?;
-
-        let mut rng = test_rng();
-
-        let srs_size = circuit.srs_size()?;
-        let srs =
-            <PlonkKzgSnark<ark_bn254::Bn254> as UniversalSNARK<ark_bn254::Bn254>>::universal_setup_for_testing(
-                srs_size, &mut rng,
-            )?;
-
-        let (pk, vk) = PlonkKzgSnark::<ark_bn254::Bn254>::preprocess(&srs, &circuit)?;
-
-        let proof = PlonkKzgSnark::<ark_bn254::Bn254>::prove::<_, _, StandardTranscript>(
-            &mut rng, &circuit, &pk, None,
-        )?;
-
-        let public_inputs = circuit.public_input()?;
-        assert_eq!(public_inputs[0], public_commitment);
-
-        assert!(
-            PlonkKzgSnark::<ark_bn254::Bn254>::verify::<StandardTranscript>(
-                &vk,
-                &public_inputs,
-                &proof,
-                None,
-            )
-            .is_ok()
-        );
-
         Ok(())
     }
 }

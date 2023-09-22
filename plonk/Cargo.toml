@@ -37,5 +37,9 @@ opt-level = 3
 
 
 [[bench]]
-name = "circuit_benchmarks"
+name = "core_circuit_bench"
+harness = false
+
+[[bench]]
+name = "utils_circuit_bench"
 harness = false
