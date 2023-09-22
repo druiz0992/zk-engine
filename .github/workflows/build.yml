@@ -1,0 +1,53 @@
+name: Build
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel Previous Runs
+        uses: styfle/cancel-workflow-action@0.11.0
+
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: SSH Checkout for private repo access
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.ORG_PRIVATE_SSH_DEPLOY_KEY }}
+
+      - name: Cache Cargo Dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Cargo Format
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+
+      - name: Cargo Check
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+
+      - name: Cargo Clippy
+        uses: giraffate/clippy-action@v1
+        with:
+          clippy_flags: --all-targets --all-features -- -D warnings
+      
+      - name: Audit
+        uses: actions-rs/audit-check@v1
+        with:
+          token: ${{ github.token }}
+
+
+      - name: Cargo Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+

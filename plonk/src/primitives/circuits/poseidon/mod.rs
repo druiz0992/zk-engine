@@ -115,12 +115,12 @@ mod test {
 
     #[test]
     fn test_poseidon() {
-        test_poseidon_helper::<Fq, 2>(
+        test_poseidon_helper::<2>(
             vec![Fq::from_str("1").unwrap()],
             "18586133768512220936620570745912940619677854269274689475585506675881198879027",
         );
     }
-    fn test_poseidon_helper<F: PoseidonParams, const N: usize>(arr: Vec<Fq>, expected: &str) {
+    fn test_poseidon_helper<const N: usize>(arr: Vec<Fq>, expected: &str) {
         let poseidon = Poseidon::new();
         let h = poseidon.hash(arr.clone()).unwrap();
         assert_eq!(h.to_string(), expected);
@@ -149,7 +149,7 @@ mod test {
             Fq::from_str("0").unwrap(),
             Fq::from_str("0").unwrap(),
         ];
-        test_poseidon_helper::<Fq, 6>(
+        test_poseidon_helper::<6>(
             vec_1,
             "1018317224307729531995786483840663576608797660851238720571059489595066344487",
         );
@@ -162,7 +162,7 @@ mod test {
             Fq::from_str("23").unwrap(),
         ];
 
-        test_poseidon_helper::<Fq, 6>(
+        test_poseidon_helper::<6>(
             vec_2,
             "13034429309846638789535561449942021891039729847501137143363028890275222221409",
         );
@@ -171,14 +171,14 @@ mod test {
     #[test]
     fn test_vectors_poseidon_3() {
         let vec_1: Vec<Fq> = vec![Fq::from_str("1").unwrap(), Fq::from_str("2").unwrap()];
-        test_poseidon_helper::<Fq, 3>(
+        test_poseidon_helper::<3>(
             vec_1,
             "7853200120776062878684798364095072458815029376092732009249414926327459813530",
         );
 
         let vec_2: Vec<Fq> = vec![Fq::from_str("3").unwrap(), Fq::from_str("4").unwrap()];
 
-        test_poseidon_helper::<Fq, 3>(
+        test_poseidon_helper::<3>(
             vec_2,
             "14763215145315200506921711489642608356394854266165572616578112107564877678998",
         );
@@ -204,7 +204,7 @@ mod test {
             Fq::from_str("15").unwrap(),
             Fq::from_str("16").unwrap(),
         ];
-        test_poseidon_helper::<Fq, 17>(
+        test_poseidon_helper::<17>(
             vec_1,
             "9989051620750914585850546081941653841776809718687451684622678807385399211877",
         );
