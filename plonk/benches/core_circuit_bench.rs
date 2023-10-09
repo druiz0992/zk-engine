@@ -34,13 +34,15 @@ pub fn benchmark_mint(c: &mut Criterion) {
         let value = Fq::from_str("1").unwrap();
         let token_id = Fq::from_str("2").unwrap();
         let token_nonce = Fq::from_str("3").unwrap();
-        let token_owner = (EdwardsAffine::generator() * Fr::from_str("4").unwrap()).into_affine();
+        let token_owner =
+            (EdwardsAffine::generator() * Fr::from_str("4").unwrap()).into_affine();
         let mut circuit = mint_circuit::<ark_ed_on_bn254::EdwardsConfig, ark_bn254::Bn254, 1>(
             [value],
             [token_id],
             [token_nonce],
             [token_owner],
-        ).unwrap();
+        )
+            .unwrap();
         circuit.finalize_for_arithmetization().unwrap();
 
         let srs_size = circuit.srs_size().unwrap();
