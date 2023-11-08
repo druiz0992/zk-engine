@@ -1,3 +1,3 @@
 [workspace]
-members = ["client", "plonk"]
+members = ["client", "plonk", "trees", "common"]
 resolver = "2"

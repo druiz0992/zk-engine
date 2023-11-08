@@ -8,5 +8,15 @@ edition = "2021"
 [dependencies]
 ark-ff="0.4.2"
 ark-std="0.4.0"
-
 ark-bn254 = "0.4.0"
+
+thiserror="1.0.50"
+poseidon-paramgen="0.4.0"
+poseidon-parameters="0.4.0"
+curves = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
+rayon="1.8.0"
+
+[[example]]
+name="poseidon-gen"
+path = "examples/poseidon_gen.rs"
+

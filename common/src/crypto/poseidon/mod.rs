@@ -1,11 +1,13 @@
 // Modified from the original version by arnaucubeto be adaptable over F
-mod constants;
+pub mod constants;
 use ark_ff::{Field, Zero};
 use std::ops::{AddAssign, MulAssign};
 
 use ark_ff::PrimeField;
 
 use self::constants::PoseidonParams;
+
+use super::crypto_errors::CryptoError;
 
 #[derive(Debug)]
 pub struct Constants<F: PrimeField> {
@@ -61,11 +63,11 @@ impl<P: PoseidonParams> Poseidon<P> {
         new_state
     }
 
-    pub fn hash(&self, inp: Vec<P::Field>) -> Result<P::Field, String> {
+    pub fn hash(&self, inp: Vec<P::Field>) -> Result<P::Field, CryptoError> {
         let t = inp.len() + 1;
         // if inp.len() == 0 || inp.len() >= self.constants.n_rounds_p.len() - 1 {
         if inp.is_empty() || inp.len() > P::N_ROUNDS_PARTIAL.len() {
-            return Err("Wrong inputs length".to_string());
+            return Err(CryptoError::HashError("Wrong inputs length".to_string()));
         }
         let n_rounds_f = P::N_ROUND_FULL;
         let n_rounds_p = P::N_ROUNDS_PARTIAL[t - 2];
@@ -80,6 +82,25 @@ impl<P: PoseidonParams> Poseidon<P> {
         }
 
         Ok(state[0])
+    }
+
+    /// This is like hash but without checking the length of the input
+    /// Useful if we know the input length will be right
+    pub fn hash_unchecked(&self, inp: Vec<P::Field>) -> P::Field {
+        let t = inp.len() + 1;
+        let n_rounds_f = P::N_ROUND_FULL;
+        let n_rounds_p = P::N_ROUNDS_PARTIAL[t - 2];
+
+        let mut state = vec![P::Field::zero(); t];
+        state[1..].clone_from_slice(&inp);
+
+        for i in 0..(n_rounds_f + n_rounds_p) {
+            self.ark(&mut state, &self.constants.c[t - 2], i * t);
+            self.sbox(n_rounds_f, n_rounds_p, &mut state, i);
+            state = self.mix(&state, &self.constants.m[t - 2]);
+        }
+
+        state[0]
     }
 }
 
