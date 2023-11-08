@@ -14,9 +14,12 @@ pub struct Constants<F: PrimeField> {
     pub c: Vec<Vec<F>>,
     pub m: Vec<Vec<Vec<F>>>,
 }
+
+#[derive(Debug)]
 pub struct Poseidon<P: PoseidonParams> {
     constants: Constants<P::Field>,
 }
+
 impl<P: PoseidonParams> Default for Poseidon<P> {
     fn default() -> Self {
         Self::new()

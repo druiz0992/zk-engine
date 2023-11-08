@@ -34,7 +34,7 @@ pub fn transfer_circuit<E, P, const N: usize, const C: usize, const D: usize>(
 where
     E: TECurveConfig,
     P: Pairing<ScalarField = E::BaseField>,
-    <E as CurveConfig>::BaseField: PrimeField + KemDemParams,
+    <E as CurveConfig>::BaseField: PrimeField + KemDemParams<Field = P::ScalarField>,
 {
     let mut circuit = PlonkCircuit::new_turbo_plonk();
 
@@ -183,16 +183,16 @@ mod test {
     use ark_ec::{AffineRepr, CurveGroup};
     use ark_ed_on_bn254::{EdwardsAffine, Fq, Fr};
     use ark_std::UniformRand;
+    use common::crypto::poseidon::Poseidon;
     use jf_relation::{errors::CircuitError, Circuit};
     use jf_utils::{fq_to_fr_with_mask, test_rng};
-    use poseidon_ark::Poseidon;
     use std::str::FromStr;
     #[test]
     fn transfer_test() -> Result<(), CircuitError> {
         let root_key = Fq::rand(&mut test_rng());
         let private_key_domain = Fq::from_str("1").unwrap();
         let nullifier_key_domain = Fq::from_str("2").unwrap();
-        let private_key = Poseidon::new()
+        let private_key: Fq = Poseidon::<Fq>::new()
             .hash(vec![root_key, private_key_domain])
             .unwrap();
         let private_key_trunc: Fr = fq_to_fr_with_mask(&private_key);
@@ -202,7 +202,7 @@ mod test {
         let token_id = Fq::from_str("2").unwrap();
         let token_nonce = Fq::from(3u32);
         let token_owner = (EdwardsAffine::generator() * private_key_trunc).into_affine();
-        let old_commitment_hash = Poseidon::new()
+        let old_commitment_hash = Poseidon::<Fq>::new()
             .hash(vec![
                 value,
                 token_id,
@@ -221,7 +221,7 @@ mod test {
             .into_iter()
             .enumerate()
             .fold(old_commitment_hash, |a, (i, b)| {
-                let poseidon = Poseidon::new();
+                let poseidon: Poseidon<Fq> = Poseidon::new();
                 let bit_dir = old_commitment_leaf_index >> i & 1;
                 if bit_dir == 0 {
                     poseidon.hash(vec![a, b]).unwrap()

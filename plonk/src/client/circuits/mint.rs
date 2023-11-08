@@ -4,9 +4,10 @@ use ark_ec::{
     CurveConfig,
 };
 use ark_ff::PrimeField;
+use common::crypto::poseidon::constants::PoseidonParams;
 use jf_relation::{errors::CircuitError, Circuit, PlonkCircuit};
 
-use crate::primitives::circuits::poseidon::{PoseidonGadget, PoseidonParams, PoseidonStateVar};
+use crate::primitives::circuits::poseidon::{PoseidonGadget, PoseidonStateVar};
 // private_value: ScalarField
 // private_token_id: ScalarField
 // private_token_nonce: ScalarField
@@ -24,7 +25,7 @@ pub fn mint_circuit<E, P, const C: usize>(
 where
     E: TECurveConfig,
     P: Pairing<ScalarField = E::BaseField>,
-    <E as CurveConfig>::BaseField: PrimeField + PoseidonParams,
+    <E as CurveConfig>::BaseField: PrimeField + PoseidonParams<Field = P::ScalarField>,
 {
     // Calculate output hash of the commitment
     let mut circuit = PlonkCircuit::new_turbo_plonk();
@@ -53,8 +54,8 @@ where
 mod test {
     use ark_ec::{AffineRepr, CurveGroup};
     use ark_ed_on_bn254::{EdwardsAffine, Fq, Fr};
+    use common::crypto::poseidon::Poseidon;
     use jf_relation::{errors::CircuitError, Circuit};
-    use poseidon_ark::Poseidon;
     use std::str::FromStr;
     #[test]
     fn mint_test() -> Result<(), CircuitError> {
@@ -68,7 +69,7 @@ mod test {
             [token_nonce],
             [token_owner],
         )?;
-        let poseidon = Poseidon::new();
+        let poseidon: Poseidon<Fq> = Poseidon::new();
         let public_commitment = poseidon
             .hash(vec![
                 value,
