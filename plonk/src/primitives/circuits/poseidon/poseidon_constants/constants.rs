@@ -1,4 +1,4 @@
-pub(crate) fn constants() -> (Vec<Vec<&'static str>>, Vec<Vec<Vec<&'static str>>>) {
+pub fn constants() -> (Vec<Vec<&'static str>>, Vec<Vec<Vec<&'static str>>>) {
     let c_str: Vec<Vec<&str>> = vec![
         vec![
             "4417881134626180770308697923359573201005643519861877412381846989312604493735",

@@ -1,3 +1,3 @@
-pub mod merkle_tree;
-pub mod sparse_merkle_tree;
+pub mod membership_tree;
+pub mod non_membership_tree;
 pub mod tree;

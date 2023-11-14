@@ -1,5 +1,3 @@
-use std::io::Write;
-
 use ark_ff::PrimeField;
 use ark_std::str::FromStr;
 

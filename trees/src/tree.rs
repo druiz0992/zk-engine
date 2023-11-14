@@ -1,52 +1,54 @@
-use std::collections::HashMap;
-
-use ark_ff::PrimeField;
+use ark_ff::{PrimeField, Zero};
 use common::crypto::poseidon::{constants::PoseidonParams, Poseidon};
 use rayon::prelude::*;
 
-pub struct Node<F: PrimeField>(pub F);
-
-pub struct Tree<F: PrimeField, const H: usize> {
-    pub root: Node<F>,
-    pub leaf_count: u64,
-    pub inner: HashMap<u16, Node<F>>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct Position {
+    pub index: usize,  // 0 is the left most
+    pub height: usize, // 0 is the leaf layer
 }
 
-impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> Default for Tree<F, H> {
-    fn default() -> Self {
-        Self::new()
+impl Position {
+    pub fn new(index: usize, height: usize) -> Self {
+        Self { index, height }
     }
 }
 
-impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> Tree<F, H> {
-    pub fn new() -> Self {
-        let root = Node(F::zero());
-        let leaf_count = 0;
-        let inner = HashMap::new();
-        Self {
-            root,
-            leaf_count,
-            inner,
-        }
+pub trait AppendTree<const H: usize> {
+    type F: PrimeField + PoseidonParams<Field = Self::F>;
+
+    fn append_leaf(&mut self, leaf: Self::F);
+    fn from_leaves(leaves: Vec<Self::F>) -> Self;
+    fn get_node(&self, position: Position) -> Self::F;
+    fn update_node(&mut self, position: Position, new_node: Self::F);
+    fn update_root(&mut self, new_node: Self::F);
+    fn insert_node(&mut self, position: Position, new_node: Self::F);
+
+    fn move_up(position: Position) -> Position {
+        Position::new(position.index / 2, position.height + 1)
     }
 
-    pub fn from_leaves(leaves: Vec<F>) -> Self {
-        let leaves_len = leaves.len();
-        let tree_leaves = leaves.clone();
-        let root = Self::from_leaves_in_place(tree_leaves);
-        let leaf_count = leaves_len as u64;
-        let inner = HashMap::from_iter((0..leaves_len).map(|i| (i as u16, Node(leaves[i]))));
-        Self {
-            root: Node(root),
-            leaf_count,
-            inner,
-        }
+    fn sibling_node(&self, position: Position) -> Self::F {
+        let sibling_pos = if position.index % 2 == 0 {
+            Position::new(position.index + 1, position.height)
+        } else {
+            Position::new(position.index - 1, position.height)
+        };
+        self.get_node(sibling_pos)
     }
 
-    pub fn from_leaves_in_place(mut leaves: Vec<F>) -> F {
-        let poseidon: Poseidon<F> = Poseidon::new();
+    fn siblings(&self, position: Position) -> [Self::F; 2] {
+        if position.index % 2 == 0 {
+            let right_sibling_pos = Position::new(position.index + 1, position.height);
+            return [self.get_node(position), self.get_node(right_sibling_pos)];
+        }
+        let left_sibling_pos = Position::new(position.index - 1, position.height);
+        [self.get_node(left_sibling_pos), self.get_node(position)]
+    }
+
+    fn get_root_in_place(mut leaves: Vec<Self::F>) -> Self::F {
+        let poseidon: Poseidon<Self::F> = Poseidon::new();
         assert!(leaves.len() <= 1 << H, "Too Many leaves for tree");
-        // leaves.resize(1 << H, F::zero());
 
         for _ in 0..H {
             leaves = leaves
@@ -55,13 +57,13 @@ impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> Tree<F, H> {
                 .map(|chunk| match chunk.as_slice() {
                     [left] => {
                         if left.is_zero() {
-                            return F::zero();
+                            return Self::F::zero();
                         }
-                        poseidon.hash_unchecked(vec![*left, F::zero()])
+                        poseidon.hash_unchecked(vec![*left, Self::F::zero()])
                     }
                     _ => {
                         if chunk[0].is_zero() {
-                            return F::zero();
+                            return Self::F::zero();
                         }
                         poseidon.hash_unchecked(chunk)
                     }
@@ -70,106 +72,52 @@ impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> Tree<F, H> {
         }
         leaves[0]
     }
-}
-
-#[cfg(test)]
-mod test {
-    use ark_ff::PrimeField;
-    use ark_std::rand::Rng;
-    use common::crypto::poseidon::{constants::PoseidonParams, Poseidon};
-
-    // Single threaded checker, expects subtree to be a power of 2
-    fn hash_subtree_helper<F: PoseidonParams<Field = F> + PrimeField>(subtree: Vec<F>) -> F {
-        let poseidon: Poseidon<F> = Poseidon::new();
-        match subtree[..] {
-            [left, right] => {
-                if left.is_zero() {
-                    F::zero()
-                } else {
-                    poseidon.hash_unchecked(vec![left, right])
-                }
-            }
-            _ => {
-                let left = subtree[0..subtree.len() / 2].to_vec();
-                let left_root = hash_subtree_helper(left);
-                if left_root.is_zero() {
-                    return F::zero();
-                }
-                let right = subtree[subtree.len() / 2..].to_vec();
-                let right_root = hash_subtree_helper(right);
-                poseidon.hash_unchecked(vec![left_root, right_root])
-            }
+    fn add_leaves(&mut self, leaves: Vec<Self::F>) -> Self::F {
+        let poseidon: Poseidon<Self::F> = Poseidon::new();
+        let mut leaves = leaves;
+        for h in 0..H {
+            leaves
+                .iter()
+                .enumerate()
+                .filter(|(_, leaf)| !leaf.is_zero())
+                .for_each(|(i, leaf)| self.insert_node(Position::new(i, h), *leaf));
+            leaves = leaves
+                .into_par_iter()
+                .chunks(2)
+                .map(|chunk| match chunk.as_slice() {
+                    [left] => {
+                        if left.is_zero() {
+                            return Self::F::zero();
+                        }
+                        poseidon.hash_unchecked(vec![*left, Self::F::zero()])
+                    }
+                    _ => {
+                        if chunk[0].is_zero() {
+                            return Self::F::zero();
+                        }
+                        poseidon.hash_unchecked(chunk)
+                    }
+                })
+                .collect();
         }
+        self.insert_node(Position::new(0, H), leaves[0]);
+        leaves[0]
     }
-    #[test]
-    fn test_merkle_tree_from_leaves() {
-        test_from_leaves_helper::<ark_bn254::Fr, 2>();
-        test_from_leaves_helper::<ark_bn254::Fr, 3>();
-        test_from_leaves_helper::<ark_bn254::Fr, 16>();
-    }
-
-    fn test_from_leaves_helper<F: PoseidonParams<Field = F> + PrimeField, const H: usize>() {
-        // Try an Even number of leaves
-        let leaves = vec![
-            F::from(1u128),
-            F::from(2u128),
-            F::from(3u128),
-            F::from(4u128),
-        ];
-        let poseidon = Poseidon::<F>::new();
-        let mut leaves_hash = poseidon
-            .hash(vec![
-                poseidon.hash(vec![F::from(1u128), F::from(2u128)]).unwrap(),
-                poseidon.hash(vec![F::from(3u128), F::from(4u128)]).unwrap(),
-            ])
-            .unwrap();
-        for _ in 0..(H - leaves.len().trailing_zeros() as usize) {
-            leaves_hash = poseidon.hash(vec![leaves_hash, F::zero()]).unwrap();
+    fn update_by_leaf_index(&mut self, leaf_index: usize) {
+        let leaf_position = Position::new(leaf_index, 0);
+        let mut siblings = self.siblings(leaf_position);
+        let poseidon = Poseidon::<Self::F>::new();
+        let mut curr_height = 0;
+        let mut curr_index = leaf_index;
+        let mut curr_hash = poseidon.hash_unchecked(siblings.to_vec());
+        while curr_height <= H {
+            curr_height += 1;
+            curr_index /= 2;
+            self.update_node(Position::new(curr_index, curr_height), curr_hash);
+            siblings = self.siblings(Position::new(curr_index, curr_height));
+            curr_hash = poseidon.hash_unchecked(siblings.to_vec());
         }
-
-        let tree = super::Tree::<F, H>::from_leaves(leaves.clone());
-        assert_eq!(tree.leaf_count, leaves.len() as u64);
-        assert_eq!(tree.inner.len(), leaves.len());
-        assert_eq!(tree.root.0, leaves_hash);
-
-        // Try an ODd number of leaves
-        let leaves = vec![F::from(1u128), F::from(2u128), F::from(3u128)];
-        let poseidon = Poseidon::<F>::new();
-        let mut leaves_hash = poseidon
-            .hash(vec![
-                poseidon.hash(vec![F::from(1u128), F::from(2u128)]).unwrap(),
-                poseidon.hash(vec![F::from(3u128), F::from(0u128)]).unwrap(),
-            ])
-            .unwrap();
-        for _ in 0..(H - 2) {
-            leaves_hash = poseidon.hash(vec![leaves_hash, F::zero()]).unwrap();
-        }
-
-        let tree = super::Tree::<F, H>::from_leaves(leaves.clone());
-        assert_eq!(tree.leaf_count, leaves.len() as u64);
-        assert_eq!(tree.inner.len(), leaves.len());
-        assert_eq!(tree.root.0, leaves_hash);
-    }
-
-    #[test]
-    fn test_merkle_tree_from_leaves_random() {
-        test_from_random_helper::<ark_bn254::Fr, 2>();
-        test_from_random_helper::<ark_bn254::Fr, 3>();
-        test_from_random_helper::<ark_bn254::Fr, 4>();
-        test_from_random_helper::<ark_bn254::Fr, 5>();
-    }
-
-    fn test_from_random_helper<F: PoseidonParams<Field = F> + PrimeField, const H: usize>() {
-        use ark_std::rand::SeedableRng;
-        use rand_chacha::ChaCha20Rng;
-
-        let mut rng = ChaCha20Rng::seed_from_u64(0u64);
-        let max_leaves = 1 << H;
-        let leaf_count = rng.gen_range(1..max_leaves);
-        let mut leaves: Vec<F> = (0..leaf_count).map(|_| F::rand(&mut rng)).collect();
-        let tree = super::Tree::<F, H>::from_leaves(leaves.clone());
-        leaves.resize(1 << H, F::zero());
-        let helper_hash = hash_subtree_helper(leaves);
-        assert_eq!(helper_hash, tree.root.0);
+        // Update root
+        self.update_root(self.get_node(Position::new(0, H)));
     }
 }
