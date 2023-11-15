@@ -12,6 +12,7 @@ ark-ed-on-bn254="0.4.0"
 ark-ec="0.4.2"
 ark-ff="0.4.2"
 ark-std="0.4.0"
+ark-poly="0.4.2"
 
 # Jellyfish Deps
 jf-plonk = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master", features = ["test-srs"]}
@@ -21,6 +22,7 @@ jf-primitives = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "
 
 # poseidon-ark = {git = "https://github.com/arnaucube/poseidon-ark.git", branch = "main"}
 common = {path = "../common"}
+trees = {path = "../trees"}
 
 
 [dev-dependencies]
