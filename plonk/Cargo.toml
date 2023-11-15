@@ -19,7 +19,8 @@ jf-relation = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "ma
 jf-utils = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
 jf-primitives = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
 
-poseidon-ark = {git = "https://github.com/arnaucube/poseidon-ark.git", branch = "main"}
+# poseidon-ark = {git = "https://github.com/arnaucube/poseidon-ark.git", branch = "main"}
+common = {path = "../common"}
 
 
 [dev-dependencies]

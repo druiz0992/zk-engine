@@ -1,17 +1,18 @@
 mod gate;
 mod poseidon_constants;
 use ark_ff::{PrimeField, Zero};
+use common::crypto::poseidon::constants::PoseidonParams;
 use jf_relation::{errors::CircuitError, Circuit, PlonkCircuit, Variable};
 
 use self::gate::{FullRoundGate, PartialRoundGate};
 
 pub const MAX_INPUT_LEN: usize = 16;
 
-pub trait PoseidonParams: PrimeField {
-    const N_ROUND_FULL: usize;
-    const N_ROUNDS_PARTIAL: [usize; MAX_INPUT_LEN];
-}
-
+// pub trait PoseidonParams: PrimeField {
+//     const N_ROUND_FULL: usize;
+//     const N_ROUNDS_PARTIAL: [usize; MAX_INPUT_LEN];
+// }
+//
 pub trait PoseidonGadget<T, P> {
     fn ark(&mut self, state: T, constants: &[P], it: usize) -> Result<T, CircuitError>;
     fn sbox(
@@ -31,7 +32,7 @@ pub type PoseidonStateVar<const N: usize> = [Variable; N];
 
 impl<const N: usize, F> PoseidonGadget<PoseidonStateVar<N>, F> for PlonkCircuit<F>
 where
-    F: PoseidonParams,
+    F: PoseidonParams<Field = F> + PrimeField,
 {
     fn ark(
         &mut self,
@@ -89,21 +90,7 @@ where
         let mut state = [Variable::zero(); N];
         state[1..].clone_from_slice(inputs);
         let n_rounds_p = F::N_ROUNDS_PARTIAL[t - 2];
-        let (c_str, m_str) = poseidon_constants::constants::constants();
-        let constants = c_str[t - 2]
-            .iter()
-            .map(|&c| F::from_str(c))
-            .collect::<Result<Vec<F>, _>>()
-            .map_err(|_| CircuitError::InternalError("InvalidConstant".to_string()))?;
-        let matrix = m_str[t - 2]
-            .iter()
-            .map(|row| {
-                row.iter()
-                    .map(|&c| F::from_str(c))
-                    .collect::<Result<Vec<F>, _>>()
-                    .map_err(|_| CircuitError::InternalError("InvalidConstant".to_string()))
-            })
-            .collect::<Result<Vec<Vec<F>>, _>>()?;
+        let (constants, matrix) = F::load_subset_constants(t);
 
         if N <= 4 {
             for i in 0..F::N_ROUND_FULL / 2 {
@@ -226,7 +213,7 @@ mod test {
     use super::*;
     use ark_ed_on_bn254::Fq;
     use ark_std::str::FromStr;
-    use poseidon_ark::Poseidon;
+    use common::crypto::poseidon::Poseidon;
 
     #[test]
     fn test_poseidon() {
@@ -236,8 +223,8 @@ mod test {
         );
     }
     fn test_poseidon_helper<const N: usize>(arr: Vec<Fq>, expected: &str) {
-        let poseidon = Poseidon::new();
-        let h = poseidon.hash(arr.clone()).unwrap();
+        let poseidon: Poseidon<Fq> = Poseidon::new();
+        let h: Fq = poseidon.hash(arr.clone()).unwrap();
         assert_eq!(h.to_string(), expected);
 
         let mut circuit = PlonkCircuit::<Fq>::new_turbo_plonk();

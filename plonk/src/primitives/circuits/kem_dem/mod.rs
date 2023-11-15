@@ -3,11 +3,12 @@ mod kem_dem_constants;
 use ark_ec::twisted_edwards::TECurveConfig;
 
 use ark_ff::{PrimeField, Zero};
+use common::crypto::poseidon::constants::PoseidonParams;
 use jf_relation::{
     errors::CircuitError, gadgets::ecc::PointVariable, Circuit, PlonkCircuit, Variable,
 };
 
-use crate::primitives::circuits::poseidon::{PoseidonGadget, PoseidonParams, PoseidonStateVar};
+use crate::primitives::circuits::poseidon::{PoseidonGadget, PoseidonStateVar};
 // from_le_bytes_mod_order(
 pub trait KemDemParams: PoseidonParams {
     const DOMAIN_DEM: &'static [u8; 32];
@@ -30,7 +31,7 @@ pub type PlainTextVars<const N: usize> = [Variable; N];
 impl<E, F, const N: usize> KemDemGadget<PlainTextVars<N>, E, F> for PlonkCircuit<F>
 where
     E: TECurveConfig<BaseField = F>,
-    F: PrimeField + KemDemParams,
+    F: PrimeField + KemDemParams<Field = F>,
 {
     fn kem(
         &mut self,
@@ -94,8 +95,8 @@ mod test {
     use ark_ec::{AffineRepr, CurveGroup};
     use ark_ed_on_bn254::{EdwardsAffine, EdwardsConfig, Fq, Fr};
     use ark_std::UniformRand;
+    use common::crypto::poseidon::Poseidon;
     use jf_utils::fr_to_fq;
-    use poseidon_ark::Poseidon;
 
     #[test]
     fn test_kem_dem_gadget() {
@@ -106,7 +107,7 @@ mod test {
         let domain_dem = Fq::from_le_bytes_mod_order(F::DOMAIN_DEM);
         let mut ciphertexts = Vec::new();
         for (i, plain_text) in plain_texts.iter().enumerate() {
-            let poseidon = Poseidon::new();
+            let poseidon: Poseidon<Fq> = Poseidon::new();
             let hash = poseidon
                 .hash(vec![enc_key, domain_dem, Fq::from(i as u32)])
                 .unwrap();
@@ -119,7 +120,7 @@ mod test {
         let domain_dem = Fq::from_le_bytes_mod_order(F::DOMAIN_DEM);
         let mut plain_texts = Vec::new();
         for (i, cipher_text) in cipher_texts.iter().enumerate() {
-            let hash = Poseidon::new()
+            let hash = Poseidon::<Fq>::new()
                 .hash(vec![enc_key, domain_dem, Fq::from(i as u32)])
                 .unwrap();
             plain_texts.push(cipher_text - &hash);
@@ -130,7 +131,7 @@ mod test {
     fn kem<F: KemDemParams>(private_key: Fr, recipient: EdwardsAffine) -> Fq {
         let domain_kem = Fq::from_le_bytes_mod_order(F::DOMAIN_KEM);
         let shared_secret = (recipient * private_key).into_affine();
-        Poseidon::new()
+        Poseidon::<Fq>::new()
             .hash(vec![shared_secret.x, shared_secret.y, domain_kem])
             .unwrap()
     }

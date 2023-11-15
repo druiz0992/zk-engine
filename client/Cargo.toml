@@ -14,8 +14,8 @@ ark-ff="0.4.2"
 ark-std="0.4.0"
 
 # JF Deps
- jf-plonk = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master", features = ["test-srs"]}
- jf-relation = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
+jf-plonk = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master", features = ["test-srs"]}
+jf-relation = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
 jf-utils = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
 jf-primitives = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
 

@@ -1,0 +1,24 @@
+[package]
+name = "trees"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ark-ff="0.4.2"
+ark-std="0.4.0"
+itertools = "0.11.0"
+anyhow = "1.0.75"
+rayon = "1.8.0"
+common = {path = "../common"}
+
+[dev-dependencies]
+ark-bn254="0.4.0"
+rand_chacha = "0.3.1"
+criterion = "0.5.1"
+
+
+[[bench]]
+name = "benchmark"
+harness = false

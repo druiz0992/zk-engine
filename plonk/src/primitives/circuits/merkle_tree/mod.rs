@@ -1,5 +1,6 @@
-use crate::primitives::circuits::poseidon::{PoseidonGadget, PoseidonParams, PoseidonStateVar};
+use crate::primitives::circuits::poseidon::{PoseidonGadget, PoseidonStateVar};
 use ark_ff::PrimeField;
+use common::crypto::poseidon::constants::PoseidonParams;
 use jf_relation::{errors::CircuitError, BoolVar, Circuit, PlonkCircuit, Variable};
 
 // D is the depth of the merkle tree
@@ -15,7 +16,7 @@ pub trait BinaryMerkleTreeGadget<const D: usize, P: PrimeField> {
 
 impl<const D: usize, P> BinaryMerkleTreeGadget<D, P> for PlonkCircuit<P>
 where
-    P: PrimeField + PoseidonParams,
+    P: PrimeField + PoseidonParams<Field = P>,
 {
     fn decompose_leaf_index(&mut self, leaf_index: P) -> Result<Vec<BoolVar>, CircuitError> {
         let leaf_index_var = self.create_variable(leaf_index)?;
@@ -57,7 +58,7 @@ mod test {
     use super::*;
     use ark_ed_on_bn254::Fq;
     use ark_std::UniformRand;
-    use poseidon_ark::Poseidon;
+    use common::crypto::poseidon::Poseidon;
 
     #[test]
     fn test_binary_merkle_gadget() {
@@ -75,7 +76,7 @@ mod test {
             .into_iter()
             .enumerate()
             .fold(rand_leaf, |a, (i, b)| {
-                let poseidon = Poseidon::new();
+                let poseidon = Poseidon::<Fq>::new();
                 let bit_dir = index >> i & 1;
                 if bit_dir == 0 {
                     poseidon.hash(vec![a, b]).unwrap()
