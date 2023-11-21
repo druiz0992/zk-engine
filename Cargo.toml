@@ -1,3 +1,7 @@
 [workspace]
 members = ["client", "plonk", "trees", "common"]
 resolver = "2"
+
+
+# [profile.dev]
+# opt-level = 3

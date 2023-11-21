@@ -1,6 +1,6 @@
 use ark_ec::{
     pairing::Pairing,
-    twisted_edwards::{Affine as TEAffine, TECurveConfig},
+    short_weierstrass::{Affine, SWCurveConfig},
     CurveConfig,
 };
 use ark_ff::PrimeField;
@@ -21,18 +21,18 @@ pub fn transfer_circuit<E, P, const N: usize, const C: usize, const D: usize>(
     old_commitment_nonces: [P::ScalarField; N],
     old_commitment_sibling_path: [[P::ScalarField; D]; N],
     old_commitment_leaf_index: [P::ScalarField; N],
-    commitment_tree_root: P::ScalarField,
+    commitment_tree_root: [P::ScalarField; N],
     commitment_values: [P::ScalarField; C],
     commitment_nonces: [P::ScalarField; C], // The first one of this must be the old_commitment_leaf_index
     token_id: P::ScalarField,
-    recipient: TEAffine<E>,
+    recipient: Affine<E>,
     root_key: P::ScalarField,
     ephemeral_key: P::ScalarField,
     private_key_domain: P::ScalarField, // Remove this later as can be constant
     nullifier_key_domain: P::ScalarField, // Remove this later as can be constant
 ) -> Result<PlonkCircuit<P::ScalarField>, CircuitError>
 where
-    E: TECurveConfig,
+    E: SWCurveConfig,
     P: Pairing<ScalarField = E::BaseField>,
     <E as CurveConfig>::BaseField: PrimeField + KemDemParams<Field = P::ScalarField>,
 {
@@ -47,16 +47,12 @@ where
         &mut circuit,
         &[root_key_var, private_key_domain_var],
     )?;
-    let private_key_bits_var = circuit.unpack(private_key_var, 254)?;
-    let private_key_var_trunc = private_key_bits_var
-        .into_iter()
-        .take(248)
-        .collect::<Vec<_>>();
-    let private_key_var_trunc_bool = private_key_var_trunc.as_slice();
-    let generator_point_var = &circuit.create_constant_point_variable(E::GENERATOR.into())?;
+    let private_key_bits_var =
+        circuit.unpack(private_key_var, P::ScalarField::MODULUS_BIT_SIZE as usize)?;
+    let generator_point_var = &circuit.create_constant_sw_point_variable(E::GENERATOR.into())?;
 
     let public_key_var = circuit
-        .variable_base_binary_scalar_mul::<E>(private_key_var_trunc_bool, generator_point_var)?;
+        .variable_base_binary_sw_scalar_mul::<E>(&private_key_bits_var, generator_point_var)?;
 
     let nullifier_key_var = PoseidonGadget::<PoseidonStateVar<3>, P::ScalarField>::hash(
         &mut circuit,
@@ -100,8 +96,8 @@ where
             ],
         )?;
         // Check the sibling path
-        let commitment_root_var = circuit.create_variable(commitment_tree_root)?;
         for i in 0..N {
+            let commitment_root_var = circuit.create_variable(commitment_tree_root[i])?;
             let calc_commitment_root_var =
                 BinaryMerkleTreeGadget::<D, P::ScalarField>::calculate_root(
                     &mut circuit,
@@ -116,7 +112,7 @@ where
             &mut circuit,
             &[nullifier_key_var, old_commitment_hash_var],
         )?;
-        circuit.create_public_variable(circuit.witness(nullifier_hash_var)?)?;
+        circuit.set_variable_public(nullifier_hash_var)?;
     }
 
     // Calculate the recipients(first) commitment hash, this has an additional requirement
@@ -128,7 +124,7 @@ where
         recipient_commitment_nonce_var,
         index_of_first_commitment_var,
     )?;
-    let recipient_var = circuit.create_point_variable(recipient.into())?;
+    let recipient_var = circuit.create_sw_point_variable(recipient.into())?;
     let recipient_commitment_hash_var =
         PoseidonGadget::<PoseidonStateVar<6>, P::ScalarField>::hash(
             &mut circuit,
@@ -140,7 +136,7 @@ where
                 recipient_var.get_y(),
             ],
         )?;
-    circuit.create_public_variable(circuit.witness(recipient_commitment_hash_var)?)?;
+    circuit.set_variable_public(recipient_commitment_hash_var)?;
 
     // Check the encryption of secret information to the recipient
     // This proves that they will be able to decrypt the information
@@ -155,7 +151,7 @@ where
         ],
     )?;
     for ciphertext in ciphertext_vars {
-        circuit.create_public_variable(circuit.witness(ciphertext)?)?;
+        circuit.set_variable_public(ciphertext)?;
     }
 
     // Calculate the remaining change commitment hashes ()
@@ -172,7 +168,7 @@ where
                 public_key_var.get_y(),
             ],
         )?;
-        circuit.create_public_variable(circuit.witness(commitment_hash_var)?)?;
+        circuit.set_variable_public(commitment_hash_var)?;
     }
 
     Ok(circuit)
@@ -180,12 +176,15 @@ where
 
 #[cfg(test)]
 mod test {
-    use ark_ec::{AffineRepr, CurveGroup};
-    use ark_ed_on_bn254::{EdwardsAffine, Fq, Fr};
+    use ark_ec::{short_weierstrass::SWCurveConfig, CurveGroup};
     use ark_std::UniformRand;
     use common::crypto::poseidon::Poseidon;
+    use curves::{
+        pallas::{Affine, Fq, Fr, PallasConfig},
+        vesta::VestaConfig,
+    };
     use jf_relation::{errors::CircuitError, Circuit};
-    use jf_utils::{fq_to_fr_with_mask, test_rng};
+    use jf_utils::{field_switching, test_rng};
     use std::str::FromStr;
     #[test]
     fn transfer_test() -> Result<(), CircuitError> {
@@ -195,13 +194,14 @@ mod test {
         let private_key: Fq = Poseidon::<Fq>::new()
             .hash(vec![root_key, private_key_domain])
             .unwrap();
-        let private_key_trunc: Fr = fq_to_fr_with_mask(&private_key);
+        let private_key_fr: Fr = field_switching(&private_key);
+        // let private_key_trunc: Fr = fq_to_fr_with_mask(&private_key);
         let old_commitment_leaf_index = 0u64;
 
         let value = Fq::from_str("1").unwrap();
         let token_id = Fq::from_str("2").unwrap();
         let token_nonce = Fq::from(3u32);
-        let token_owner = (EdwardsAffine::generator() * private_key_trunc).into_affine();
+        let token_owner = (PallasConfig::GENERATOR * private_key_fr).into_affine();
         let old_commitment_hash = Poseidon::<Fq>::new()
             .hash(vec![
                 value,
@@ -230,25 +230,24 @@ mod test {
                 }
             });
 
-        let recipient_public_key = EdwardsAffine::rand(&mut test_rng());
+        let recipient_public_key = Affine::rand(&mut test_rng());
         let ephemeral_key = Fq::rand(&mut test_rng());
 
-        let circuit =
-            super::transfer_circuit::<ark_ed_on_bn254::EdwardsConfig, ark_bn254::Bn254, 1, 1, 48>(
-                [value],
-                [token_nonce],
-                [old_commitment_sibling_path.try_into().unwrap()],
-                [Fq::from(old_commitment_leaf_index)],
-                root,
-                [value],
-                [Fq::from(old_commitment_leaf_index)],
-                token_id,
-                recipient_public_key,
-                root_key,
-                ephemeral_key,
-                private_key_domain,
-                nullifier_key_domain,
-            )?;
+        let circuit = super::transfer_circuit::<PallasConfig, VestaConfig, 1, 1, 48>(
+            [value],
+            [token_nonce],
+            [old_commitment_sibling_path.try_into().unwrap()],
+            [Fq::from(old_commitment_leaf_index)],
+            [root],
+            [value],
+            [Fq::from(old_commitment_leaf_index)],
+            token_id,
+            recipient_public_key,
+            root_key,
+            ephemeral_key,
+            private_key_domain,
+            nullifier_key_domain,
+        )?;
 
         let public_inputs = circuit.public_input()?;
         assert!(circuit.check_circuit_satisfiability(&public_inputs).is_ok());

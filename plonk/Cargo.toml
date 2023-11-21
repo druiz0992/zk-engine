@@ -13,16 +13,25 @@ ark-ec="0.4.2"
 ark-ff="0.4.2"
 ark-std="0.4.0"
 ark-poly="0.4.2"
+ark-serialize= "0.4.2"
 
 # Jellyfish Deps
 jf-plonk = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master", features = ["test-srs"]}
 jf-relation = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
 jf-utils = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
 jf-primitives = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
+curves = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
 
 # poseidon-ark = {git = "https://github.com/arnaucube/poseidon-ark.git", branch = "main"}
 common = {path = "../common"}
 trees = {path = "../trees"}
+
+rayon = "1.8.0"
+serde = "1.0.192"
+serde_json = "1.0.108"
+num-bigint = {version = "0.4.4", features = ["serde"]}
+num-traits = "0.2.17"
+
 
 
 [dev-dependencies]
@@ -34,6 +43,8 @@ default = ["parallel"]
 std = ["ark-std/std", "ark-ff/std", "ark-ec/std", "jf-primitives/std", "jf-relation/std", "jf-utils/std"]
 parallel = ["ark-ff/parallel", "ark-ec/parallel", "jf-primitives/parallel", "jf-utils/parallel", "jf-relation/parallel"]
 
+[profile.test]
+opt-level = 3
 
 [profile.bench]
 opt-level = 3

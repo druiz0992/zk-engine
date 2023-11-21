@@ -1,31 +1,43 @@
 mod keypair;
 mod transaction;
 pub mod primitives {
-    use std::marker::PhantomData;
 
-    use ark_ec::pairing::Pairing;
+    pub type Curve = curves::vesta::VestaConfig;
+    pub type Fr = curves::vesta::Fr;
+    pub type Fq = curves::vesta::Fq;
 
-    pub type Curve = ark_bn254::Bn254;
-    pub type Fr = ark_bn254::Fr;
-    pub type Fq = ark_bn254::Fq;
+    pub type ECurve = curves::pallas::PallasConfig;
+    pub type EFr = curves::pallas::Fr;
+    pub type EFq = curves::pallas::Fq;
 
-    pub type ECurve = ark_ed_on_bn254::EdwardsProjective;
-    pub type EFr = ark_ed_on_bn254::Fr;
-    pub type EFq = ark_ed_on_bn254::Fq;
+    use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
+    use num_bigint::BigUint;
+    use num_traits::Num;
 
-    // This is just a stub until JF is better complete
-    pub struct Proof<P: Pairing> {
-        _phantom: PhantomData<P>,
+    pub fn ark_se<S, A: CanonicalSerialize>(a: &A, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut bytes = vec![];
+        a.serialize_with_mode(&mut bytes, Compress::Yes)
+            .map_err(serde::ser::Error::custom)?;
+        let hex_s = BigUint::from_bytes_le(bytes.as_slice()).to_str_radix(16);
+        s.serialize_str(&hex_s)
     }
-    impl<E: Pairing> Proof<E> {
-        pub fn new() -> Self {
-            Self {
-                _phantom: PhantomData,
-            }
-        }
-        pub fn public_inputs(&self) -> Result<Vec<E::ScalarField>, String> {
-            Ok(Default::default())
-        }
+
+    pub fn ark_de<'de, D, A: CanonicalDeserialize>(data: D) -> Result<A, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        let hex_s: String = serde::de::Deserialize::deserialize(data)?;
+        ark_std::println!("hex_s: {}", hex_s);
+        let s = BigUint::from_str_radix(&hex_s, 16).map_err(serde::de::Error::custom)?;
+        ark_std::println!("s: {}", s);
+        let mut bytes = s.to_bytes_le();
+        bytes.resize(33, 0); // Magic!
+
+        let a = A::deserialize_with_mode(bytes.as_slice(), Compress::Yes, Validate::No);
+        a.map_err(serde::de::Error::custom)
     }
 }
 pub use self::keypair::*;

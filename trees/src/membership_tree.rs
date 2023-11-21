@@ -39,6 +39,9 @@ impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> Tree<F, H> {
 impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> AppendTree<H> for Tree<F, H> {
     type F = F;
     fn from_leaves(leaves: Vec<F>) -> Self {
+        if leaves.is_empty() {
+            return Self::new();
+        }
         let leaves_len = leaves.len();
         let inner = HashMap::with_capacity(leaves_len * 2 + 1);
         let leaf_count = leaves_len as u64;

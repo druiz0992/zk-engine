@@ -11,6 +11,7 @@ use crate::{
 
 pub trait NonMembershipTree: MembershipTree {
     fn non_membership_witness(&self, leaf: Self::Field) -> Option<Vec<Self::Field>>;
+    fn update_low_nullifier(&mut self, leaf: Self::Field);
 }
 
 #[derive(Clone, Debug, Default)]
@@ -36,6 +37,7 @@ pub struct SortedIndexedNode<F: PrimeField> {
     pub node: IndexedNode<F>,
 }
 
+#[derive(Clone, Debug)]
 pub struct IndexedMerkleTree<F: PrimeField, const H: usize> {
     pub inner: HashMap<Position, F>,           // leaf position indexed
     pub sorted_vec: Vec<SortedIndexedNode<F>>, //leaf position indexed
@@ -53,14 +55,15 @@ impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> Default
 impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> IndexedMerkleTree<F, H> {
     pub fn new() -> Self {
         let mut inner = HashMap::new();
-        let zeroth_node = Default::default();
-        inner.insert(Default::default(), Default::default());
+        let zeroth_node: IndexedNode<F> = Default::default();
         let sorted_vec = vec![SortedIndexedNode {
             tree_index: 0,
-            node: zeroth_node,
+            node: zeroth_node.clone(),
         }];
-        let leaf_count = 0;
-        let root = F::zero();
+        let leaf_count = 1;
+        let zeroth_node_hash = Self::leaf_hash(zeroth_node);
+        inner.insert(Default::default(), zeroth_node_hash);
+        let root = Self::get_root_in_place(vec![zeroth_node_hash]);
         Self {
             inner,
             sorted_vec,
@@ -75,7 +78,7 @@ impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> IndexedMerkleTre
         poseidon.hash_unchecked(vec![leaf.value, index_f, leaf.next_value])
     }
 
-    fn find_predecessor(&self, val: F) -> SortedIndexedNode<F> {
+    pub fn find_predecessor(&self, val: F) -> SortedIndexedNode<F> {
         // A better way would be to use a binary search
         // This unwrap is safe because there is always a zeroth_node in the list
         let max_node = self.sorted_vec.last().unwrap();
@@ -131,10 +134,19 @@ impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> AppendTree<H>
         self.update_by_leaf_index(low_nullifier.tree_index);
         self.update_by_leaf_index(self.leaf_count as usize);
 
+        let search_val = low_nullifier.node.value;
+        for s in self.sorted_vec.iter_mut() {
+            if s.node.value == search_val {
+                *s = low_nullifier.clone();
+            }
+        }
+
         self.sorted_vec.push(SortedIndexedNode {
             tree_index: self.leaf_count as usize,
             node: new_node,
         });
+        self.sorted_vec
+            .sort_by(|a, b| a.node.value.cmp(&b.node.value));
         self.leaf_count += 1;
         // Calculate Root here
         self.root = self.get_node(Position::new(0, H));
@@ -142,6 +154,9 @@ impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> AppendTree<H>
 
     // For an empty indexed merkle tree, there should be a zero as the first element
     fn from_leaves(leaves: Vec<Self::F>) -> Self {
+        if leaves.is_empty() {
+            return Self::new();
+        }
         let leaf_count = leaves.len() as u64;
         // Sorted vec is the tuple (insertion_index, val)
         let mut sorted_vec = leaves.into_iter().enumerate().collect::<Vec<_>>();
@@ -213,6 +228,8 @@ impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> AppendTree<H>
     fn update_node(&mut self, position: Position, new_node: Self::F) {
         if let Some(node) = self.inner.get_mut(&position) {
             *node = new_node
+        } else {
+            self.inner.insert(position, new_node);
         }
     }
 
@@ -257,19 +274,62 @@ impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> NonMembershipTre
             return None;
         }
         // Return membership proof that low_nullifier is in tree
-        ark_std::println!("Low nullifier is {:?}", low_nullifier);
         self.membership_witness(low_nullifier.tree_index)
+    }
+    fn update_low_nullifier(&mut self, leaf: F) {
+        let poseidon: Poseidon<F> = Poseidon::new();
+        let mut low_nullifier = self.find_predecessor(leaf);
+        low_nullifier.node.next_index = self.leaf_count as usize;
+        low_nullifier.node.next_value = leaf;
+
+        let low_nullifier_pos = Position::new(low_nullifier.tree_index, 0);
+
+        if let Some(low_nullifier_node) = self.inner.get_mut(&low_nullifier_pos) {
+            *low_nullifier_node = poseidon.hash_unchecked(vec![
+                low_nullifier.node.value,
+                F::from(low_nullifier.node.next_index as u64),
+                low_nullifier.node.next_value,
+            ]);
+        } else {
+            panic!("Think of an error if we cant find the low_nullifier");
+        }
+        let search_val = low_nullifier.node.value;
+        for s in self.sorted_vec.iter_mut() {
+            if s.node.value == search_val {
+                *s = low_nullifier.clone();
+            }
+        }
+
+        self.update_by_leaf_index(low_nullifier.tree_index);
     }
 }
 
 #[cfg(test)]
 mod test {
+    use super::{IndexedMerkleTree, IndexedNode, NonMembershipTree};
+    use crate::membership_tree::MembershipTree;
     use crate::tree::{AppendTree, Position};
     use ark_bn254::Fr;
-    use ark_ff::PrimeField;
+    use ark_ff::{PrimeField, Zero};
     use common::crypto::poseidon::{constants::PoseidonParams, Poseidon};
 
-    use super::{IndexedMerkleTree, IndexedNode, NonMembershipTree};
+    #[test]
+    fn test_initial_tree_consistent() {
+        let initial_tree = IndexedMerkleTree::<Fr, 32>::new();
+        let poseidon = Poseidon::<Fr>::new();
+        let zeroth_node_hash =
+            poseidon.hash_unchecked(vec![Fr::zero(), Fr::from(0u64), Fr::zero()]);
+        let mut expected_root = zeroth_node_hash;
+        for _ in 0..32 {
+            expected_root = poseidon.hash_unchecked(vec![expected_root, Fr::zero()]);
+        }
+        let witness = initial_tree.membership_witness(0).unwrap();
+        let witness_root = witness.into_iter().fold(zeroth_node_hash, |acc, val| {
+            poseidon.hash_unchecked(vec![acc, val])
+        });
+        assert_eq!(witness_root, expected_root);
+        assert_eq!(initial_tree.root, expected_root);
+    }
 
     #[test]
     fn test_indexed_hash() {
@@ -383,7 +443,6 @@ mod test {
         }
         assert_eq!(indexed_tree.root, expected_root);
 
-        ark_std::println!("Initial hash is ok");
         // Append a leaf = 4 to the tree
         let new_leaf = F::from(4u128);
         indexed_tree.append_leaf(new_leaf);

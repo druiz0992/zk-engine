@@ -1,13 +1,11 @@
-use ark_ec::{
-    pairing::Pairing,
-    short_weierstrass::{Affine, SWCurveConfig},
-    AffineRepr, CurveGroup,
-};
+use ark_ec::{short_weierstrass::SWCurveConfig, AffineRepr};
 use ark_ff::PrimeField;
-use num_bigint::BigUint;
-use poseidon_ark::Poseidon;
+use common::crypto::{
+    crypto_errors::CryptoError,
+    poseidon::{constants::PoseidonParams, Poseidon},
+};
 
-use crate::domain::{Commitment, Fr, Preimage};
+use crate::domain::{Commitment, Preimage};
 
 pub trait Committable<F: PrimeField> {
     type Error;
@@ -22,30 +20,19 @@ pub trait Nullifiable<F: PrimeField>: Committable<F> {
 // Implementation of how a Preimage can be committed to.
 impl<E, F> Committable<F> for Preimage<E>
 where
-    E: Pairing<BaseField = F, G1Affine = Affine<F>>,
-    F: PrimeField + SWCurveConfig<BaseField = F>,
+    E: SWCurveConfig<BaseField = F>,
+    F: PrimeField + SWCurveConfig<BaseField = F> + PoseidonParams<Field = F>,
 {
-    type Error = String;
+    type Error = CryptoError;
 
     fn commitment_hash(&self) -> Result<Commitment<F>, Self::Error> {
-        let poseidon = Poseidon::new();
+        let poseidon = Poseidon::<F>::new();
         match self.public_key.as_affine().xy() {
             Some((x, y)) => {
-                // Hack to make this work for now, we need a generic Poseidon over F
-                // and not just Fr.
-                let hacky_poseidon_inputs: Vec<Fr> =
-                    vec![self.value, self.token_id, self.salt, *x, *y]
-                        .into_iter()
-                        .map(|x| {
-                            let big_int: BigUint = x.into_bigint().into();
-                            Fr::from(big_int)
-                        })
-                        .collect();
-                let hack_fr_hash = poseidon.hash(hacky_poseidon_inputs)?;
-                let hash: BigUint = hack_fr_hash.into_bigint().into();
-                Ok(Commitment(hash.into()))
+                let hash = poseidon.hash(vec![*x, *y])?;
+                Ok(Commitment(hash))
             }
-            None => Err("Error".to_string()),
+            None => Err(CryptoError::HashError("Error".to_string())),
         }
     }
 }

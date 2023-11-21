@@ -1,4 +1,4 @@
-use crate::ports::prover::Prover;
+use crate::{domain::Preimage, ports::prover::Prover};
 
 use ark_ec::{
     pairing::Pairing,
@@ -11,11 +11,14 @@ use plonk_prover::primitives::circuits::kem_dem::KemDemParams;
 
 use crate::domain::{CircuitInputs, CircuitType::Mint, PublicKey, Transaction};
 
-pub fn mint_tokens<P, V, VSW, Proof>(
-    token_values: Vec<V::ScalarField>,
-    token_ids: Vec<V::ScalarField>,
-    salts: Vec<V::ScalarField>,
-    owners: Vec<PublicKey<P>>,
+pub fn transfer_tokens<P, V, VSW, Proof>(
+    // Token information
+    old_preimages: Vec<Preimage<P>>,
+    new_token_values: Vec<V::ScalarField>,
+    recipients: Vec<PublicKey<P>>,
+    // Tree information
+    sibling_paths: Vec<P::ScalarField>,
+    commitment_roots: Vec<P::ScalarField>,
 ) -> Result<Transaction<V>, &'static str>
 where
     P: SWCurveConfig<BaseField = V::ScalarField>,

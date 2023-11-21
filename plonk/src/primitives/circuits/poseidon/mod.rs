@@ -79,7 +79,7 @@ where
         for (i, matrix_row) in matrix.iter().enumerate() {
             for (j, state_val) in state.iter().enumerate() {
                 let mixed_val = self.mul_constant(*state_val, &matrix_row[j])?;
-                new_arr[i] = self.add_constant(mixed_val, &self.witness(new_arr[i]).unwrap())?;
+                new_arr[i] = self.add(mixed_val, new_arr[i])?;
             }
         }
         Ok(new_arr)

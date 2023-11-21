@@ -12,16 +12,36 @@ ark-ed-on-bn254="0.4.0"
 ark-ec="0.4.2"
 ark-ff="0.4.2"
 ark-std="0.4.0"
+ark-poly="0.4.2"
+ark-serialize="0.4.2"
 
 # JF Deps
 jf-plonk = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master", features = ["test-srs"]}
 jf-relation = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
 jf-utils = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
 jf-primitives = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
+curves = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
 
-
+common = {path = "../common"}
+trees = {path = "../trees"}
 plonk-prover = { path="../plonk"}
+num-bigint = {version = "0.4.4", features = ["serde"]}
+num-traits = "0.2.17"
+bip32 = "0.5.1"
+rand = { version = "0.8.5", features = ["std"]}
+rand_chacha = "0.3.1"
 
-poseidon-ark = {git = "https://github.com/arnaucube/poseidon-ark.git", branch = "main"}
-num-bigint = "0.4.4"
+# axum
+tokio = {version = "1.29.1", features = ["full"]}
+axum = { version = "0.6.20", features = ["json"]}
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"
+serde = {version = "1.0.192", features = ["derive"]}
+serde_json = "1.0.108"
+serde_with = "3.4.0"
+hex="0.4.3"
+serde-hex = "0.1.0"
+dotenvy = "0.15.7"
+derivative = "2.2.0"
 
+rayon = "1.8.0"
