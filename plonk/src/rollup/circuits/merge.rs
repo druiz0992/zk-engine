@@ -38,7 +38,7 @@ use super::structs::{AccInstance, GlobalPublicInputs, SubTrees};
 //
 #[allow(clippy::too_many_arguments)]
 pub fn merge_circuit<C1, C2>(
-    test_pi: Vec<C1::ScalarField>,
+    // test_pi: Vec<C1::ScalarField>,
     vk: VerifyingKey<C1>,
     // Std Global State
     global_state: GlobalPublicInputs<C2::ScalarField>,
@@ -47,10 +47,10 @@ pub fn merge_circuit<C1, C2>(
     g_poly: [DensePolynomial<C1::ScalarField>; 2],
 
     // Pass through, we dont do anything with this here
-    passthrough_pv_acc: [AccInstance<C2::BaseField>; 2],
+    passthrough_pv_acc: [AccInstance<C2>; 2],
 
     commit_key: CommitKey<C1>,
-    base_accs: [AccInstance<C2::ScalarField>; 2],
+    base_accs: [AccInstance<C1>; 2],
     base_pi_stars: [DensePolynomial<C1::ScalarField>; 2],
 ) -> Result<PlonkCircuit<C2::ScalarField>, CircuitError>
 where
@@ -82,28 +82,35 @@ where
     for i in 0..2 {
         let proof_var = PlonkIpaSWProofNativeVar::create_variables(&mut circuit, &proof[i])?;
 
-        // Passthrough of bounce, previously from base
-        ark_std::println!("x coordinate: {}", base_accs[i].comm.0);
+        // =======================================================
+        // Base acc:
+        // = previously completed Vesta acc
+        // It is used as a public input for bounce i PV (it was the passthrough instance there)
+        // And to acc later in this circuit
         let instance = base_accs[i].clone().into();
-
         instances.push(instance);
 
         let sw_point_var = circuit.create_sw_point_variable(base_accs[i].comm)?;
-        let value = circuit.create_variable(base_accs[i].eval)?;
-        let point = circuit.create_variable(base_accs[i].eval_point)?;
+        let value = circuit.create_variable(field_switching(&base_accs[i].eval))?;
+        let point = circuit.create_variable(field_switching(&base_accs[i].eval_point))?;
         g_comms_vars.push(sw_point_var);
         u_challenges_vars.push(point);
         eval_vars.push(value);
         g_polys.push(base_pi_stars[i].clone());
 
+        // =======================================================
+        // Public inputs for bounce i PV
+
         let mut bounce_public_inputs = global_state.to_vec();
         let subtree_public_inputs = subtrees[i].to_vec();
         bounce_public_inputs.extend(subtree_public_inputs);
 
-        let passthrough_public_inputs: Vec<C2::ScalarField> = passthrough_pv_acc[i].to_vec_switch();
-        bounce_public_inputs.extend(passthrough_public_inputs);
+        // we push base acc first (it was the passthrough of bounce)
+        let base_acc_public_inputs: Vec<C2::ScalarField> = base_accs[i].to_vec();
+        bounce_public_inputs.extend(base_acc_public_inputs);
 
-        let mut for_testing = vec![];
+        // we convert to 'emulated' since that what bounce takes in
+        // TODO: something else
         let mut bounce_public_inputs_var = bounce_public_inputs
             .iter()
             .flat_map(|&x| {
@@ -111,56 +118,36 @@ where
                 limb_x
                     .into_iter()
                     .map(|l_x| {
-                        for_testing.push(l_x);
+                        // for_testing.push(l_x);
                         circuit.create_variable(field_switching(&l_x))
                     })
                     .collect::<Vec<_>>()
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        for (i, &test) in for_testing.iter().enumerate() {
-            ark_std::println!("{}: {}  |  {}", i, test, test_pi[i]);
-            assert_eq!(test, test_pi[i], "SOMETHING NOT EQUL")
-        }
-
-        bounce_public_inputs_var.push(sw_point_var.get_x());
-        bounce_public_inputs_var.push(sw_point_var.get_y());
+        // we push passthrough last (it was the PV result at the end of bounce)
+        bounce_public_inputs_var.push(circuit.create_variable(field_switching(&passthrough_pv_acc[i].comm.0))?);
+        bounce_public_inputs_var.push(circuit.create_variable(field_switching(&passthrough_pv_acc[i].comm.1))?);
         bounce_public_inputs_var.push(circuit.false_var().into());
-        bounce_public_inputs_var.push(value);
-        let emul_point = from_emulated_field(base_accs[i].eval_point);
+        bounce_public_inputs_var.push(0 as usize);
+        // u-var of bounce was emulated
+        let emul_point = from_emulated_field(field_switching::<_, C1::BaseField>(&passthrough_pv_acc[i].eval_point));
         emul_point.iter().for_each(|l_x| {
             bounce_public_inputs_var.push(circuit.create_variable(field_switching(l_x)).unwrap())
         });
 
-        for i in (for_testing.len() - 1)..bounce_public_inputs_var.len() {
-            ark_std::println!(
-                "{}: {}  |  {}",
-                i,
-                circuit.witness(bounce_public_inputs_var[i]).unwrap(),
-                test_pi[i]
-            );
-            //     assert_eq!(
-            //         test_pi[i],
-            //         field_switching(&circuit.witness(bounce_public_inputs_var[i]).unwrap()),
-            //         "SOMETHING NOT EQUAL {}",
-            //         i
-            //     )
-        }
-        bounce_public_inputs_var.push(point);
-        ark_std::println!(
-            "Bounce Public Inputs Var len: {:?}",
-            bounce_public_inputs_var.len()
-        );
+        // let test_pi_vars = test_pi
+        //     .iter()
+        //     .map(|x| circuit.create_variable(field_switching(x)))
+        //     .collect::<Result<Vec<_>, _>>()?;
 
-        let test_pi_vars = test_pi
-            .iter()
-            .map(|x| circuit.create_variable(field_switching(x)))
-            .collect::<Result<Vec<_>, _>>()?;
+        // =======================================================
+        // PV of bounce i:
+        // we don't set to public, because we acc with base_acc in this circuit, and set that to public instead
         let (g_comm_var, u_challenge_var) = &verifying_key_var.partial_verify_circuit_ipa_native(
             &mut circuit,
             &g_gen,
-            &test_pi_vars,
-            // &bounce_public_inputs_var,
+            &bounce_public_inputs_var,
             &proof_var,
         )?;
 
@@ -174,8 +161,10 @@ where
         instances.push(instance);
         g_comms_vars.push(*g_comm_var);
         u_challenges_vars.push(*u_challenge_var);
+        // single PV'd proof => eval is 0
         eval_vars.push(circuit.zero());
         g_polys.push(g_poly[i].clone());
+        // =======================================================
     }
 
     // Partial prove accumulation of all instances
@@ -184,8 +173,8 @@ where
     let (acc, _) = prover
         .prove_accumulation(
             &commit_key,
-            &[instances[1].clone(), instances[3].clone()],
-            &[g_polys[1].clone(), g_polys[3].clone()],
+            &instances,
+            &g_polys,
         )
         .unwrap();
 
@@ -197,17 +186,15 @@ where
         <<C1 as Pairing>::G1 as CurveGroup>::Config,
     >(
         &mut circuit,
-        &[g_comms_vars[1], g_comms_vars[3]],
-        &[eval_vars[1], eval_vars[3]],
-        &[u_challenges_vars[1], u_challenges_vars[3]],
-        // &g_comms_vars.as_slice(),
-        // &eval_vars.as_slice(),
-        // &u_challenges_vars.as_slice(),
+        &g_comms_vars,
+        &eval_vars,
+        &u_challenges_vars,
         &acc,
     )?;
 
     // Rollup subtrees
     // Commitment subtree
+    // TODO use existing var
     let left_subtree_var = circuit.create_variable(subtrees[0].commitment_subtree)?;
     let right_subtree_var = circuit.create_variable(subtrees[1].commitment_subtree)?;
     let commitment_subtree = PoseidonGadget::<PoseidonStateVar<3>, C2::ScalarField>::hash(
@@ -256,40 +243,17 @@ pub mod merge_test {
         let (_, subtree_pi_2, passthrough_instance_2, instance_2) = stored_bounce_2.pub_inputs;
 
         let mut rng = test_rng();
-        // let mut bounce_public_inputs = global_public_inputs.to_vec();
-        // let subtree_public_inputs = subtree_pi_1.to_vec();
-        // bounce_public_inputs.extend(subtree_public_inputs);
-        // let mut verify_pi = bounce_public_inputs
-        //     .into_iter()
-        //     .map(|x| field_switching(&x))
-        //     .collect::<Vec<_>>();
-        //
-        // let passthrough_public_inputs: Vec<_> = passthrough_instance_1.to_vec();
-        // verify_pi.extend(passthrough_public_inputs);
-        // PlonkIpaSnark::<VestaConfig>::verify::<
-        //     RescueTranscript<<VestaConfig as Pairing>::BaseField>,
-        // >(
-        //     &stored_bounce.vk,
-        //     &verify_pi,
-        //     &stored_bounce.proof,
-        //     None,
-        // )
-        // .unwrap();
-
-        ark_std::println!("VERIFY BOUNCE IN MERGE!, PIs are good");
-        ark_std::println!("instance 1: {}", instance_1[0].comm.0);
-        ark_std::println!("instance 2: {}", instance_2[0].comm.0);
 
         let mut merge_circuit = merge_circuit::<VestaConfig, PallasConfig>(
-            bounce_circuit.public_input().unwrap(),
+            // bounce_circuit.public_input().unwrap(),
             stored_bounce.vk,
             global_public_inputs,
             [subtree_pi_1, subtree_pi_2],
             [stored_bounce.proof, stored_bounce_2.proof],
             [stored_bounce.g_poly, stored_bounce_2.g_poly],
             [
-                passthrough_instance_1.switch_field(),
-                passthrough_instance_2.switch_field(),
+                passthrough_instance_1,
+                passthrough_instance_2,
             ],
             stored_bounce.commit_key.1,
             [instance_1[0].clone(), instance_2[0].clone()],

@@ -38,10 +38,12 @@ pub mod utils {
     }
 
     #[derive(CanonicalSerialize, CanonicalDeserialize, Serialize, Deserialize, Clone)]
-    pub struct StoredProof<E>
+    pub struct StoredProof<E, I>
     where
         E: Pairing,
         <E::G1 as CurveGroup>::Config: SWCurveConfig,
+        I: Pairing<BaseField = E::ScalarField>,
+
     {
         #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
         pub proof: Proof<E>,
@@ -49,8 +51,8 @@ pub mod utils {
         pub pub_inputs: (
             GlobalPublicInputs<curves::pallas::Fr>,
             SubTrees<curves::pallas::Fr>,
-            AccInstance<E::BaseField>,
-            Vec<AccInstance<E::BaseField>>,
+            AccInstance<I>,
+            Vec<AccInstance<E>>,
         ),
         #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
         pub vk: VerifyingKey<E>,
@@ -65,13 +67,13 @@ pub mod utils {
         ),
     }
 
-    pub fn serial_to_file<E: Pairing>(
+    pub fn serial_to_file<E: Pairing, I: Pairing>(
         proof: Proof<E>,
         pub_inputs: (
             GlobalPublicInputs<curves::pallas::Fr>,
             SubTrees<curves::pallas::Fr>,
-            AccInstance<E::BaseField>,
-            Vec<AccInstance<E::BaseField>>,
+            AccInstance<I>,
+            Vec<AccInstance<E>>,
         ),
         vk: VerifyingKey<E>,
         commit_key: (CommitKey<PallasConfig>, CommitKey<VestaConfig>),
@@ -84,6 +86,7 @@ pub mod utils {
     ) where
         E: Pairing,
         <E::G1 as CurveGroup>::Config: SWCurveConfig,
+        I: Pairing<BaseField = E::ScalarField>,
     {
         let file = File::create(file_name).unwrap();
         let stored_proof = StoredProof {
@@ -97,10 +100,11 @@ pub mod utils {
         serde_json::to_writer(file, &stored_proof).unwrap();
     }
 
-    pub fn deserial_from_file<E, P>(file_name: &str) -> StoredProof<E>
+    pub fn deserial_from_file<E, I>(file_name: &str) -> StoredProof<E, I>
     where
         E: Pairing,
         <E::G1 as CurveGroup>::Config: SWCurveConfig,
+        I: Pairing<BaseField = E::ScalarField>,
     {
         let file = File::open(file_name).unwrap();
         serde_json::from_reader(file).unwrap()

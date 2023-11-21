@@ -38,7 +38,7 @@ pub fn bounce_circuit<C1, C2>(
     subtrees: SubTrees<C2::BaseField>,
     proof: Proof<C1>,
     // Pass through, we dont do anything with this here
-    base_acc: AccInstance<C2::BaseField>,
+    base_acc: AccInstance<C2>,
 ) -> Result<(PlonkCircuit<C2::ScalarField>, Vec<C1::ScalarField>), CircuitError>
 where
     C1: Pairing<G1Affine = Affine<<<C1 as Pairing>::G1 as CurveGroup>::Config>>,
@@ -71,8 +71,13 @@ where
     let passthrough_public_inputs = base_acc.to_vec();
     base_public_inputs.extend(passthrough_public_inputs);
 
+    // TODO we don't need to set emulated base_acc.comm public
+    // Since base_acc.comm is a vesta point => x and y are vesta basefield = pallas scalar
+    // => are native here
     let public_input_var = base_public_inputs
         .into_iter()
+        // TODO dont do this and instead work out how to truncate and check in merge
+        // We need something like circuit.emul_var_trunc: EmulatedVariable -> Variable
         .map(|x| circuit.create_public_emulated_variable(x))
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -139,25 +144,25 @@ pub mod bounce_test {
     use jf_relation::{
         gadgets::ecc::short_weierstrass::SWPoint, Arithmetization, Circuit, PlonkCircuit,
     };
-    use jf_utils::test_rng;
+    use jf_utils::{test_rng, field_switching};
 
     #[test]
     fn bounce_test() {
         bounce_test_helper();
     }
-    pub fn bounce_test_helper() -> (PlonkCircuit<Fr>, StoredProof<VestaConfig>) {
+    pub fn bounce_test_helper() -> (PlonkCircuit<Fr>, StoredProof<VestaConfig, PallasConfig>) {
         let stored_proof_base = test_base_rollup_helper_transfer();
 
         let mut rng = test_rng();
         let (global_public_inputs, subtree_public_inputs, passthrough_instance, _) =
             stored_proof_base.pub_inputs;
-
+            
         let (mut bounce_circuit, public_outputs) = bounce_circuit::<PallasConfig, VestaConfig>(
             stored_proof_base.vk,
             global_public_inputs.clone(),
             subtree_public_inputs.clone(),
             stored_proof_base.proof,
-            passthrough_instance.switch_field(),
+            passthrough_instance,
         )
         .unwrap();
         bounce_circuit
@@ -189,38 +194,41 @@ pub mod bounce_test {
         )
         .unwrap();
 
-        ark_std::println!("Proof verified");
-        let instance = AccInstance {
+        ark_std::println!("Bounce proof verified");
+
+        // public output is in Pallas::scalar
+
+        // This is the Vesta acc calculated in base
+        let passthrough = AccInstance {
             comm: SWPoint(
                 public_outputs[7],
                 public_outputs[8],
                 public_outputs[9] == Fq::one(),
             ),
-            eval: public_outputs[10],
-            eval_point: public_outputs[11],
+            // These are originally Vesta Fr => small => safe conversion
+            eval: field_switching(&public_outputs[10]),
+            eval_point: field_switching(&public_outputs[11]),
         };
-        // let switched_field_instance = passthrough_instance.switch_field();
-        let passthrough = AccInstance {
+
+        // This is the Pallas acc we just made by Pv'ing base
+        let instance = AccInstance {
+            // This is originally a Pallas point => safe conversion
             comm: SWPoint(
-                public_outputs[public_outputs.len() - 5],
-                public_outputs[public_outputs.len() - 4],
+                field_switching(&public_outputs[public_outputs.len() - 5]),
+                field_switching(&public_outputs[public_outputs.len() - 4]),
                 public_outputs[public_outputs.len() - 3] == Fq::one(),
             ),
-            eval: public_outputs[public_outputs.len() - 2],
+            eval: public_outputs[public_outputs.len() - 2], // = 0 because we only PV one base
             eval_point: public_outputs[public_outputs.len() - 1],
         };
-        ark_std::println!("Length of publicoutputs: {}", public_outputs.len());
-        // ark_std::println!("Switch_field_point: {}", switched_field_instance.comm.0);
-        // ark_std::println!("passthrough _point: {}", passthrough_instance.comm.0);
-        // ark_std::println!("Switch_field_eval: {}", switched_field_instance.eval);
-        // ark_std::println!("passthrough_eval: {}", passthrough_instance.eval);
-        let sp = StoredProof {
+
+        let sp = StoredProof::<VestaConfig, PallasConfig> {
             proof: bounce_ipa_proof,
             pub_inputs: (
                 global_public_inputs,
                 subtree_public_inputs,
                 instance,
-                vec![passthrough], // Things that are no longer passthroughs
+                vec![passthrough],
             ),
             vk: bounce_ipa_vk,
             commit_key: stored_proof_base.commit_key,

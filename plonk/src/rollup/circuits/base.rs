@@ -636,7 +636,7 @@ pub mod base_test {
         ark_std::println!("Proof verified")
     }
 
-    pub fn test_base_rollup_helper_transfer() -> StoredProof<PallasConfig>
+    pub fn test_base_rollup_helper_transfer() -> StoredProof<PallasConfig, VestaConfig>
 //     PlonkCircuit<Fr>,
     //     Proof<PallasConfig>,
     //     VerifyingKey<PallasConfig>,
@@ -904,14 +904,15 @@ pub mod base_test {
         let public_inputs = base_rollup_circuit.public_input().unwrap();
         let global_public_inputs = GlobalPublicInputs::from_vec(public_inputs.clone());
         let subtree_pi = SubTrees::from_vec(public_inputs[5..=6].to_vec());
-        let instance: AccInstance<curves::vesta::Fq> = AccInstance {
+        let instance: AccInstance<VestaConfig> = AccInstance {
             comm: SWPoint(
                 public_inputs[7],
                 public_inputs[8],
                 public_inputs[9] == Fr::one(),
             ),
-            eval: public_inputs[10],
-            eval_point: public_inputs[11],
+            // values are originally Vesta scalar => safe switch back into 'native'
+            eval: field_switching(&public_inputs[10]),
+            eval_point: field_switching(&public_inputs[11]),
         };
 
         StoredProof {
@@ -919,7 +920,7 @@ pub mod base_test {
             pub_inputs: (
                 global_public_inputs,
                 subtree_pi,
-                instance.switch_field(),
+                instance,
                 vec![],
             ),
             vk: base_ipa_vk,

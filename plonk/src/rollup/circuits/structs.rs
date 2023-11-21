@@ -3,7 +3,7 @@ use ark_ec::{
     short_weierstrass::{Affine, SWCurveConfig},
     CurveConfig, CurveGroup,
 };
-use ark_ff::PrimeField;
+use ark_ff::{PrimeField, One};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use jf_plonk::nightfall::{accumulation::accumulation_structs::PCSInstance, UnivariateIpaPCS};
 use jf_primitives::{pcs::prelude::Commitment, rescue::RescueParameter};
@@ -49,27 +49,27 @@ pub struct GlobalPublicInputs<F: PrimeField> {
 }
 
 #[derive(Clone, CanonicalDeserialize, CanonicalSerialize)]
-pub struct AccInstance<F: PrimeField> {
-    pub comm: SWPoint<F>,
-    pub eval: F,
-    pub eval_point: F,
+pub struct AccInstance<C: Pairing> {
+    pub comm: SWPoint<C::BaseField>,
+    pub eval: C::ScalarField,
+    pub eval_point: C::ScalarField,
 }
-impl<F: PrimeField> AccInstance<F> {
-    pub fn switch_field<T: PrimeField>(&self) -> AccInstance<T> {
+impl<C: Pairing> AccInstance<C> {
+    pub fn switch_field<T: Pairing>(&self) -> AccInstance<T> {
         let switched_point_x = field_switching(&self.comm.0);
         let switched_point_y = field_switching(&self.comm.1);
         let switched_eval = field_switching(&self.eval);
         let switched_eval_point = field_switching(&self.eval_point);
         AccInstance {
-            comm: SWPoint(switched_point_x, switched_point_y, self.comm.2),
+            comm: SWPoint(switched_point_x, switched_point_y, self.comm.2), // may be not on curve, check
             eval: switched_eval,
             eval_point: switched_eval_point,
         }
     }
-    pub fn from_vec(array: Vec<F>) -> Self {
-        let instance_sw = SWPoint(array[0], array[1], array[2] == F::one());
-        let instance_value = array[3];
-        let instance_point = array[4];
+    pub fn from_vec(array: Vec<C::BaseField>) -> Self {
+        let instance_sw = SWPoint(array[0], array[1], array[2] == C::BaseField::one());
+        let instance_value = field_switching(&array[3]);
+        let instance_point = field_switching(&array[4]);
         Self {
             comm: instance_sw,
             eval: instance_value,
@@ -88,13 +88,13 @@ impl<F: PrimeField> AccInstance<F> {
             field_switching(&self.eval_point),
         )
     }
-    pub fn to_vec(&self) -> Vec<F> {
+    pub fn to_vec(&self) -> Vec<C::BaseField> {
         let vars = vec![
             self.comm.0,
             self.comm.1,
             self.comm.2.into(),
-            self.eval,
-            self.eval_point,
+            field_switching(&self.eval),
+            field_switching(&self.eval_point),
         ];
         vars
     }
@@ -108,32 +108,32 @@ impl<F: PrimeField> AccInstance<F> {
         ];
         vars
     }
-    pub fn to_vars(&self, mut circuit: PlonkCircuit<F>) -> Result<Vec<Variable>, CircuitError> {
+    pub fn to_vars(&self, mut circuit: PlonkCircuit<C::BaseField>) -> Result<Vec<Variable>, CircuitError> {
         let vars = vec![
             circuit.create_variable(self.comm.0)?,
             circuit.create_variable(self.comm.1)?,
             circuit.create_variable(self.comm.2.into())?,
-            circuit.create_variable(self.eval)?,
-            circuit.create_variable(self.eval_point)?,
+            circuit.create_variable(field_switching(&self.eval))?,
+            circuit.create_variable(field_switching(&self.eval_point))?,
         ];
         Ok(vars)
     }
     pub fn to_public_vars(
         &self,
-        mut circuit: PlonkCircuit<F>,
+        mut circuit: PlonkCircuit<C::BaseField>,
     ) -> Result<Vec<Variable>, CircuitError> {
         let vars = vec![
             circuit.create_public_variable(self.comm.0)?,
             circuit.create_public_variable(self.comm.1)?,
             circuit.create_public_variable(self.comm.2.into())?,
-            circuit.create_public_variable(self.eval)?,
-            circuit.create_public_variable(self.eval_point)?,
+            circuit.create_public_variable(field_switching(&self.eval))?,
+            circuit.create_public_variable(field_switching(&self.eval_point))?,
         ];
         Ok(vars)
     }
 }
 
-impl<E, F> From<PCSInstance<UnivariateIpaPCS<E>>> for AccInstance<F>
+impl<E, F> From<PCSInstance<UnivariateIpaPCS<E>>> for AccInstance<E>
 where
     E: Pairing<BaseField = F, G1Affine = Affine<<<E as Pairing>::G1 as CurveGroup>::Config>>,
     <<E as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = E::BaseField>,
@@ -152,7 +152,7 @@ where
     }
 }
 
-impl<E, F> Into<PCSInstance<UnivariateIpaPCS<E>>> for AccInstance<F>
+impl<E, F> Into<PCSInstance<UnivariateIpaPCS<E>>> for AccInstance<E>
 where
     E: Pairing<BaseField = F, G1Affine = Affine<<<E as Pairing>::G1 as CurveGroup>::Config>>,
     <<E as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = E::BaseField>,
