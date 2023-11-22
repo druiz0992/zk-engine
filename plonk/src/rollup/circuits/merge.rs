@@ -19,10 +19,10 @@ use jf_primitives::{pcs::prelude::Commitment, rescue::RescueParameter};
 use jf_relation::{
     errors::CircuitError,
     gadgets::{
-        ecc::{short_weierstrass::SWPoint, SWToTEConParam},
+        ecc::{short_weierstrass::{SWPoint, SWPointVariable}, SWToTEConParam},
         from_emulated_field, EmulationConfig,
     },
-    Circuit, PlonkCircuit, Variable,
+    Circuit, PlonkCircuit, Variable, BoolVar,
 };
 use jf_utils::field_switching;
 
@@ -78,9 +78,51 @@ where
     let mut u_challenges_vars = vec![];
     let mut eval_vars = vec![];
     let mut g_polys = vec![];
+
+    // Build one set of public global state vars to compare each bounce PV against
+    let global_state_vars: Vec<Variable> = global_state.to_vec().iter().map(|val| {
+        circuit.create_public_variable(*val)
+    }).collect::<Result<Vec<_>, CircuitError>>()?;
+    // Build two sets of private subtree variables
+    // [comm, null], [comm, null]
+    let mut subtree_vars = [[0, 0], [0,0]];
+
     // Build Bounce Instances and PV
     for i in 0..2 {
         let proof_var = PlonkIpaSWProofNativeVar::create_variables(&mut circuit, &proof[i])?;
+
+
+
+        // =======================================================
+        // Public inputs for bounce i PV
+
+        let mut bounce_public_inputs_var = vec![];
+        // global state
+        for (j, val) in global_state.to_vec().iter().enumerate() {
+            // C2::scalar -> limbs of C2::base
+            let limbed_val: Vec<C2::BaseField> = from_emulated_field(*val);
+            // limbs of C2::base -> values of C2::scalar -> variables
+            let limb_vars: Vec<Variable> = limbed_val.into_iter().map(|l_x| {
+                circuit.create_variable(field_switching(&l_x))
+            }).collect::<Result<Vec<_>, _>>()?;
+            let recombined_var: Variable = circuit.recombine_limbs(&limb_vars, <C2 as Pairing>::ScalarField::B)?;
+            circuit.enforce_equal(recombined_var, global_state_vars[j])?;
+            // assert_eq!(val, circuit.witness(recombined_var)?, "NOT EQUAL - global state");
+            bounce_public_inputs_var.extend(limb_vars);
+        }
+
+        // subtrees
+        for (j, val) in subtrees[i].to_vec().iter().enumerate() {
+            // C2::scalar -> limbs of C2::base
+            let limbed_val: Vec<C2::BaseField> = from_emulated_field(*val);
+            // limbs of C2::base -> values of C2::scalar -> variables
+            let limb_vars: Vec<Variable> = limbed_val.into_iter().map(|l_x| {
+                circuit.create_variable(field_switching(&l_x))
+            }).collect::<Result<Vec<_>, _>>()?;
+            subtree_vars[i][j] = circuit.recombine_limbs(&limb_vars, <C2 as Pairing>::ScalarField::B)?;
+            // assert_eq!(val, circuit.witness(recombined_var)?, "NOT EQUAL - subtree");
+            bounce_public_inputs_var.extend(limb_vars);
+        }
 
         // =======================================================
         // Base acc:
@@ -90,48 +132,24 @@ where
         let instance = base_accs[i].clone().into();
         instances.push(instance);
 
-        let sw_point_var = circuit.create_sw_point_variable(base_accs[i].comm)?;
-        let value = circuit.create_variable(field_switching(&base_accs[i].eval))?;
-        let point = circuit.create_variable(field_switching(&base_accs[i].eval_point))?;
-        g_comms_vars.push(sw_point_var);
-        u_challenges_vars.push(point);
-        eval_vars.push(value);
-        g_polys.push(base_pi_stars[i].clone());
-
-        // =======================================================
-        // Public inputs for bounce i PV
-
-        let mut bounce_public_inputs = global_state.to_vec();
-        let subtree_public_inputs = subtrees[i].to_vec();
-        bounce_public_inputs.extend(subtree_public_inputs);
-
         // we push base acc first (it was the passthrough of bounce)
-        let base_acc_public_inputs: Vec<C2::ScalarField> = base_accs[i].to_vec();
-        bounce_public_inputs.extend(base_acc_public_inputs);
-
-        // we convert to 'emulated' since that what bounce takes in
-        // TODO: something else
-        let mut bounce_public_inputs_var: Vec<Variable> = bounce_public_inputs
-            .iter()
-            .map(|&x| {
-                let limb_x: Vec<_> = from_emulated_field(x);
-                let limb_x_vars: Vec<Variable> = limb_x
-                    .into_iter()
-                    .map(|l_x| {
-                        // for_testing.push(l_x);
-                        circuit.create_variable(field_switching(&l_x))
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
-                let recombined_x: Variable =
-                    circuit.recombine_limbs(&limb_x_vars, <C2 as Pairing>::ScalarField::B)?;
-                circuit.set_variable_public(recombined_x)?;
-                // assert_eq!(x, circuit.witness(recombined_x)?, "NOT EQUAL ");
-                Ok(limb_x_vars)
-            })
-            .collect::<Result<Vec<_>, CircuitError>>()?
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
+        let base_acc_vars = base_accs[i].to_vars(&mut circuit)?;
+        for (j, val) in base_accs[i].to_vec().iter().enumerate() {
+            // C2::scalar -> limbs of C2::base
+            let limbed_val: Vec<C2::BaseField> = from_emulated_field(*val);
+            // limbs of C2::base -> values of C2::scalar -> variables
+            let limb_vars: Vec<Variable> = limbed_val.into_iter().map(|l_x| {
+                circuit.create_variable(field_switching(&l_x))
+            }).collect::<Result<Vec<_>, _>>()?;
+            let recombined_var: Variable = circuit.recombine_limbs(&limb_vars, <C2 as Pairing>::ScalarField::B)?;
+            circuit.enforce_equal(recombined_var, base_acc_vars[j])?;
+            // assert_eq!(val, circuit.witness(recombined_var)?, "NOT EQUAL - global state");
+            bounce_public_inputs_var.extend(limb_vars);
+        }
+        g_comms_vars.push(SWPointVariable::new(base_acc_vars[0], base_acc_vars[1], BoolVar(base_acc_vars[2])));
+        u_challenges_vars.push(base_acc_vars[4]);
+        eval_vars.push(base_acc_vars[3]);
+        g_polys.push(base_pi_stars[i].clone());
 
         // we push passthrough last (it was the PV result at the end of bounce)
         bounce_public_inputs_var.push(
@@ -145,8 +163,7 @@ where
                 .create_public_boolean_variable(passthrough_pv_acc[i].comm.get_inf())?
                 .into(),
         );
-        bounce_public_inputs_var.push(0);
-        circuit.create_public_variable(C1::BaseField::from(0u64))?;
+        bounce_public_inputs_var.push(circuit.create_public_variable(C1::BaseField::from(0u64))?);
         // u-var of bounce was emulated
         let emul_point = from_emulated_field(field_switching::<_, C1::BaseField>(
             &passthrough_pv_acc[i].eval_point,
@@ -161,10 +178,7 @@ where
             .into_iter()
             .for_each(|l| bounce_public_inputs_var.push(l));
 
-        // let test_pi_vars = test_pi
-        //     .iter()
-        //     .map(|x| circuit.create_variable(field_switching(x)))
-        //     .collect::<Result<Vec<_>, _>>()?;
+        ark_std::println!("new bounce PI var len: {}", bounce_public_inputs_var.len());
 
         // =======================================================
         // PV of bounce i:
@@ -215,17 +229,16 @@ where
 
     // Rollup subtrees
     // Commitment subtree
-    // TODO use existing var
-    let left_subtree_var = circuit.create_variable(subtrees[0].commitment_subtree)?;
-    let right_subtree_var = circuit.create_variable(subtrees[1].commitment_subtree)?;
+    let left_subtree_var = subtree_vars[0][0];
+    let right_subtree_var = subtree_vars[1][0];
     let commitment_subtree = PoseidonGadget::<PoseidonStateVar<3>, C2::ScalarField>::hash(
         &mut circuit,
         [left_subtree_var, right_subtree_var].as_slice(),
     )?;
     circuit.set_variable_public(commitment_subtree)?;
     // Nullifier subtree
-    let left_subtree_var = circuit.create_variable(subtrees[0].nullifier_subtree)?;
-    let right_subtree_var = circuit.create_variable(subtrees[1].nullifier_subtree)?;
+    let left_subtree_var = subtree_vars[0][1];
+    let right_subtree_var = subtree_vars[1][1];
     let nullifier_subtree = PoseidonGadget::<PoseidonStateVar<3>, C2::ScalarField>::hash(
         &mut circuit,
         [left_subtree_var, right_subtree_var].as_slice(),
@@ -239,7 +252,7 @@ where
 pub mod merge_test {
 
     use crate::rollup::circuits::{
-        bounce::bounce_test::bounce_test_helper, merge::merge_circuit, utils::StoredProof,
+        bounce::bounce_test::bounce_test_helper, merge::{merge_circuit, self}, utils::StoredProof,
     };
     use ark_ec::pairing::Pairing;
     use curves::{pallas::PallasConfig, vesta::VestaConfig};
@@ -281,6 +294,7 @@ pub mod merge_test {
         merge_circuit
             .check_circuit_satisfiability(&merge_circuit.public_input().unwrap())
             .unwrap();
+        ark_std::println!("Merge circuit constraints: {}", merge_circuit.num_gates());
         merge_circuit.finalize_for_arithmetization().unwrap();
         let merge_ipa_srs = <PlonkIpaSnark<PallasConfig> as UniversalSNARK<PallasConfig>>::universal_setup_for_testing(
             merge_circuit.srs_size().unwrap(),
@@ -288,6 +302,10 @@ pub mod merge_test {
         ).unwrap();
         let (merge_ipa_pk, merge_ipa_vk) =
             PlonkIpaSnark::<PallasConfig>::preprocess(&merge_ipa_srs, &merge_circuit).unwrap();
+        ark_std::println!("Merge public inputs len: {}", merge_circuit.public_input().unwrap().len());
+        for (i, p) in merge_circuit.public_input().unwrap().iter().enumerate() {
+            ark_std::println!("PI {}: {}", i, p);
+        }
         let now = std::time::Instant::now();
         let merge_ipa_proof = PlonkIpaSnark::<PallasConfig>::prove::<
             _,

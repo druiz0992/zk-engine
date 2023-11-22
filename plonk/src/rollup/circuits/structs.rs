@@ -108,7 +108,7 @@ impl<C: Pairing> AccInstance<C> {
         ];
         vars
     }
-    pub fn to_vars(&self, mut circuit: PlonkCircuit<C::BaseField>) -> Result<Vec<Variable>, CircuitError> {
+    pub fn to_vars(&self, circuit: &mut PlonkCircuit<C::BaseField>) -> Result<Vec<Variable>, CircuitError> {
         let vars = vec![
             circuit.create_variable(self.comm.0)?,
             circuit.create_variable(self.comm.1)?,
