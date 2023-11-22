@@ -37,16 +37,18 @@ pub mod in_mem_storage {
             todo!()
         }
 
-        fn get_preimage(&self, key: VSW::ScalarField) -> Option<Preimage<VSW>> {
+        fn get_preimage(&self, key: VSW::BaseField) -> Option<Preimage<VSW>> {
             todo!()
         }
 
-        fn insert_preimage(
-            &mut self,
-            key: VSW::ScalarField,
-            preimage: Preimage<VSW>,
-        ) -> Option<()> {
-            todo!()
+        fn insert_preimage(&mut self, key: VSW::BaseField, preimage: Preimage<VSW>) -> Option<()> {
+            // We check it doesnt already exist so we dont overwrite.
+            if self.preimage_db.contains_key(&key.to_string()) {
+                return None;
+            }
+            // Insert returns None if there wasnt a key.
+            let insert = self.preimage_db.insert(key.to_string(), preimage);
+            Some(())
         }
 
         fn get_all_preimages(&self) -> Vec<Preimage<VSW>> {

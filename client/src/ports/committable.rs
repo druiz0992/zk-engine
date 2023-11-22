@@ -21,7 +21,7 @@ pub trait Nullifiable<F: PrimeField>: Committable<F> {
 impl<E, F> Committable<F> for Preimage<E>
 where
     E: SWCurveConfig<BaseField = F>,
-    F: PrimeField + SWCurveConfig<BaseField = F> + PoseidonParams<Field = F>,
+    F: PrimeField + PoseidonParams<Field = F>,
 {
     type Error = CryptoError;
 

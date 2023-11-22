@@ -19,12 +19,12 @@ pub mod rest_api_entry {
 
     use crate::{
         domain::{Preimage, Transaction},
-        ports::storage::PreimageDB,
+        ports::{committable::Committable, storage::PreimageDB},
         services::{
             derive_keys::{generate_keys, UserKeys},
             prover::in_memory_prover::InMemProver,
         },
-        usecase::mint::mint_tokens,
+        usecase::mint::{self, mint_tokens},
     };
 
     use super::structs::MnemonicInput;
@@ -72,9 +72,15 @@ pub mod rest_api_entry {
                 vec![mint_details.salt],
                 vec![mint_details.public_key],
             );
-            let _ = send.send(mint);
+            send.send(mint);
         });
         let transaction = recv.await.expect("Failed in rayon").unwrap();
+
+        let mut db = db.lock().await;
+        let preimage_key = mint_details
+            .commitment_hash()
+            .map_err(|_| AppError::TxError)?;
+        db.insert_preimage(preimage_key.0, mint_details);
         Ok(Json(transaction))
     }
 
