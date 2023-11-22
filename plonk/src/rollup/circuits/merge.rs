@@ -22,7 +22,7 @@ use jf_relation::{
         ecc::{short_weierstrass::SWPoint, SWToTEConParam},
         from_emulated_field, EmulationConfig,
     },
-    Circuit, PlonkCircuit,
+    Circuit, PlonkCircuit, Variable,
 };
 use jf_utils::field_switching;
 
@@ -111,30 +111,55 @@ where
 
         // we convert to 'emulated' since that what bounce takes in
         // TODO: something else
-        let mut bounce_public_inputs_var = bounce_public_inputs
+        let mut bounce_public_inputs_var: Vec<Variable> = bounce_public_inputs
             .iter()
-            .flat_map(|&x| {
-                let limb_x = from_emulated_field(x);
-                limb_x
+            .map(|&x| {
+                let limb_x: Vec<_> = from_emulated_field(x);
+                let limb_x_vars: Vec<Variable> = limb_x
                     .into_iter()
                     .map(|l_x| {
                         // for_testing.push(l_x);
                         circuit.create_variable(field_switching(&l_x))
                     })
-                    .collect::<Vec<_>>()
+                    .collect::<Result<Vec<_>, _>>()?;
+                let recombined_x: Variable =
+                    circuit.recombine_limbs(&limb_x_vars, <C2 as Pairing>::ScalarField::B)?;
+                circuit.set_variable_public(recombined_x)?;
+                // assert_eq!(x, circuit.witness(recombined_x)?, "NOT EQUAL ");
+                Ok(limb_x_vars)
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, CircuitError>>()?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
 
         // we push passthrough last (it was the PV result at the end of bounce)
-        bounce_public_inputs_var.push(circuit.create_variable(field_switching(&passthrough_pv_acc[i].comm.0))?);
-        bounce_public_inputs_var.push(circuit.create_variable(field_switching(&passthrough_pv_acc[i].comm.1))?);
-        bounce_public_inputs_var.push(circuit.false_var().into());
-        bounce_public_inputs_var.push(0 as usize);
+        bounce_public_inputs_var.push(
+            circuit.create_public_variable(field_switching(&passthrough_pv_acc[i].comm.get_x()))?,
+        );
+        bounce_public_inputs_var.push(
+            circuit.create_public_variable(field_switching(&passthrough_pv_acc[i].comm.get_y()))?,
+        );
+        bounce_public_inputs_var.push(
+            circuit
+                .create_public_boolean_variable(passthrough_pv_acc[i].comm.get_inf())?
+                .into(),
+        );
+        bounce_public_inputs_var.push(0);
+        circuit.create_public_variable(C1::BaseField::from(0u64))?;
         // u-var of bounce was emulated
-        let emul_point = from_emulated_field(field_switching::<_, C1::BaseField>(&passthrough_pv_acc[i].eval_point));
-        emul_point.iter().for_each(|l_x| {
-            bounce_public_inputs_var.push(circuit.create_variable(field_switching(l_x)).unwrap())
-        });
+        let emul_point = from_emulated_field(field_switching::<_, C1::BaseField>(
+            &passthrough_pv_acc[i].eval_point,
+        ));
+        let emul_point_limb_vars = emul_point
+            .iter()
+            .map(|l_x| circuit.create_variable(field_switching(l_x)))
+            .collect::<Result<Vec<_>, _>>()?;
+        let recombined_point = circuit.recombine_limbs(&emul_point_limb_vars, C1::BaseField::B)?;
+        circuit.set_variable_public(recombined_point)?;
+        emul_point_limb_vars
+            .into_iter()
+            .for_each(|l| bounce_public_inputs_var.push(l));
 
         // let test_pi_vars = test_pi
         //     .iter()
@@ -171,11 +196,7 @@ where
     let prover = AccProver::new();
     // 1 SW Point + 2 Field element made public here
     let (acc, _) = prover
-        .prove_accumulation(
-            &commit_key,
-            &instances,
-            &g_polys,
-        )
+        .prove_accumulation(&commit_key, &instances, &g_polys)
         .unwrap();
 
     verify_accumulation_gadget_sw_native::<
@@ -251,10 +272,7 @@ pub mod merge_test {
             [subtree_pi_1, subtree_pi_2],
             [stored_bounce.proof, stored_bounce_2.proof],
             [stored_bounce.g_poly, stored_bounce_2.g_poly],
-            [
-                passthrough_instance_1,
-                passthrough_instance_2,
-            ],
+            [passthrough_instance_1, passthrough_instance_2],
             stored_bounce.commit_key.1,
             [instance_1[0].clone(), instance_2[0].clone()],
             [stored_bounce.pi_stars.1, stored_bounce_2.pi_stars.1],

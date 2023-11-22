@@ -1,5 +1,6 @@
 pub mod base;
 pub mod bounce;
+pub mod bounce_merge;
 pub mod merge;
 pub mod structs;
 
@@ -43,7 +44,6 @@ pub mod utils {
         E: Pairing,
         <E::G1 as CurveGroup>::Config: SWCurveConfig,
         I: Pairing<BaseField = E::ScalarField>,
-
     {
         #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
         pub proof: Proof<E>,

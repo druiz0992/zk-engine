@@ -144,7 +144,7 @@ pub mod bounce_test {
     use jf_relation::{
         gadgets::ecc::short_weierstrass::SWPoint, Arithmetization, Circuit, PlonkCircuit,
     };
-    use jf_utils::{test_rng, field_switching};
+    use jf_utils::{field_switching, test_rng};
 
     #[test]
     fn bounce_test() {
@@ -156,7 +156,7 @@ pub mod bounce_test {
         let mut rng = test_rng();
         let (global_public_inputs, subtree_public_inputs, passthrough_instance, _) =
             stored_proof_base.pub_inputs;
-            
+
         let (mut bounce_circuit, public_outputs) = bounce_circuit::<PallasConfig, VestaConfig>(
             stored_proof_base.vk,
             global_public_inputs.clone(),
