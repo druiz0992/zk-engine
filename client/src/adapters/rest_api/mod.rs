@@ -24,10 +24,13 @@ pub mod rest_api_entry {
             derive_keys::{generate_keys, UserKeys},
             prover::in_memory_prover::InMemProver,
         },
-        usecase::mint::{self, mint_tokens},
+        usecase::{
+            mint::{self, mint_tokens},
+            transfer::transfer_tokens,
+        },
     };
 
-    use super::structs::MnemonicInput;
+    use super::structs::{MnemonicInput, TransferInput};
 
     pub enum AppError {
         TxError,
@@ -51,6 +54,7 @@ pub mod rest_api_entry {
             .route("/health", get(|| async { StatusCode::OK }))
             .route("/mint", post(create_mint))
             .route("/keys", post(create_keys))
+            .route("/transfer", post(create_transfer))
             .route("/preimages", get(get_preimages))
             .with_state(db_state);
 
@@ -99,5 +103,27 @@ pub mod rest_api_entry {
         let db_locked = db.lock().await;
         let preimages = db_locked.get_all_preimages();
         Ok(Json(preimages))
+    }
+
+    pub async fn create_transfer(
+        State(db): State<WriteDatabase>,
+        Json(transfer_details): Json<TransferInput<PallasConfig>>,
+    ) -> Result<Json<Transaction<VestaConfig>>, AppError> {
+        let db_locked = db.lock().await;
+        let old_preimages = transfer_details
+            .commitments_to_use
+            .iter()
+            .map(|key| db_locked.get_preimage(key).ok_or(AppError::TxError))
+            .collect()?;
+        transfer_tokens(
+            old_preimages,
+            new_token_values,
+            recipients,
+            sibling_paths,
+            commitment_roots,
+            membership_path_index,
+            root_key,
+            ephemeral_key,
+        )
     }
 }

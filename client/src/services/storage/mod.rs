@@ -38,7 +38,7 @@ pub mod in_mem_storage {
         }
 
         fn get_preimage(&self, key: VSW::BaseField) -> Option<Preimage<VSW>> {
-            todo!()
+            self.preimage_db.get(&key.to_string()).cloned()
         }
 
         fn insert_preimage(&mut self, key: VSW::BaseField, preimage: Preimage<VSW>) -> Option<()> {
