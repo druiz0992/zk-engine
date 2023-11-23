@@ -917,12 +917,7 @@ pub mod base_test {
 
         StoredProof {
             proof: base_ipa_proof,
-            pub_inputs: (
-                global_public_inputs,
-                subtree_pi,
-                instance,
-                vec![],
-            ),
+            pub_inputs: (global_public_inputs, subtree_pi, instance, vec![]),
             vk: base_ipa_vk,
             commit_key: (pallas_commit_key, vesta_commit_key),
             g_poly,

@@ -217,6 +217,7 @@ where
 pub mod bounce_test {
 
     use crate::rollup::circuits::{
+        bounce::bounce_test::bounce_test_helper,
         bounce_merge::bounce_circuit,
         merge::merge_test::merge_test_helper,
         structs::{AccInstance, GlobalPublicInputs, SubTrees},
@@ -243,12 +244,14 @@ pub mod bounce_test {
     use jf_utils::{field_switching, test_rng};
 
     #[test]
-    fn bounce_merge_test() {
-        bounce_test_helper();
+    pub fn bounce_merge_test() {
+        let stored_bounce = bounce_test_helper();
+        let stored_proof_merge = merge_test_helper(stored_bounce, Default::default());
+        bounce_merge_test_helper(stored_proof_merge);
     }
-    pub fn bounce_test_helper() -> StoredProof<VestaConfig, PallasConfig> {
-        let stored_proof_merge = merge_test_helper();
-
+    pub fn bounce_merge_test_helper(
+        stored_proof_merge: StoredProof<PallasConfig, VestaConfig>,
+    ) -> (PlonkCircuit<Fr>, StoredProof<VestaConfig, PallasConfig>) {
         let mut rng = test_rng();
         let (global_public_inputs, subtree_public_inputs, passthrough_instance, bounce_accs) =
             stored_proof_merge.pub_inputs;
@@ -347,9 +350,9 @@ pub mod bounce_test {
         // serde_json::to_writer(file, &sp).unwrap();
 
         ark_std::println!(
-            "PI length: {}",
+            "Bounce merge PI length: {}",
             bounce_circuit.public_input().unwrap().len()
         );
-        sp
+        (bounce_circuit, sp)
     }
 }

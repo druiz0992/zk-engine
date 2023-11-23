@@ -41,7 +41,7 @@ use super::structs::{AccInstance, GlobalPublicInputs, SubTrees};
 //
 #[allow(clippy::too_many_arguments)]
 pub fn merge_circuit<C1, C2>(
-    // test_pi: Vec<C1::ScalarField>,
+    test_pi: Vec<C1::ScalarField>,
     vk: VerifyingKey<C1>,
     // Std Global State
     global_state: GlobalPublicInputs<C2::ScalarField>,
@@ -182,7 +182,20 @@ where
                 .create_public_boolean_variable(passthrough_pv_acc[i].comm.get_inf())?
                 .into(),
         );
-        bounce_public_inputs_var.push(circuit.create_public_variable(C1::BaseField::from(0u64))?);
+
+        let emul_val = from_emulated_field(field_switching::<_, C1::BaseField>(
+            &passthrough_pv_acc[i].eval,
+        ));
+        let emul_val_limb_vars = emul_val
+            .iter()
+            .map(|l_x| circuit.create_variable(field_switching(l_x)))
+            .collect::<Result<Vec<_>, _>>()?;
+        let recombined_values = circuit.recombine_limbs(&emul_val_limb_vars, C1::BaseField::B)?;
+        circuit.set_variable_public(recombined_values)?;
+        emul_val_limb_vars
+            .into_iter()
+            .for_each(|l| bounce_public_inputs_var.push(l));
+
         // u-var of bounce was emulated
         let emul_point = from_emulated_field(field_switching::<_, C1::BaseField>(
             &passthrough_pv_acc[i].eval_point,
@@ -198,6 +211,12 @@ where
             .for_each(|l| bounce_public_inputs_var.push(l));
 
         ark_std::println!("new bounce PI var len: {}", bounce_public_inputs_var.len());
+        ark_std::println!("test PI var len: {}", test_pi.len());
+
+        for i in 0..test_pi.len() {
+            let emul_wit = circuit.witness(bounce_public_inputs_var[i])?;
+            ark_std::println!("PI{}:   {} | {}", i, test_pi[i], emul_wit);
+        }
 
         // =======================================================
         // PV of bounce i:
@@ -272,6 +291,7 @@ pub mod merge_test {
 
     use crate::rollup::circuits::{
         bounce::bounce_test::bounce_test_helper,
+        bounce_merge::bounce_test::{bounce_merge_test, bounce_merge_test_helper},
         merge::{self, merge_circuit},
         structs::{AccInstance, SubTrees},
         utils::StoredProof,
@@ -285,18 +305,32 @@ pub mod merge_test {
     use jf_plonk::{
         nightfall::PlonkIpaSnark, proof_system::UniversalSNARK, transcript::RescueTranscript,
     };
-    use jf_relation::{gadgets::ecc::short_weierstrass::SWPoint, Arithmetization, Circuit};
+    use jf_relation::{
+        gadgets::ecc::short_weierstrass::SWPoint, Arithmetization, Circuit, PlonkCircuit,
+    };
     use jf_utils::{field_switching, test_rng};
 
+    // #[test]
+    // pub fn merge_test() {
+    //     let stored_bounce = bounce_test_helper();
+    //     merge_test_helper(stored_bounce);
+    // }
+    //
     #[test]
-    fn merge_test() {
-        merge_test_helper();
+    pub fn merge_bounce_test() {
+        let stored_bounce = bounce_test_helper();
+        let stored_merge = merge_test_helper(stored_bounce, Default::default());
+        let (circuit, stored_bounce_merge) = bounce_merge_test_helper(stored_merge);
+        merge_test_helper(stored_bounce_merge, circuit);
     }
-    pub fn merge_test_helper() -> StoredProof<PallasConfig, VestaConfig> {
+    pub fn merge_test_helper(
+        stored_bounce: StoredProof<VestaConfig, PallasConfig>,
+        circuit: PlonkCircuit<curves::vesta::Fr>,
+    ) -> StoredProof<PallasConfig, VestaConfig> {
         ark_std::println!("Running file read");
         // let str = std::fs::File::open("bounce_proof.json").unwrap();
         // let stored_bounce: StoredProof<VestaConfig> = serde_json::from_reader(str).unwrap();
-        let stored_bounce = bounce_test_helper();
+        // let stored_bounce = bounce_test_helper();
         let stored_bounce_2 = stored_bounce.clone();
         let (global_public_inputs, subtree_pi_1, passthrough_instance_1, instance_1) =
             stored_bounce.pub_inputs;
@@ -305,7 +339,7 @@ pub mod merge_test {
         let mut rng = test_rng();
 
         let (mut merge_circuit, pi_star_out) = merge_circuit::<VestaConfig, PallasConfig>(
-            // bounce_circuit.public_input().unwrap(),
+            circuit.public_input().unwrap(),
             stored_bounce.vk,
             global_public_inputs.clone(),
             [subtree_pi_1, subtree_pi_2],

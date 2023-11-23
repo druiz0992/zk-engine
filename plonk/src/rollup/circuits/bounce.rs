@@ -100,7 +100,7 @@ where
     circuit.set_variable_public(g_comm_var.get_x())?;
     circuit.set_variable_public(g_comm_var.get_y())?;
     let bewl = circuit.create_public_boolean_variable(false)?;
-    circuit.create_public_variable(C2::ScalarField::zero())?;
+    circuit.create_public_emulated_variable(C1::ScalarField::zero())?;
     // This is to make "point" of the instance public
     for i in 0..u_var.native_vars().len() {
         circuit.set_variable_public(u_var.native_vars()[i])?;
