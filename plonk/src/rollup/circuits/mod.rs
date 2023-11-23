@@ -62,7 +62,7 @@ pub mod utils {
         pub g_poly: DensePolynomial<E::ScalarField>,
         #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
         pub pi_stars: (
-            DensePolynomial<curves::pallas::Fr>,
+            Vec<DensePolynomial<curves::pallas::Fr>>,
             DensePolynomial<curves::vesta::Fr>,
         ),
     }
@@ -79,7 +79,7 @@ pub mod utils {
         commit_key: (CommitKey<PallasConfig>, CommitKey<VestaConfig>),
         g_poly: DensePolynomial<E::ScalarField>,
         pi_stars: (
-            DensePolynomial<curves::pallas::Fr>,
+            Vec<DensePolynomial<curves::pallas::Fr>>,
             DensePolynomial<curves::vesta::Fr>,
         ),
         file_name: &str,

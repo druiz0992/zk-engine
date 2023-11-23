@@ -233,7 +233,7 @@ pub mod bounce_test {
             vk: bounce_ipa_vk,
             commit_key: stored_proof_base.commit_key,
             g_poly,
-            pi_stars: stored_proof_base.pi_stars,
+            pi_stars: ([stored_proof_base.g_poly].to_vec(), stored_proof_base.pi_stars.1),
         };
 
         // let file = std::fs::File::create("bounce_proof.json").unwrap();
