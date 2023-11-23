@@ -150,7 +150,7 @@ pub mod bounce_test {
     fn bounce_test() {
         bounce_test_helper();
     }
-    pub fn bounce_test_helper() -> (PlonkCircuit<Fr>, StoredProof<VestaConfig, PallasConfig>) {
+    pub fn bounce_test_helper() -> StoredProof<VestaConfig, PallasConfig> {
         let stored_proof_base = test_base_rollup_helper_transfer();
 
         let mut rng = test_rng();
@@ -233,7 +233,10 @@ pub mod bounce_test {
             vk: bounce_ipa_vk,
             commit_key: stored_proof_base.commit_key,
             g_poly,
-            pi_stars: ([stored_proof_base.g_poly].to_vec(), stored_proof_base.pi_stars.1),
+            pi_stars: (
+                [stored_proof_base.g_poly].to_vec(),
+                stored_proof_base.pi_stars.1,
+            ),
         };
 
         // let file = std::fs::File::create("bounce_proof.json").unwrap();
@@ -243,6 +246,6 @@ pub mod bounce_test {
             "PI length: {}",
             bounce_circuit.public_input().unwrap().len()
         );
-        (bounce_circuit, sp)
+        sp
     }
 }

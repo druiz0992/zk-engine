@@ -20,7 +20,7 @@ use jf_relation::{
     errors::CircuitError,
     gadgets::{
         ecc::{short_weierstrass::SWPoint, SWToTEConParam},
-        EmulationConfig,
+        EmulatedVariable, EmulationConfig,
     },
     Circuit, PlonkCircuit,
 };
@@ -68,27 +68,53 @@ where
     let verifying_key_var = SWVerifyingKeyVar::new_from_ipa(&mut circuit, &vk)?;
     let g_gen: SWPoint<C1::BaseField> = vk.open_key.g_bases[0].into();
 
-
     // =======================================================
     // Public inputs for merge PV
     // first: global state
-    let mut merge_public_inputs: Vec<C2::BaseField> = global_state.to_vec();
+    let merge_public_inputs: Vec<C2::BaseField> = global_state.to_vec();
+    let mut merge_public_inputs_vars = global_state
+        .to_vec()
+        .into_iter()
+        .map(|x| circuit.create_public_emulated_variable(x))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    public_outputs.extend(global_state.to_vec());
     // then both bounce_accs
-    merge_public_inputs.extend(bounce_accs[0].clone().to_vec_switch::<C2::BaseField>());
-    merge_public_inputs.extend(bounce_accs[1].clone().to_vec_switch::<C2::BaseField>());
-    // then the PV + acc result of the merge circuit
-    let passthrough_public_inputs = passthrough_merge_acc.to_vec();
-    merge_public_inputs.extend(passthrough_public_inputs);
+    let bounce_acc_vars = bounce_accs
+        .clone()
+        .into_iter()
+        .flat_map(|x: AccInstance<_>| {
+            x.to_vec_switch::<C2::BaseField>()
+                .iter()
+                .map(|&y| circuit.create_emulated_variable(y))
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .flatten()
+        .collect::<Vec<_>>();
+
     // finally, the calculated subtrees
-    let subtree_public_inputs = subtrees.to_vec();
-    merge_public_inputs.extend(subtree_public_inputs);
+    let subtree_public_inputs_vars = subtrees
+        .to_vec()
+        .into_iter()
+        .map(|x| circuit.create_public_emulated_variable(x))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    public_outputs.extend(subtrees.to_vec());
+
+    // then the PV + acc result of the merge circuit
+    let passthrough_public_inputs_vars = passthrough_merge_acc
+        .to_vec()
+        .iter()
+        .map(|&x| circuit.create_public_emulated_variable(x))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    public_outputs.extend(passthrough_merge_acc.to_vec());
+
+    merge_public_inputs_vars.extend(bounce_acc_vars.clone());
+    merge_public_inputs_vars.extend(passthrough_public_inputs_vars);
+    merge_public_inputs_vars.extend(subtree_public_inputs_vars);
 
     ark_std::println!("merge PI len: {}", merge_public_inputs.len()); // expect 22
-
-    let public_input_var = merge_public_inputs
-        .into_iter()
-        .map(|x| circuit.create_emulated_variable(x))
-        .collect::<Result<Vec<_>, _>>()?;
 
     // for pub_input in public_input_var.iter() {
     //     let emul_wit = circuit.emulated_witness(pub_input)?;
@@ -99,7 +125,7 @@ where
     let (g_comm_var, u_var) = &verifying_key_var.partial_verify_circuit_ipa(
         &mut circuit,
         &g_gen,
-        &public_input_var,
+        &merge_public_inputs_vars,
         &proof_var,
     )?;
 
@@ -114,11 +140,11 @@ where
     // for i in 0..u_var.native_vars().len() {
     //     circuit.set_variable_public(u_var.native_vars()[i])?;
     // }
-    
+
     let pv_instance = PCSInstance::<UnivariateIpaPCS<C1>>::new(
         Commitment(circuit.sw_point_witness(g_comm_var)?.into()),
         C2::BaseField::from(0u64),
-        circuit.emulated_witness(&u_var.clone())?
+        circuit.emulated_witness(&u_var.clone())?,
     );
 
     // NB being lazy here, easy to debug
@@ -131,45 +157,58 @@ where
     g_polys.push(bounce_pi_stars[1].clone());
     // Partial prove accumulation of all instances
     let prover = AccProver::new();
-    
+
     let (acc, _) = prover
         .prove_accumulation(&commit_key, &instances, &g_polys)
         .unwrap();
 
     // TODO 23.11 create vars above and re-use for PV
     let mut g_comms_vars = vec![*g_comm_var];
-    g_comms_vars.push(circuit.create_sw_point_variable(bounce_accs[0].comm.into())?);
-    g_comms_vars.push(circuit.create_sw_point_variable(bounce_accs[1].comm.into())?);
+    let g_comm_bounce = circuit.create_sw_point_variable(bounce_accs[0].comm)?;
+    let g_comm_bounce_2 = circuit.create_sw_point_variable(bounce_accs[1].comm)?;
+    let mut emul_g_comm_bounce: Vec<EmulatedVariable<_>> = vec![];
+    emul_g_comm_bounce.extend(bounce_acc_vars[0..=2].to_vec());
+    emul_g_comm_bounce.extend(bounce_acc_vars[5..=7].to_vec());
+
+    let _ = vec![
+        g_comm_bounce.get_x(),
+        g_comm_bounce.get_y(),
+        g_comm_bounce.get_inf().into(),
+        g_comm_bounce_2.get_x(),
+        g_comm_bounce_2.get_y(),
+        g_comm_bounce_2.get_inf().into(),
+    ]
+    .iter()
+    .zip(emul_g_comm_bounce)
+    .map(|(x, y)| {
+        let res = circuit.recombine_limbs(&y.native_vars(), <C1 as Pairing>::ScalarField::B)?;
+        circuit.enforce_equal(*x, res)
+    });
+
+    g_comms_vars.push(g_comm_bounce);
+    g_comms_vars.push(g_comm_bounce_2);
 
     let mut eval_vars = vec![circuit.create_emulated_variable(C1::ScalarField::zero())?];
-    eval_vars.push(circuit.create_emulated_variable(bounce_accs[0].eval)?);
-    eval_vars.push(circuit.create_emulated_variable(bounce_accs[1].eval)?);
+    eval_vars.push(bounce_acc_vars[3].clone());
+    eval_vars.push(bounce_acc_vars[8].clone());
 
     let mut eval_point_vars = vec![u_var.clone()];
-    eval_point_vars.push(circuit.create_emulated_variable(bounce_accs[0].eval_point)?);
-    eval_point_vars.push(circuit.create_emulated_variable(bounce_accs[1].eval_point)?);
+    eval_point_vars.push(bounce_acc_vars[4].clone());
+    eval_point_vars.push(bounce_acc_vars[9].clone());
     // 1 SW Point + 2 Field element made public here
-    verify_accumulation_gadget_sw::<
-        C1,
-        C2,
-        _,
-        _,
-        <<C1 as Pairing>::G1 as CurveGroup>::Config,
-    >(
+    verify_accumulation_gadget_sw::<C1, C2, _, _, <<C1 as Pairing>::G1 as CurveGroup>::Config>(
         &mut circuit,
         &g_comms_vars,
         &eval_vars,
         &eval_point_vars,
         &acc,
     )?;
-
-    // We push it onto public_outputs array so it's easier to work with outside
-    // the circuit
-    public_outputs.push(field_switching(&circuit.witness(g_comm_var.get_x())?));
-    public_outputs.push(field_switching(&circuit.witness(g_comm_var.get_y())?));
-    // public_outputs.push(field_switching(&circuit.witness(bewl.into())?));
-    public_outputs.push(C2::BaseField::zero());
-    public_outputs.push(circuit.emulated_witness(u_var)?);
+    // Acc.comm.0
+    public_outputs.push(field_switching(&acc.instance.comm.0.x));
+    public_outputs.push(field_switching(&acc.instance.comm.0.y));
+    public_outputs.push(acc.instance.comm.0.infinity.into());
+    public_outputs.push(acc.instance.value);
+    public_outputs.push(acc.instance.point);
 
     Ok((circuit, public_outputs))
 }
@@ -178,8 +217,8 @@ where
 pub mod bounce_test {
 
     use crate::rollup::circuits::{
-        merge::merge_test::merge_test_helper,
         bounce_merge::bounce_circuit,
+        merge::merge_test::merge_test_helper,
         structs::{AccInstance, GlobalPublicInputs, SubTrees},
         utils::{deserial_from_file, serial_to_file, StoredProof},
     };
@@ -207,15 +246,14 @@ pub mod bounce_test {
     fn bounce_merge_test() {
         bounce_test_helper();
     }
-    pub fn bounce_test_helper() -> () {
+    pub fn bounce_test_helper() -> StoredProof<VestaConfig, PallasConfig> {
         let stored_proof_merge = merge_test_helper();
 
         let mut rng = test_rng();
         let (global_public_inputs, subtree_public_inputs, passthrough_instance, bounce_accs) =
             stored_proof_merge.pub_inputs;
 
-        let (mut bounce_circuit, public_outputs) =
-        bounce_circuit::<PallasConfig, VestaConfig>(
+        let (mut bounce_circuit, public_outputs) = bounce_circuit::<PallasConfig, VestaConfig>(
             stored_proof_merge.vk,
             global_public_inputs.clone(),
             subtree_public_inputs.clone(),
@@ -224,7 +262,10 @@ pub mod bounce_test {
             passthrough_instance,
             stored_proof_merge.commit_key.0.clone(),
             [bounce_accs[0].clone(), bounce_accs[1].clone()],
-            [stored_proof_merge.pi_stars.0[0].clone(), stored_proof_merge.pi_stars.0[1].clone()]
+            [
+                stored_proof_merge.pi_stars.0[0].clone(),
+                stored_proof_merge.pi_stars.0[1].clone(),
+            ],
         )
         .unwrap();
         bounce_circuit
@@ -260,46 +301,47 @@ pub mod bounce_test {
 
         // public output is in Pallas::scalar
 
+        // This is the Vesta acc calculated in base
+        let passthrough = AccInstance {
+            comm: SWPoint(
+                public_outputs[7],
+                public_outputs[8],
+                public_outputs[9] == Fq::one(),
+            ),
+            // These are originally Vesta Fr => small => safe conversion
+            eval: field_switching(&public_outputs[10]),
+            eval_point: field_switching(&public_outputs[11]),
+        };
 
-        //TODO
-        
-        // // This is the Vesta acc calculated in base
-        // let passthrough = AccInstance {
-        //     comm: SWPoint(
-        //         public_outputs[7],
-        //         public_outputs[8],
-        //         public_outputs[9] == Fq::one(),
-        //     ),
-        //     // These are originally Vesta Fr => small => safe conversion
-        //     eval: field_switching(&public_outputs[10]),
-        //     eval_point: field_switching(&public_outputs[11]),
-        // };
+        // This is the Pallas acc we just made by Pv'ing base
+        let instance = AccInstance {
+            // This is originally a Pallas point => safe conversion
+            comm: SWPoint(
+                field_switching(&public_outputs[public_outputs.len() - 5]),
+                field_switching(&public_outputs[public_outputs.len() - 4]),
+                public_outputs[public_outputs.len() - 3] == Fq::one(),
+            ),
+            eval: public_outputs[public_outputs.len() - 2], // = 0 because we only PV one base
+            eval_point: public_outputs[public_outputs.len() - 1],
+        };
 
-        // // This is the Pallas acc we just made by Pv'ing base
-        // let instance = AccInstance {
-        //     // This is originally a Pallas point => safe conversion
-        //     comm: SWPoint(
-        //         field_switching(&public_outputs[public_outputs.len() - 5]),
-        //         field_switching(&public_outputs[public_outputs.len() - 4]),
-        //         public_outputs[public_outputs.len() - 3] == Fq::one(),
-        //     ),
-        //     eval: public_outputs[public_outputs.len() - 2], // = 0 because we only PV one base
-        //     eval_point: public_outputs[public_outputs.len() - 1],
-        // };
+        let sp = StoredProof::<VestaConfig, PallasConfig> {
+            proof: bounce_ipa_proof,
+            pub_inputs: (
+                global_public_inputs,
+                subtree_public_inputs,
+                instance,
+                vec![passthrough],
+            ),
+            vk: bounce_ipa_vk,
+            commit_key: stored_proof_merge.commit_key,
+            g_poly,
+            pi_stars: stored_proof_merge.pi_stars,
+        };
 
-        // let sp = StoredProof::<VestaConfig, PallasConfig> {
-        //     proof: bounce_ipa_proof,
-        //     pub_inputs: (
-        //         global_public_inputs,
-        //         subtree_public_inputs,
-        //         instance,
-        //         vec![passthrough],
-        //     ),
-        //     vk: bounce_ipa_vk,
-        //     commit_key: stored_proof_merge.commit_key,
-        //     g_poly,
-        //     pi_stars: stored_proof_merge.pi_stars,
-        // };
+        for i in 0..public_outputs.len() {
+            ark_std::println!("Public Outputs {}: {}", i, public_outputs[i]);
+        }
 
         // let file = std::fs::File::create("bounce_proof.json").unwrap();
         // serde_json::to_writer(file, &sp).unwrap();
@@ -308,7 +350,6 @@ pub mod bounce_test {
             "PI length: {}",
             bounce_circuit.public_input().unwrap().len()
         );
-        ()
-        // (bounce_circuit, sp)
+        sp
     }
 }
