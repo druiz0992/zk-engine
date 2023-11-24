@@ -51,6 +51,7 @@ where
     ciphertext: [E::ScalarField; 3],
 }
 
+#[allow(clippy::type_complexity)]
 pub fn base_rollup_circuit<C1, C2, const I: usize, const C: usize, const N: usize>(
     client_inputs: [ClientInput<C1, C, N>; I],
     global_vk_root: C2::ScalarField,
@@ -464,12 +465,11 @@ pub mod base_test {
     use ark_ec::short_weierstrass::SWCurveConfig;
     use ark_ec::CurveGroup;
     use ark_ff::{One, Zero};
-    use ark_poly::univariate::DensePolynomial;
     use ark_std::UniformRand;
     use common::crypto::poseidon::Poseidon;
     use curves::pallas::{Affine, Fq, Fr, PallasConfig};
     use curves::vesta::VestaConfig;
-    use jf_plonk::nightfall::ipa_structs::{CommitKey, Proof, VerifyingKey};
+    use jf_plonk::nightfall::ipa_structs::VerifyingKey;
     use jf_plonk::nightfall::PlonkIpaSnark;
     use jf_plonk::proof_system::structs::VK;
     use jf_plonk::proof_system::UniversalSNARK;
@@ -488,12 +488,12 @@ pub mod base_test {
     use crate::client::circuits::mint::mint_circuit;
     use crate::client::circuits::transfer::transfer_circuit;
     use crate::rollup::circuits::structs::{AccInstance, GlobalPublicInputs, SubTrees};
-    use crate::rollup::circuits::utils::{serial_to_file, StoredProof};
+    use crate::rollup::circuits::utils::StoredProof;
 
     use super::{base_rollup_circuit, ClientInput};
     #[test]
     fn test_base_circuit() {
-        // test_base_rollup_helper_mint();
+        test_base_rollup_helper_mint();
         test_base_rollup_helper_transfer();
     }
 

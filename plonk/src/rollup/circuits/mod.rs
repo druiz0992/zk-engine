@@ -8,17 +8,23 @@ pub mod utils {
     use std::fs::File;
 
     use ark_ec::{pairing::Pairing, short_weierstrass::SWCurveConfig, CurveGroup};
+
     use ark_ff::PrimeField;
     use ark_poly::univariate::DensePolynomial;
     use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
     use curves::{pallas::PallasConfig, vesta::VestaConfig};
     use jf_plonk::nightfall::ipa_structs::{CommitKey, Proof, VerifyingKey};
-    use num_bigint::BigUint;
-    use num_traits::Num;
+    use jf_relation::{
+        errors::CircuitError,
+        gadgets::{from_emulated_field, EmulationConfig},
+        Circuit, PlonkCircuit, Variable,
+    };
+    use jf_utils::field_switching;
     use serde::{Deserialize, Serialize};
 
     use super::structs::{AccInstance, GlobalPublicInputs, SubTrees};
 
+    // This is a helper to serialize
     pub fn ark_se<S, A: CanonicalSerialize>(a: &A, s: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -29,6 +35,7 @@ pub mod utils {
         s.serialize_bytes(&bytes)
     }
 
+    // This is a helper to deserialize
     pub fn ark_de<'de, D, A: CanonicalDeserialize>(data: D) -> Result<A, D::Error>
     where
         D: serde::de::Deserializer<'de>,
@@ -36,6 +43,26 @@ pub mod utils {
         let s: Vec<u8> = serde::de::Deserialize::deserialize(data)?;
         let a = A::deserialize_with_mode(s.as_slice(), Compress::Yes, Validate::Yes);
         a.map_err(serde::de::Error::custom)
+    }
+
+    // This is a helper to enforce limb decomposition into Variables
+    pub fn enforce_limb_decomposition<P: Pairing>(
+        circuit: &mut PlonkCircuit<P::ScalarField>,
+        a: &P::ScalarField,
+    ) -> Result<(Vec<Variable>, Variable), CircuitError>
+    where
+        <P as Pairing>::ScalarField: EmulationConfig<<P as Pairing>::BaseField>,
+    {
+        // C2::scalar -> limbs of C2::base
+        let limbed_val: Vec<P::BaseField> = from_emulated_field(*a);
+        // limbs of C2::base -> values of C2::scalar -> variables
+        let limb_vars: Vec<Variable> = limbed_val
+            .into_iter()
+            .map(|l_x| circuit.create_variable(field_switching(&l_x)))
+            .collect::<Result<Vec<_>, _>>()?;
+        let recombined_var: Variable =
+            circuit.recombine_limbs(&limb_vars, <P as Pairing>::ScalarField::B)?;
+        Ok((limb_vars, recombined_var))
     }
 
     #[derive(CanonicalSerialize, CanonicalDeserialize, Serialize, Deserialize, Clone)]

@@ -4,18 +4,12 @@ use ark_ec::{
     CurveGroup,
 };
 use ark_ff::{PrimeField, Zero};
-use ark_poly::univariate::DensePolynomial;
 use common::crypto::poseidon::constants::PoseidonParams;
 use jf_plonk::nightfall::{
-    accumulation::{
-        accumulation_structs::PCSInstance, circuit::gadgets::verify_accumulation_gadget_sw_native,
-        prover::AccProver,
-    },
     circuit::plonk_partial_verifier::{PlonkIpaSWProofVar, SWVerifyingKeyVar},
-    ipa_structs::{CommitKey, Proof, VerifyingKey},
-    UnivariateIpaPCS,
+    ipa_structs::{Proof, VerifyingKey},
 };
-use jf_primitives::{pcs::prelude::Commitment, rescue::RescueParameter};
+use jf_primitives::rescue::RescueParameter;
 use jf_relation::{
     errors::CircuitError,
     gadgets::{
@@ -29,8 +23,8 @@ use jf_utils::field_switching;
 use super::structs::{AccInstance, GlobalPublicInputs, SubTrees};
 
 // C1 is Pallas, C2 is Vesta
-//
 
+#[allow(clippy::type_complexity)]
 pub fn bounce_circuit<C1, C2>(
     vk: VerifyingKey<C1>,
     // Std Global State
@@ -56,13 +50,11 @@ where
         PrimeField + PoseidonParams<Field = C1::ScalarField> + RescueParameter + SWToTEConParam,
     <C1 as Pairing>::ScalarField: EmulationConfig<<C1 as Pairing>::BaseField>,
 {
-    // This is useful to store re-stitched emulated variables into Field elements
-    let mut public_outputs: Vec<C1::ScalarField> = vec![];
     let mut circuit = PlonkCircuit::<C2::ScalarField>::new_ultra_plonk(8);
-    // This stores instances for the accumulator
     let verifying_key_var = SWVerifyingKeyVar::new_from_ipa(&mut circuit, &vk)?;
     let g_gen: SWPoint<C1::BaseField> = vk.open_key.g_bases[0].into();
 
+    // Initialise public inputs for the circuit
     let mut base_public_inputs: Vec<C2::BaseField> = global_state.to_vec();
 
     let subtree_public_inputs = subtrees.to_vec();
@@ -71,20 +63,12 @@ where
     let passthrough_public_inputs = base_acc.to_vec();
     base_public_inputs.extend(passthrough_public_inputs);
 
-    // TODO we don't need to set emulated base_acc.comm public
-    // Since base_acc.comm is a vesta point => x and y are vesta basefield = pallas scalar
-    // => are native here
+    // Convert public inputs to variables
     let public_input_var = base_public_inputs
-        .into_iter()
-        // TODO dont do this and instead work out how to truncate and check in merge
-        // We need something like circuit.emul_var_trunc: EmulatedVariable -> Variable
-        .map(|x| circuit.create_public_emulated_variable(x))
+        .iter()
+        .map(|&x| circuit.create_public_emulated_variable(x))
         .collect::<Result<Vec<_>, _>>()?;
 
-    for pub_input in public_input_var.iter() {
-        let emul_wit = circuit.emulated_witness(pub_input)?;
-        public_outputs.push(emul_wit);
-    }
     let proof_var = PlonkIpaSWProofVar::create_variables(&mut circuit, &proof)?;
 
     let (g_comm_var, u_var) = &verifying_key_var.partial_verify_circuit_ipa(
@@ -97,20 +81,25 @@ where
     // This is to make g_comm_var a public input to the circuit
     let is_infinity = circuit.is_neutral_sw_point::<C1>(g_comm_var)?;
     circuit.enforce_false(is_infinity.into())?;
+    // Set g_comm_var to public
     circuit.set_variable_public(g_comm_var.get_x())?;
     circuit.set_variable_public(g_comm_var.get_y())?;
-    let bewl = circuit.create_public_boolean_variable(false)?;
+    circuit.set_variable_public(g_comm_var.get_inf().into())?;
+    // Set evaluation to zero and public
     circuit.create_public_emulated_variable(C1::ScalarField::zero())?;
     // This is to make "point" of the instance public
-    for i in 0..u_var.native_vars().len() {
-        circuit.set_variable_public(u_var.native_vars()[i])?;
+    for u_var_limb in u_var.native_vars() {
+        circuit.set_variable_public(u_var_limb)?;
     }
 
     // We push it onto public_outputs array so it's easier to work with outside
     // the circuit
+    let mut public_outputs = base_public_inputs;
     public_outputs.push(field_switching(&circuit.witness(g_comm_var.get_x())?));
     public_outputs.push(field_switching(&circuit.witness(g_comm_var.get_y())?));
-    public_outputs.push(field_switching(&circuit.witness(bewl.into())?));
+    public_outputs.push(field_switching(
+        &circuit.witness(g_comm_var.get_inf().into())?,
+    ));
     public_outputs.push(C2::BaseField::zero());
     public_outputs.push(circuit.emulated_witness(u_var)?);
 
@@ -121,29 +110,19 @@ where
 pub mod bounce_test {
 
     use crate::rollup::circuits::{
-        base::base_test::test_base_rollup_helper_transfer,
-        bounce::bounce_circuit,
-        structs::{AccInstance, GlobalPublicInputs, SubTrees},
-        utils::{deserial_from_file, serial_to_file, StoredProof},
+        base::base_test::test_base_rollup_helper_transfer, bounce::bounce_circuit,
+        structs::AccInstance, utils::StoredProof,
     };
     use ark_ec::pairing::Pairing;
     use ark_ff::One;
-    use ark_poly::univariate::DensePolynomial;
     use curves::{
         pallas::PallasConfig,
-        vesta::{Fq, Fr, VestaConfig},
+        vesta::{Fq, VestaConfig},
     };
     use jf_plonk::{
-        nightfall::{
-            ipa_structs::{CommitKey, Proof, VerifyingKey},
-            PlonkIpaSnark,
-        },
-        proof_system::UniversalSNARK,
-        transcript::RescueTranscript,
+        nightfall::PlonkIpaSnark, proof_system::UniversalSNARK, transcript::RescueTranscript,
     };
-    use jf_relation::{
-        gadgets::ecc::short_weierstrass::SWPoint, Arithmetization, Circuit, PlonkCircuit,
-    };
+    use jf_relation::{gadgets::ecc::short_weierstrass::SWPoint, Arithmetization, Circuit};
     use jf_utils::{field_switching, test_rng};
 
     #[test]
@@ -239,13 +218,6 @@ pub mod bounce_test {
             ),
         };
 
-        // let file = std::fs::File::create("bounce_proof.json").unwrap();
-        // serde_json::to_writer(file, &sp).unwrap();
-
-        ark_std::println!(
-            "PI length: {}",
-            bounce_circuit.public_input().unwrap().len()
-        );
         sp
     }
 }

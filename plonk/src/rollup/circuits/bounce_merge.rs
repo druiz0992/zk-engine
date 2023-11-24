@@ -31,7 +31,8 @@ use super::structs::{AccInstance, GlobalPublicInputs, SubTrees};
 // C1 is Pallas, C2 is Vesta
 //
 
-pub fn bounce_circuit<C1, C2>(
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
+pub fn bounce_merge_circuit<C1, C2>(
     vk: VerifyingKey<C1>,
     // Std Global State
     global_state: GlobalPublicInputs<C2::BaseField>,
@@ -114,12 +115,6 @@ where
     merge_public_inputs_vars.extend(passthrough_public_inputs_vars);
     merge_public_inputs_vars.extend(subtree_public_inputs_vars);
 
-    ark_std::println!("merge PI len: {}", merge_public_inputs.len()); // expect 22
-
-    // for pub_input in public_input_var.iter() {
-    //     let emul_wit = circuit.emulated_witness(pub_input)?;
-    //     public_outputs.push(emul_wit);
-    // }
     let proof_var = PlonkIpaSWProofVar::create_variables(&mut circuit, &proof)?;
 
     let (g_comm_var, u_var) = &verifying_key_var.partial_verify_circuit_ipa(
@@ -128,18 +123,6 @@ where
         &merge_public_inputs_vars,
         &proof_var,
     )?;
-
-    // This is to make g_comm_var a public input to the circuit
-    // let is_infinity = circuit.is_neutral_sw_point::<C1>(g_comm_var)?;
-    // circuit.enforce_false(is_infinity.into())?;
-    // circuit.set_variable_public(g_comm_var.get_x())?;
-    // circuit.set_variable_public(g_comm_var.get_y())?;
-    // let bewl = circuit.create_public_boolean_variable(false)?;
-    // circuit.create_public_variable(C2::ScalarField::zero())?;
-    // // This is to make "point" of the instance public
-    // for i in 0..u_var.native_vars().len() {
-    //     circuit.set_variable_public(u_var.native_vars()[i])?;
-    // }
 
     let pv_instance = PCSInstance::<UnivariateIpaPCS<C1>>::new(
         Commitment(circuit.sw_point_witness(g_comm_var)?.into()),
@@ -214,63 +197,53 @@ where
 }
 
 #[cfg(test)]
-pub mod bounce_test {
+pub mod bounce_merge_test {
 
     use crate::rollup::circuits::{
-        bounce::bounce_test::bounce_test_helper,
-        bounce_merge::bounce_circuit,
-        merge::merge_test::merge_test_helper,
-        structs::{AccInstance, GlobalPublicInputs, SubTrees},
-        utils::{deserial_from_file, serial_to_file, StoredProof},
+        bounce::bounce_test::bounce_test_helper, bounce_merge::bounce_merge_circuit,
+        merge::merge_test::merge_test_helper, structs::AccInstance, utils::StoredProof,
     };
     use ark_ec::pairing::Pairing;
     use ark_ff::One;
-    use ark_poly::univariate::DensePolynomial;
     use curves::{
         pallas::PallasConfig,
-        vesta::{Fq, Fr, VestaConfig},
+        vesta::{Fq, VestaConfig},
     };
     use jf_plonk::{
-        nightfall::{
-            ipa_structs::{CommitKey, Proof, VerifyingKey},
-            PlonkIpaSnark,
-        },
-        proof_system::UniversalSNARK,
-        transcript::RescueTranscript,
+        nightfall::PlonkIpaSnark, proof_system::UniversalSNARK, transcript::RescueTranscript,
     };
-    use jf_relation::{
-        gadgets::ecc::short_weierstrass::SWPoint, Arithmetization, Circuit, PlonkCircuit,
-    };
+    use jf_relation::{gadgets::ecc::short_weierstrass::SWPoint, Arithmetization, Circuit};
     use jf_utils::{field_switching, test_rng};
 
     #[test]
     pub fn bounce_merge_test() {
         let stored_bounce = bounce_test_helper();
-        let stored_proof_merge = merge_test_helper(stored_bounce, Default::default());
+        let stored_proof_merge = merge_test_helper(stored_bounce);
         bounce_merge_test_helper(stored_proof_merge);
     }
     pub fn bounce_merge_test_helper(
         stored_proof_merge: StoredProof<PallasConfig, VestaConfig>,
-    ) -> (PlonkCircuit<Fr>, StoredProof<VestaConfig, PallasConfig>) {
+    ) -> StoredProof<VestaConfig, PallasConfig> {
         let mut rng = test_rng();
         let (global_public_inputs, subtree_public_inputs, passthrough_instance, bounce_accs) =
             stored_proof_merge.pub_inputs;
 
-        let (mut bounce_circuit, public_outputs) = bounce_circuit::<PallasConfig, VestaConfig>(
-            stored_proof_merge.vk,
-            global_public_inputs.clone(),
-            subtree_public_inputs.clone(),
-            stored_proof_merge.proof,
-            stored_proof_merge.g_poly,
-            passthrough_instance,
-            stored_proof_merge.commit_key.0.clone(),
-            [bounce_accs[0].clone(), bounce_accs[1].clone()],
-            [
-                stored_proof_merge.pi_stars.0[0].clone(),
-                stored_proof_merge.pi_stars.0[1].clone(),
-            ],
-        )
-        .unwrap();
+        let (mut bounce_circuit, public_outputs) =
+            bounce_merge_circuit::<PallasConfig, VestaConfig>(
+                stored_proof_merge.vk,
+                global_public_inputs.clone(),
+                subtree_public_inputs.clone(),
+                stored_proof_merge.proof,
+                stored_proof_merge.g_poly,
+                passthrough_instance,
+                stored_proof_merge.commit_key.0.clone(),
+                [bounce_accs[0].clone(), bounce_accs[1].clone()],
+                [
+                    stored_proof_merge.pi_stars.0[0].clone(),
+                    stored_proof_merge.pi_stars.0[1].clone(),
+                ],
+            )
+            .unwrap();
         bounce_circuit
             .check_circuit_satisfiability(&bounce_circuit.public_input().unwrap())
             .unwrap();
@@ -328,7 +301,7 @@ pub mod bounce_test {
             eval_point: public_outputs[public_outputs.len() - 1],
         };
 
-        let sp = StoredProof::<VestaConfig, PallasConfig> {
+        StoredProof::<VestaConfig, PallasConfig> {
             proof: bounce_ipa_proof,
             pub_inputs: (
                 global_public_inputs,
@@ -340,19 +313,6 @@ pub mod bounce_test {
             commit_key: stored_proof_merge.commit_key,
             g_poly,
             pi_stars: stored_proof_merge.pi_stars,
-        };
-
-        for i in 0..public_outputs.len() {
-            ark_std::println!("Public Outputs {}: {}", i, public_outputs[i]);
         }
-
-        // let file = std::fs::File::create("bounce_proof.json").unwrap();
-        // serde_json::to_writer(file, &sp).unwrap();
-
-        ark_std::println!(
-            "Bounce merge PI length: {}",
-            bounce_circuit.public_input().unwrap().len()
-        );
-        (bounce_circuit, sp)
     }
 }

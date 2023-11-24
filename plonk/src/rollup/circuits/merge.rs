@@ -31,17 +31,15 @@ use jf_utils::field_switching;
 
 use crate::primitives::circuits::poseidon::{PoseidonGadget, PoseidonStateVar};
 
-use super::structs::{AccInstance, GlobalPublicInputs, SubTrees};
+use super::{
+    structs::{AccInstance, GlobalPublicInputs, SubTrees},
+    utils::enforce_limb_decomposition,
+};
 
 // C1 is Vesta, C2 is Pallas
-//Public Inputs:
-//[Commitment Root[0],Vk root[1], nullifier root [2],
-// leaf_count[3], verify_acc[4..7], verify_acc_field[7..9], new_nullifier_Root, comm_subtree,
-// null_subtree ]
-//
-#[allow(clippy::too_many_arguments)]
+
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub fn merge_circuit<C1, C2>(
-    test_pi: Vec<C1::ScalarField>,
     vk: VerifyingKey<C1>,
     // Std Global State
     global_state: GlobalPublicInputs<C2::ScalarField>,
@@ -108,31 +106,34 @@ where
         let mut bounce_public_inputs_var = vec![];
         // global state
         for (j, val) in global_state.to_vec().iter().enumerate() {
+            let (limb_vars, val_var): (Vec<Variable>, Variable) =
+                enforce_limb_decomposition::<C2>(&mut circuit, val)?;
             // C2::scalar -> limbs of C2::base
-            let limbed_val: Vec<C2::BaseField> = from_emulated_field(*val);
-            // limbs of C2::base -> values of C2::scalar -> variables
-            let limb_vars: Vec<Variable> = limbed_val
-                .into_iter()
-                .map(|l_x| circuit.create_variable(field_switching(&l_x)))
-                .collect::<Result<Vec<_>, _>>()?;
-            let recombined_var: Variable =
-                circuit.recombine_limbs(&limb_vars, <C2 as Pairing>::ScalarField::B)?;
-            circuit.enforce_equal(recombined_var, global_state_vars[j])?;
-            // assert_eq!(val, circuit.witness(recombined_var)?, "NOT EQUAL - global state");
+            // let limbed_val: Vec<C2::BaseField> = from_emulated_field(*val);
+            // // limbs of C2::base -> values of C2::scalar -> variables
+            // let limb_vars: Vec<Variable> = limbed_val
+            //     .into_iter()
+            //     .map(|l_x| circuit.create_variable(field_switching(&l_x)))
+            //     .collect::<Result<Vec<_>, _>>()?;
+            // let recombined_var: Variable =
+            //     circuit.recombine_limbs(&limb_vars, <C2 as Pairing>::ScalarField::B)?;
+            circuit.enforce_equal(val_var, global_state_vars[j])?;
             bounce_public_inputs_var.extend(limb_vars);
         }
 
         // subtrees
         for (j, val) in subtrees[i].to_vec().iter().enumerate() {
+            let (limb_vars, val_var): (Vec<Variable>, Variable) =
+                enforce_limb_decomposition::<C2>(&mut circuit, val)?;
+
             // C2::scalar -> limbs of C2::base
-            let limbed_val: Vec<C2::BaseField> = from_emulated_field(*val);
-            // limbs of C2::base -> values of C2::scalar -> variables
-            let limb_vars: Vec<Variable> = limbed_val
-                .into_iter()
-                .map(|l_x| circuit.create_variable(field_switching(&l_x)))
-                .collect::<Result<Vec<_>, _>>()?;
-            subtree_vars[i][j] =
-                circuit.recombine_limbs(&limb_vars, <C2 as Pairing>::ScalarField::B)?;
+            // let limbed_val: Vec<C2::BaseField> = from_emulated_field(*val);
+            // // limbs of C2::base -> values of C2::scalar -> variables
+            // let limb_vars: Vec<Variable> = limbed_val
+            //     .into_iter()
+            //     .map(|l_x| circuit.create_variable(field_switching(&l_x)))
+            //     .collect::<Result<Vec<_>, _>>()?;
+            subtree_vars[i][j] = val_var;
             // assert_eq!(val, circuit.witness(recombined_var)?, "NOT EQUAL - subtree");
             bounce_public_inputs_var.extend(limb_vars);
         }
@@ -148,16 +149,19 @@ where
         // we push base acc first (it was the passthrough of bounce)
         let base_acc_vars = base_accs[i].to_vars(&mut circuit)?;
         for (j, val) in base_accs[i].to_vec().iter().enumerate() {
+            let (limb_vars, val_var): (Vec<Variable>, Variable) =
+                enforce_limb_decomposition::<C2>(&mut circuit, val)?;
+
             // C2::scalar -> limbs of C2::base
-            let limbed_val: Vec<C2::BaseField> = from_emulated_field(*val);
-            // limbs of C2::base -> values of C2::scalar -> variables
-            let limb_vars: Vec<Variable> = limbed_val
-                .into_iter()
-                .map(|l_x| circuit.create_variable(field_switching(&l_x)))
-                .collect::<Result<Vec<_>, _>>()?;
-            let recombined_var: Variable =
-                circuit.recombine_limbs(&limb_vars, <C2 as Pairing>::ScalarField::B)?;
-            circuit.enforce_equal(recombined_var, base_acc_vars[j])?;
+            // let limbed_val: Vec<C2::BaseField> = from_emulated_field(*val);
+            // // limbs of C2::base -> values of C2::scalar -> variables
+            // let limb_vars: Vec<Variable> = limbed_val
+            //     .into_iter()
+            //     .map(|l_x| circuit.create_variable(field_switching(&l_x)))
+            //     .collect::<Result<Vec<_>, _>>()?;
+            // let recombined_var: Variable =
+            //     circuit.recombine_limbs(&limb_vars, <C2 as Pairing>::ScalarField::B)?;
+            circuit.enforce_equal(val_var, base_acc_vars[j])?;
             // assert_eq!(val, circuit.witness(recombined_var)?, "NOT EQUAL - global state");
             bounce_public_inputs_var.extend(limb_vars);
         }
@@ -209,14 +213,6 @@ where
         emul_point_limb_vars
             .into_iter()
             .for_each(|l| bounce_public_inputs_var.push(l));
-
-        ark_std::println!("new bounce PI var len: {}", bounce_public_inputs_var.len());
-        ark_std::println!("test PI var len: {}", test_pi.len());
-
-        for i in 0..test_pi.len() {
-            let emul_wit = circuit.witness(bounce_public_inputs_var[i])?;
-            ark_std::println!("PI{}:   {} | {}", i, test_pi[i], emul_wit);
-        }
 
         // =======================================================
         // PV of bounce i:
@@ -291,8 +287,8 @@ pub mod merge_test {
 
     use crate::rollup::circuits::{
         bounce::bounce_test::bounce_test_helper,
-        bounce_merge::bounce_test::{bounce_merge_test, bounce_merge_test_helper},
-        merge::{self, merge_circuit},
+        bounce_merge::bounce_test::bounce_merge_test_helper,
+        merge::merge_circuit,
         structs::{AccInstance, SubTrees},
         utils::StoredProof,
     };
@@ -305,32 +301,25 @@ pub mod merge_test {
     use jf_plonk::{
         nightfall::PlonkIpaSnark, proof_system::UniversalSNARK, transcript::RescueTranscript,
     };
-    use jf_relation::{
-        gadgets::ecc::short_weierstrass::SWPoint, Arithmetization, Circuit, PlonkCircuit,
-    };
+    use jf_relation::{gadgets::ecc::short_weierstrass::SWPoint, Arithmetization, Circuit};
     use jf_utils::{field_switching, test_rng};
 
-    // #[test]
-    // pub fn merge_test() {
-    //     let stored_bounce = bounce_test_helper();
-    //     merge_test_helper(stored_bounce);
-    // }
-    //
+    #[test]
+    pub fn merge_test() {
+        let stored_bounce = bounce_test_helper();
+        merge_test_helper(stored_bounce);
+    }
+
     #[test]
     pub fn merge_bounce_test() {
         let stored_bounce = bounce_test_helper();
-        let stored_merge = merge_test_helper(stored_bounce, Default::default());
-        let (circuit, stored_bounce_merge) = bounce_merge_test_helper(stored_merge);
-        merge_test_helper(stored_bounce_merge, circuit);
+        let stored_merge = merge_test_helper(stored_bounce);
+        let stored_bounce_merge = bounce_merge_test_helper(stored_merge);
+        merge_test_helper(stored_bounce_merge);
     }
     pub fn merge_test_helper(
         stored_bounce: StoredProof<VestaConfig, PallasConfig>,
-        circuit: PlonkCircuit<curves::vesta::Fr>,
     ) -> StoredProof<PallasConfig, VestaConfig> {
-        ark_std::println!("Running file read");
-        // let str = std::fs::File::open("bounce_proof.json").unwrap();
-        // let stored_bounce: StoredProof<VestaConfig> = serde_json::from_reader(str).unwrap();
-        // let stored_bounce = bounce_test_helper();
         let stored_bounce_2 = stored_bounce.clone();
         let (global_public_inputs, subtree_pi_1, passthrough_instance_1, instance_1) =
             stored_bounce.pub_inputs;
@@ -339,7 +328,6 @@ pub mod merge_test {
         let mut rng = test_rng();
 
         let (mut merge_circuit, pi_star_out) = merge_circuit::<VestaConfig, PallasConfig>(
-            circuit.public_input().unwrap(),
             stored_bounce.vk,
             global_public_inputs.clone(),
             [subtree_pi_1, subtree_pi_2],
@@ -365,14 +353,7 @@ pub mod merge_test {
         ).unwrap();
         let (merge_ipa_pk, merge_ipa_vk) =
             PlonkIpaSnark::<PallasConfig>::preprocess(&merge_ipa_srs, &merge_circuit).unwrap();
-        ark_std::println!(
-            "Merge public inputs len: {}",
-            merge_circuit.public_input().unwrap().len()
-        );
         let all_pi = merge_circuit.public_input().unwrap();
-        for (i, p) in all_pi.iter().enumerate() {
-            ark_std::println!("PI {}: {}", i, p);
-        }
         let now = std::time::Instant::now();
         let (merge_ipa_proof, g_poly, _) = PlonkIpaSnark::<PallasConfig>::prove_for_partial::<
             _,
@@ -399,16 +380,13 @@ pub mod merge_test {
             eval: field_switching(&all_pi[all_pi.len() - 4]),
             eval_point: field_switching(&all_pi[all_pi.len() - 3]),
         };
-        let sp = StoredProof::<PallasConfig, VestaConfig> {
+        StoredProof::<PallasConfig, VestaConfig> {
             proof: merge_ipa_proof,
             pub_inputs: (
                 global_public_inputs,
                 st,
                 instance,
-                vec![
-                    passthrough_instance_1.clone(),
-                    passthrough_instance_2.clone(),
-                ],
+                vec![passthrough_instance_1, passthrough_instance_2],
             ),
             vk: merge_ipa_vk,
             commit_key: stored_bounce.commit_key.clone(),
@@ -421,8 +399,6 @@ pub mod merge_test {
                 .to_vec(),
                 pi_star_out,
             ), // TODO do we need 3 here?
-        };
-
-        sp
+        }
     }
 }

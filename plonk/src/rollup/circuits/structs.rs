@@ -1,9 +1,9 @@
 use ark_ec::{
     pairing::Pairing,
     short_weierstrass::{Affine, SWCurveConfig},
-    CurveConfig, CurveGroup,
+    CurveGroup,
 };
-use ark_ff::{PrimeField, One};
+use ark_ff::{One, PrimeField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use jf_plonk::nightfall::{accumulation::accumulation_structs::PCSInstance, UnivariateIpaPCS};
 use jf_primitives::{pcs::prelude::Commitment, rescue::RescueParameter};
@@ -108,7 +108,10 @@ impl<C: Pairing> AccInstance<C> {
         ];
         vars
     }
-    pub fn to_vars(&self, circuit: &mut PlonkCircuit<C::BaseField>) -> Result<Vec<Variable>, CircuitError> {
+    pub fn to_vars(
+        &self,
+        circuit: &mut PlonkCircuit<C::BaseField>,
+    ) -> Result<Vec<Variable>, CircuitError> {
         let vars = vec![
             circuit.create_variable(self.comm.0)?,
             circuit.create_variable(self.comm.1)?,
