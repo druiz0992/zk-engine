@@ -287,7 +287,7 @@ pub mod merge_test {
 
     use crate::rollup::circuits::{
         bounce::bounce_test::bounce_test_helper,
-        bounce_merge::bounce_test::bounce_merge_test_helper,
+        bounce_merge::bounce_merge_test::bounce_merge_test_helper,
         merge::merge_circuit,
         structs::{AccInstance, SubTrees},
         utils::StoredProof,

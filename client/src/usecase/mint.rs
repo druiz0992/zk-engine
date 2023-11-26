@@ -37,8 +37,13 @@ where
         .build();
 
     let (proof, pub_inputs, g_polys) = Proof::prove(Mint, circuit_inputs).unwrap();
-    let commitments = pub_inputs.into_iter().map(|x| x.into()).collect();
 
-    let transaction = Transaction::new(commitments, Default::default(), proof, g_polys);
+    let transaction = Transaction::new(
+        vec![pub_inputs[1].into()],
+        Default::default(),
+        Default::default(),
+        proof,
+        g_polys,
+    );
     Ok(transaction)
 }

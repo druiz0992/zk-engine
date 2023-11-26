@@ -1,5 +1,3 @@
-use std::ops::Add;
-
 use crate::{domain::Preimage, ports::prover::Prover};
 
 use ark_ec::{
@@ -56,20 +54,26 @@ where
     let circuit_inputs = circuit_inputs_builder
         .add_token_values(new_token_values)
         .add_token_ids(vec![token_id])
-        .add_token_salts(vec![])
         .add_recipients(recipients)
         .add_old_token_values(old_token_values)
         .add_old_token_salts(old_token_salts)
         .add_membership_path(sibling_paths)
         .add_commitment_tree_root(commitment_roots)
-        .add_membership_path_index(membership_path_index)
+        .add_membership_path_index(membership_path_index.clone())
         .add_root_key(root_key)
         .add_ephemeral_key(ephemeral_key)
+        .add_token_salts(membership_path_index) //only the first salt needs to be the index
         .build();
 
     let (proof, pub_inputs, g_polys) = Proof::prove(Transfer, circuit_inputs).unwrap();
     let commitments = pub_inputs.into_iter().map(|x| x.into()).collect();
 
-    let transaction = Transaction::new(commitments, Default::default(), proof, g_polys);
+    let transaction = Transaction::new(
+        commitments,
+        Default::default(),
+        Default::default(),
+        proof,
+        g_polys,
+    );
     Ok(transaction)
 }

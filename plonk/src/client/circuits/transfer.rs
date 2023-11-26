@@ -49,10 +49,18 @@ where
     )?;
     let private_key_bits_var =
         circuit.unpack(private_key_var, P::ScalarField::MODULUS_BIT_SIZE as usize)?;
+
+    let private_key_var_trunc = private_key_bits_var
+        .into_iter()
+        .take(248)
+        .collect::<Vec<_>>();
+
+    let private_key_var_trunc_bits = private_key_var_trunc.as_slice();
     let generator_point_var = &circuit.create_constant_sw_point_variable(E::GENERATOR.into())?;
 
+    // Implicit mod being done here
     let public_key_var = circuit
-        .variable_base_binary_sw_scalar_mul::<E>(&private_key_bits_var, generator_point_var)?;
+        .variable_base_binary_sw_scalar_mul::<E>(private_key_var_trunc_bits, generator_point_var)?;
 
     let nullifier_key_var = PoseidonGadget::<PoseidonStateVar<3>, P::ScalarField>::hash(
         &mut circuit,
@@ -184,7 +192,7 @@ mod test {
         vesta::VestaConfig,
     };
     use jf_relation::{errors::CircuitError, Circuit};
-    use jf_utils::{field_switching, test_rng};
+    use jf_utils::{fq_to_fr_with_mask, test_rng};
     use std::str::FromStr;
     #[test]
     fn transfer_test() -> Result<(), CircuitError> {
@@ -194,14 +202,13 @@ mod test {
         let private_key: Fq = Poseidon::<Fq>::new()
             .hash(vec![root_key, private_key_domain])
             .unwrap();
-        let private_key_fr: Fr = field_switching(&private_key);
-        // let private_key_trunc: Fr = fq_to_fr_with_mask(&private_key);
+        let private_key_trunc: Fr = fq_to_fr_with_mask(&private_key);
         let old_commitment_leaf_index = 0u64;
 
         let value = Fq::from_str("1").unwrap();
         let token_id = Fq::from_str("2").unwrap();
         let token_nonce = Fq::from(3u32);
-        let token_owner = (PallasConfig::GENERATOR * private_key_fr).into_affine();
+        let token_owner = (PallasConfig::GENERATOR * private_key_trunc).into_affine();
         let old_commitment_hash = Poseidon::<Fq>::new()
             .hash(vec![
                 value,
