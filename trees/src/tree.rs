@@ -115,6 +115,7 @@ pub trait AppendTree<const H: usize> {
             curr_index /= 2;
             self.update_node(Position::new(curr_index, curr_height), curr_hash);
             siblings = self.siblings(Position::new(curr_index, curr_height));
+
             curr_hash = poseidon.hash_unchecked(siblings.to_vec());
         }
         // Update root

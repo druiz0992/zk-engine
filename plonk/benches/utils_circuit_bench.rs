@@ -1,5 +1,5 @@
-use ark_ed_on_bn254::Fq;
 use criterion::{criterion_group, criterion_main, Criterion};
+use curves::pallas::Fq;
 use jf_relation::{Circuit, PlonkCircuit};
 use plonk_prover::primitives::circuits::poseidon::{PoseidonGadget, PoseidonStateVar};
 use std::str::FromStr;
