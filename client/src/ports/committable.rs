@@ -21,7 +21,7 @@ pub trait Nullifiable<F: PrimeField>: Committable<F> {
 impl<E, F> Committable<F> for Preimage<E>
 where
     E: SWCurveConfig<BaseField = F>,
-    F: PrimeField + SWCurveConfig<BaseField = F> + PoseidonParams<Field = F>,
+    F: PrimeField + PoseidonParams<Field = F>,
 {
     type Error = CryptoError;
 
@@ -29,7 +29,12 @@ where
         let poseidon = Poseidon::<F>::new();
         match self.public_key.as_affine().xy() {
             Some((x, y)) => {
-                let hash = poseidon.hash(vec![*x, *y])?;
+                ark_std::println!("hash value: {}", self.value);
+                ark_std::println!("hash token_id: {}", self.token_id);
+                ark_std::println!("hash salt: {}", self.salt);
+                ark_std::println!("hash x: {}", x);
+                ark_std::println!("hash y: {}", y);
+                let hash = poseidon.hash(vec![self.value, self.token_id, self.salt, *x, *y])?;
                 Ok(Commitment(hash))
             }
             None => Err(CryptoError::HashError("Error".to_string())),

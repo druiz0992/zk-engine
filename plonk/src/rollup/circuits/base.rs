@@ -464,7 +464,7 @@ pub mod base_test {
     use ark_ec::pairing::Pairing;
     use ark_ec::short_weierstrass::SWCurveConfig;
     use ark_ec::CurveGroup;
-    use ark_ff::{One, Zero};
+    use ark_ff::{One, PrimeField, Zero};
     use ark_std::UniformRand;
     use common::crypto::poseidon::Poseidon;
     use curves::pallas::{Affine, Fq, Fr, PallasConfig};
@@ -479,6 +479,7 @@ pub mod base_test {
     use jf_relation::PlonkCircuit;
     use jf_relation::{Arithmetization, Circuit};
     use jf_utils::{field_switching, test_rng};
+    use num_bigint::BigUint;
     use std::str::FromStr;
     use trees::membership_tree::{MembershipTree, Tree};
     use trees::non_membership_tree::IndexedMerkleTree;
@@ -650,7 +651,13 @@ pub mod base_test {
         let private_key: Fq = Poseidon::<Fq>::new()
             .hash(vec![root_key, private_key_domain])
             .unwrap();
-        let private_key_fr: Fr = field_switching(&private_key);
+        let private_key_bn: BigUint = private_key.into();
+        let mut private_key_bytes = private_key_bn.to_bytes_le();
+        private_key_bytes.truncate(31);
+
+        let private_key_fr = Fr::from_le_bytes_mod_order(&private_key_bytes);
+
+        // let private_key_fr: Fr = field_switching(&private_key);
 
         let token_id = Fq::from_str("2").unwrap();
         let token_nonce = Fq::from(3u32);

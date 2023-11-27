@@ -47,6 +47,7 @@ where
         let ephemeral_key_var = self.create_variable(ephemeral_key)?;
         let ephemeral_key_var_bits =
             self.unpack(ephemeral_key_var, F::MODULUS_BIT_SIZE as usize)?;
+        // This needs to be public
         let shared_secret_var =
             self.variable_base_binary_sw_scalar_mul::<E>(&ephemeral_key_var_bits, &recipient_var)?;
         let encryption_key = PoseidonGadget::<PoseidonStateVar<4>, F>::hash(

@@ -11,6 +11,7 @@ pub trait MembershipTree {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct Node<F: PrimeField>(pub F);
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tree<F: PrimeField, const H: usize> {
     pub root: Node<F>,
     pub leaf_count: u64,

@@ -1,12 +1,11 @@
 pub mod in_memory_prover {
-    use std::{collections::HashMap, time::Instant};
-
     use ark_ec::{
         pairing::Pairing,
         short_weierstrass::{Affine, Projective, SWCurveConfig},
         CurveGroup,
     };
     use ark_poly::univariate::DensePolynomial;
+    use ark_std::str::FromStr;
     use common::crypto::poseidon::constants::PoseidonParams;
     use jf_plonk::{
         nightfall::{
@@ -24,6 +23,7 @@ pub mod in_memory_prover {
         client::circuits::{mint::mint_circuit, transfer::transfer_circuit},
         primitives::circuits::kem_dem::KemDemParams,
     };
+    use std::{collections::HashMap, time::Instant};
 
     use crate::{
         domain::{CircuitInputs, CircuitType},
@@ -60,8 +60,22 @@ pub mod in_memory_prover {
                 DensePolynomial<V::ScalarField>,
             ),
             CircuitError,
-        >
-where {
+        > {
+            /// Prefix for hashes for zkp private ket and nullifier
+            /// PRIVATE_KEY_PREFIX = keccak256('zkpPrivateKey'), need to update for Pasta
+            const PRIVATE_KEY_PREFIX: &str =
+                "2708019456231621178814538244712057499818649907582893776052749473028258908910";
+            /// PRIVATE_KEY_PREFIX = keccak256('nullifierKey'), need to update for Pasta
+            const NULLIFIER_PREFIX: &str =
+                "7805187439118198468809896822299973897593108379494079213870562208229492109015";
+
+            let pk_prefix = P::BaseField::from_str(PRIVATE_KEY_PREFIX)
+                .map_err(|_| bip32::Error::Crypto)
+                .unwrap();
+            let nullifier_prefix = P::BaseField::from_str(NULLIFIER_PREFIX)
+                .map_err(|_| bip32::Error::Crypto)
+                .unwrap();
+
             let mut circuit = match circuit_type {
                 CircuitType::Mint => mint_circuit::<P, V, 1>(
                     [circuit_inputs.token_values[0]],
@@ -84,24 +98,27 @@ where {
                     circuit_inputs.recipients[0].as_affine(),
                     circuit_inputs.root_key,
                     circuit_inputs.ephemeral_key,
-                    V::ScalarField::from(1u8),
-                    V::ScalarField::from(2u8),
+                    pk_prefix,
+                    nullifier_prefix,
                 )?,
                 _ => panic!("Wrong circuit type"),
             };
             circuit.finalize_for_arithmetization()?;
             let mut rng = &mut jf_utils::test_rng();
+            ark_std::println!("Constraint count: {}", circuit.num_gates());
             let now = Instant::now();
             let srs = <PlonkIpaSnark<V> as UniversalSNARK<V>>::universal_setup_for_testing(
                 circuit.srs_size()?,
                 &mut rng,
             )?;
-            ark_std::println!("SRS size done: {:?}", now.elapsed());
+            ark_std::println!("SRS size {} done: {:?}", circuit.srs_size()?, now.elapsed());
             let now = Instant::now();
             let (pk, vk) = PlonkIpaSnark::<V>::preprocess(&srs, &circuit)?;
             ark_std::println!("Preprocess done: {:?}", now.elapsed());
 
+            let public_inputs = circuit.public_input()?;
             let now = Instant::now();
+
             let (proof, g_poly, _) = PlonkIpaSnark::<V>::prove_for_partial::<
                 _,
                 _,
