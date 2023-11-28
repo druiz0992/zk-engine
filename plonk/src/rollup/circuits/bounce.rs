@@ -130,7 +130,7 @@ pub mod bounce_test {
         bounce_test_helper();
     }
     pub fn bounce_test_helper() -> StoredProof<VestaConfig, PallasConfig> {
-        let stored_proof_base = test_base_rollup_helper_transfer();
+        let stored_proof_base = test_base_rollup_helper_transfer::<2, 2, 1>();
 
         let mut rng = test_rng();
         let (global_public_inputs, subtree_public_inputs, passthrough_instance, _) =

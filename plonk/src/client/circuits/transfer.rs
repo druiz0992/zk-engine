@@ -91,6 +91,8 @@ where
     // Calculate the private old commitment hash and check the sibling path
     // Calculate the public nullifier hash
     let token_id_var = circuit.create_variable(token_id)?;
+    // TODO public input can be a hash of old roots, to be re-calc'd in base circuit
+    let commitment_roots_vars = commitment_tree_root.iter().map(|r| circuit.create_public_variable(*r).unwrap()).collect::<Vec<_>>();
     for (i, &old_commitment_val_var) in old_commitment_values_vars.iter().enumerate() {
         let old_commitment_nonce_var = circuit.create_variable(old_commitment_nonces[i])?;
         let old_commitment_hash_var = PoseidonGadget::<PoseidonStateVar<6>, P::ScalarField>::hash(
@@ -104,17 +106,15 @@ where
             ],
         )?;
         // Check the sibling path
-        for i in 0..N {
-            let commitment_root_var = circuit.create_variable(commitment_tree_root[i])?;
-            let calc_commitment_root_var =
-                BinaryMerkleTreeGadget::<D, P::ScalarField>::calculate_root(
-                    &mut circuit,
-                    old_commitment_hash_var,
-                    old_commitment_leaf_index[i],
-                    old_commitment_sibling_path[i],
-                )?;
-            circuit.enforce_equal(calc_commitment_root_var, commitment_root_var)?;
-        }
+        let commitment_root_var = commitment_roots_vars[i];
+        let calc_commitment_root_var =
+            BinaryMerkleTreeGadget::<D, P::ScalarField>::calculate_root(
+                &mut circuit,
+                old_commitment_hash_var,
+                old_commitment_leaf_index[i],
+                old_commitment_sibling_path[i],
+            )?;
+        circuit.enforce_equal(calc_commitment_root_var, commitment_root_var)?;
 
         let nullifier_hash_var = PoseidonGadget::<PoseidonStateVar<3>, P::ScalarField>::hash(
             &mut circuit,
@@ -146,24 +146,10 @@ where
         )?;
     circuit.set_variable_public(recipient_commitment_hash_var)?;
 
-    // Check the encryption of secret information to the recipient
-    // This proves that they will be able to decrypt the information
-    let ciphertext_vars = KemDemGadget::<PlainTextVars<3>, E, P::ScalarField>::kem_dem(
-        &mut circuit,
-        ephemeral_key,
-        recipient_var,
-        [
-            commitment_values_vars[0],
-            token_id_var,
-            recipient_commitment_nonce_var,
-        ],
-    )?;
-    for ciphertext in ciphertext_vars {
-        circuit.set_variable_public(ciphertext)?;
-    }
-
     // Calculate the remaining change commitment hashes ()
     // The recipients of these commitments are the same as the sender
+    // TODO set to one (and => C < 3 always) as no reason to send yourself multiple change commitments
+    // TODO don't provide the change commit value, calc it in circuit
     for i in 1..C {
         let commitment_nonce_var = circuit.create_variable(commitment_nonces[i])?;
         let commitment_hash_var = PoseidonGadget::<PoseidonStateVar<6>, P::ScalarField>::hash(
@@ -179,6 +165,31 @@ where
         circuit.set_variable_public(commitment_hash_var)?;
     }
 
+    // Check the encryption of secret information to the recipient
+    // This proves that they will be able to decrypt the information
+    let gen = circuit.create_constant_sw_point_variable(E::GENERATOR.into())?;
+    let ephemeral_key_var = circuit.create_variable(ephemeral_key)?;
+    let eph_key_bits = circuit.unpack(ephemeral_key_var, E::BaseField::MODULUS_BIT_SIZE as usize)?;
+    let eph_public_key = circuit.variable_base_binary_sw_scalar_mul::<E>(&eph_key_bits, &gen)?;
+    circuit.set_variable_public(eph_public_key.get_x())?;
+    circuit.set_variable_public(eph_public_key.get_y())?;
+
+    let ciphertext_vars = KemDemGadget::<PlainTextVars<3>, E, P::ScalarField>::kem_dem(
+        &mut circuit,
+        ephemeral_key_var,
+        recipient_var,
+        [
+            commitment_values_vars[0],
+            token_id_var,
+            recipient_commitment_nonce_var,
+        ],
+    )?;
+    for ciphertext in ciphertext_vars {
+        circuit.set_variable_public(ciphertext)?;
+    }
+
+
+
     Ok(circuit)
 }
 
@@ -193,9 +204,17 @@ mod test {
     };
     use jf_relation::{errors::CircuitError, Circuit};
     use jf_utils::{fq_to_fr_with_mask, test_rng};
+    use trees::{membership_tree::{MembershipTree, Tree}, tree::AppendTree};
     use std::str::FromStr;
     #[test]
     fn transfer_test() -> Result<(), CircuitError> {
+        transfer_test_helper::<1, 1>()?;
+        transfer_test_helper::<2, 2>()?;
+        transfer_test_helper::<2, 1>()?;
+        transfer_test_helper::<5, 2>()
+    }
+
+    fn transfer_test_helper<const N: usize, const C: usize>() -> Result<(), CircuitError> {
         let root_key = Fq::rand(&mut test_rng());
         let private_key_domain = Fq::from_str("1").unwrap();
         let nullifier_key_domain = Fq::from_str("2").unwrap();
@@ -203,13 +222,18 @@ mod test {
             .hash(vec![root_key, private_key_domain])
             .unwrap();
         let private_key_trunc: Fr = fq_to_fr_with_mask(&private_key);
-        let old_commitment_leaf_index = 0u64;
 
-        let value = Fq::from_str("1").unwrap();
-        let token_id = Fq::from_str("2").unwrap();
-        let token_nonce = Fq::from(3u32);
         let token_owner = (PallasConfig::GENERATOR * private_key_trunc).into_affine();
-        let old_commitment_hash = Poseidon::<Fq>::new()
+        let token_id = Fq::from_str("2").unwrap();
+
+        let mut values = vec![];
+        let mut token_nonces = vec![];
+        let mut old_commitment_hashes = vec![];
+        let mut total_value = Fq::from(0 as u32);
+        for j in 0..N {
+            let value = Fq::from(j as u32 + 10);
+            let token_nonce = Fq::from(j as u32 + 3);
+            let old_commitment_hash = Poseidon::<Fq>::new()
             .hash(vec![
                 value,
                 token_id,
@@ -218,36 +242,37 @@ mod test {
                 token_owner.y,
             ])
             .unwrap();
+            values.push(value);
+            token_nonces.push(token_nonce);
+            old_commitment_hashes.push(old_commitment_hash);
+            total_value += value;
+        }
 
-        let old_commitment_sibling_path = (0..48)
-            .map(|_| Fq::rand(&mut test_rng()))
-            .collect::<Vec<_>>();
-
-        let root = old_commitment_sibling_path
-            .clone()
-            .into_iter()
-            .enumerate()
-            .fold(old_commitment_hash, |a, (i, b)| {
-                let poseidon: Poseidon<Fq> = Poseidon::new();
-                let bit_dir = old_commitment_leaf_index >> i & 1;
-                if bit_dir == 0 {
-                    poseidon.hash(vec![a, b]).unwrap()
-                } else {
-                    poseidon.hash(vec![b, a]).unwrap()
-                }
-            });
+        let comm_tree: Tree<Fq, 8> = Tree::from_leaves(old_commitment_hashes);
+        let mut old_comm_paths = [[Fq::from(0 as u32); 8]; N];
+        for j in 0..N {
+            old_comm_paths[j] = comm_tree.membership_witness(j).unwrap().try_into().unwrap();
+        }
 
         let recipient_public_key = Affine::rand(&mut test_rng());
         let ephemeral_key = Fq::rand(&mut test_rng());
 
-        let circuit = super::transfer_circuit::<PallasConfig, VestaConfig, 1, 1, 48>(
-            [value],
-            [token_nonce],
-            [old_commitment_sibling_path.try_into().unwrap()],
-            [Fq::from(old_commitment_leaf_index)],
-            [root],
-            [value],
-            [Fq::from(old_commitment_leaf_index)],
+        let mut new_values = [Fq::from(0 as u32); C];
+        if C > 1 {
+            new_values[0] = total_value - Fq::from(1 as u32);
+            new_values[1] = Fq::from(1 as u32);
+        } else {
+            new_values[0] = total_value;
+        }
+
+        let circuit = super::transfer_circuit::<PallasConfig, VestaConfig, N, C, 8>(
+            values.try_into().unwrap(),
+            token_nonces.try_into().unwrap(),
+            old_comm_paths,
+            ark_std::array::from_fn(|i| Fq::from(i as u32)),
+            [comm_tree.root.0; N],
+            new_values,
+            ark_std::array::from_fn(|i| Fq::from(i as u32)), // = old leaf indicies,
             token_id,
             recipient_public_key,
             root_key,

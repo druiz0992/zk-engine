@@ -19,13 +19,13 @@ pub trait KemDemParams: PoseidonParams {
 pub trait KemDemGadget<T, E, F> {
     fn kem(
         &mut self,
-        ephemeral_key: F,
+        ephemeral_key: Variable,
         recipient: SWPointVariable,
     ) -> Result<Variable, CircuitError>;
-    fn dem(&mut self, encryption_key: F, plaintext: T) -> Result<T, CircuitError>;
+    fn dem(&mut self, encryption_key: Variable, plaintext: T) -> Result<T, CircuitError>;
     fn kem_dem(
         &mut self,
-        ephemeral_key: F,
+        ephemeral_key: Variable,
         recipient: SWPointVariable,
         plaintext: T,
     ) -> Result<T, CircuitError>;
@@ -39,12 +39,11 @@ where
 {
     fn kem(
         &mut self,
-        ephemeral_key: F,
+        ephemeral_key_var: Variable,
         recipient_var: SWPointVariable,
     ) -> Result<Variable, CircuitError> {
         let domain_kem = F::from_le_bytes_mod_order(F::DOMAIN_KEM);
         let domain_kem_var = self.create_constant_variable(domain_kem)?;
-        let ephemeral_key_var = self.create_variable(ephemeral_key)?;
         let ephemeral_key_var_bits =
             self.unpack(ephemeral_key_var, F::MODULUS_BIT_SIZE as usize)?;
         // This needs to be public
@@ -64,12 +63,11 @@ where
 
     fn dem(
         &mut self,
-        encryption_key: F,
+        encryption_key_var: Variable,
         plaintext_vars: PlainTextVars<N>,
     ) -> Result<[Variable; N], CircuitError> {
         let domain_dem = F::from_le_bytes_mod_order(F::DOMAIN_DEM);
         let domain_dem_var = self.create_constant_variable(domain_dem)?;
-        let encryption_key_var = self.create_variable(encryption_key)?;
         let mut ciphertext_vars = [Variable::zero(); N];
 
         for i in 0..N {
@@ -86,13 +84,13 @@ where
 
     fn kem_dem(
         &mut self,
-        ephemeral_key: F,
+        ephemeral_key: Variable,
         recipient: SWPointVariable,
         plaintext: PlainTextVars<N>,
     ) -> Result<[Variable; N], CircuitError> {
         let encryption_key: Variable =
             KemDemGadget::<PlainTextVars<N>, E, F>::kem(self, ephemeral_key, recipient)?;
-        KemDemGadget::<PlainTextVars<N>, E, F>::dem(self, self.witness(encryption_key)?, plaintext)
+        KemDemGadget::<PlainTextVars<N>, E, F>::dem(self, encryption_key, plaintext)
     }
 }
 
@@ -182,6 +180,8 @@ mod test {
             .try_into()
             .unwrap();
 
+        let ephemeral_key_var = circuit.create_variable(ephemeral_key).unwrap();
+
         let expected_ciphertexts =
             encrypt::<Fq>(ephemeral_key_fr, recipient.into(), rand_plaintexts.clone());
         let decrypted_plaintexts = decrypt::<Fq>(
@@ -192,7 +192,7 @@ mod test {
 
         let circuit_results = KemDemGadget::<PlainTextVars<3>, PallasConfig, Fq>::kem_dem(
             &mut circuit,
-            ephemeral_key,
+            ephemeral_key_var,
             recipient_var,
             plain_text_vars,
         )
