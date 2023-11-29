@@ -78,9 +78,7 @@ pub mod primitives {
         D: serde::de::Deserializer<'de>,
     {
         let hex_s: String = serde::de::Deserialize::deserialize(data)?;
-        ark_std::println!("hex_s: {}", hex_s);
         let s = BigUint::from_str_radix(&hex_s, 16).map_err(serde::de::Error::custom)?;
-        ark_std::println!("s: {}", s);
         let mut bytes = s.to_bytes_le();
         bytes.resize(33, 0); // Magic!
 

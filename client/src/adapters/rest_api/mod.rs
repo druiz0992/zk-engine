@@ -1,8 +1,17 @@
 pub mod structs;
 
 pub mod rest_api_entry {
+    use ark_ec::short_weierstrass::SWCurveConfig;
+    use ark_ec::CurveGroup;
+    use ark_poly::univariate::DensePolynomial;
+    use common::serialize::{ark_de_std, ark_se_std, vec_ark_de, vec_ark_se};
+    use common::structs::{Block, Commitment, Nullifier};
 
+    use ark_ec::pairing::Pairing;
     use bip32::Mnemonic;
+    use common::structs::Transaction;
+    use jf_plonk::nightfall::ipa_structs::Proof;
+    use serde::{Deserialize, Serialize};
     use std::sync::Arc;
     use tokio::sync::Mutex;
 
@@ -17,11 +26,13 @@ pub mod rest_api_entry {
     use dotenvy::dotenv;
     use serde_json::json;
 
+    use crate::domain::CircuitType;
     use crate::{
-        domain::{Fr, Preimage, PublicKey, Transaction},
+        domain::{Fr, Preimage, PublicKey},
         ports::{
             committable::Committable,
             keys::FullKey,
+            prover::Prover,
             storage::{KeyDB, PreimageDB, StoredPreimageInfo, TreeDB},
         },
         services::{
@@ -51,17 +62,26 @@ pub mod rest_api_entry {
 
     // type WriteDatabase = Arc<Mutex<dyn PreimageDB<E = PallasConfig> + Send + Sync>>;
     type WriteDatabase = Arc<Mutex<InMemStorage<PallasConfig, curves::pallas::Fq>>>;
-    pub async fn run_api(db_state: WriteDatabase) {
+
+    #[derive(Clone)]
+    pub struct AppState {
+        pub state_db: WriteDatabase,
+        pub prover: Arc<Mutex<InMemProver<VestaConfig>>>,
+    }
+    pub async fn run_api(db_state: WriteDatabase, prover: Arc<Mutex<InMemProver<VestaConfig>>>) {
         dotenv().ok();
+        let app_state = AppState {
+            state_db: db_state,
+            prover,
+        };
         let app = Router::new()
             .route("/health", get(|| async { StatusCode::OK }))
             .route("/mint", post(create_mint))
             .route("/keys", post(create_keys))
-            // .route("/keys", get(get_keys))
             .route("/transfer", post(create_transfer))
-            // .route("/trees", get(get_trees))
             .route("/preimages", get(get_preimages))
-            .with_state(db_state);
+            .route("/block", post(handle_block))
+            .with_state(app_state);
 
         axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())
             .serve(app.into_make_service())
@@ -69,30 +89,48 @@ pub mod rest_api_entry {
             .unwrap();
     }
 
+    #[derive(Serialize, Debug, Deserialize)]
+    pub struct Tx<P>
+    where
+        P: Pairing,
+        <<P as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig,
+    {
+        pub ct: Vec<Commitment<P::ScalarField>>,
+        phantom: std::marker::PhantomData<P>,
+        pub nullifiers: Vec<Nullifier<P::ScalarField>>,
+        #[serde(serialize_with = "vec_ark_se", deserialize_with = "vec_ark_de")]
+        pub ciphertexts: Vec<P::ScalarField>,
+        #[serde(serialize_with = "ark_se_std", deserialize_with = "ark_de_std")]
+        pub proof: Proof<P>,
+        #[serde(serialize_with = "ark_se_std", deserialize_with = "ark_de_std")]
+        pub g_polys: DensePolynomial<P::ScalarField>,
+    }
+
     pub async fn create_mint(
-        State(db): State<WriteDatabase>,
+        State(db): State<AppState>,
         Json(mint_details): Json<Preimage<PallasConfig>>,
     ) -> Result<Json<Transaction<VestaConfig>>, AppError> {
-        let (send, recv) = tokio::sync::oneshot::channel();
-        rayon::spawn(move || {
-            let mint = mint_tokens::<PallasConfig, VestaConfig, _, InMemProver<VestaConfig>>(
-                vec![mint_details.value],
-                vec![mint_details.token_id],
-                vec![mint_details.salt],
-                vec![mint_details.public_key],
-            );
-            let _ = send.send(mint);
-        });
-        let transaction = recv.await.expect("Failed in rayon").unwrap();
+        let prover = db.prover.lock().await;
+        let pk = prover.get_pk(CircuitType::Mint).cloned();
 
-        let mut db = db.lock().await;
+        let transaction = mint_tokens::<PallasConfig, VestaConfig, _, InMemProver<VestaConfig>>(
+            vec![mint_details.value],
+            vec![mint_details.token_id],
+            vec![mint_details.salt],
+            vec![mint_details.public_key],
+            pk.as_ref(),
+        )
+        .map_err(|_| AppError::TxError)?;
+
+        let mut db = db.state_db.lock().await;
         let preimage_key = mint_details
             .commitment_hash()
             .map_err(|_| AppError::TxError)?;
         let new_preimage = StoredPreimageInfo {
             preimage: mint_details,
-            block_number: Some(0),
-            leaf_index: Some(0),
+            nullifier: transaction.nullifiers[0].0,
+            block_number: None,
+            leaf_index: None,
             spent: false,
         };
         let _ = db
@@ -100,18 +138,53 @@ pub mod rest_api_entry {
             .ok_or(AppError::TxError);
 
         // This is to simulate the mint being added to the tree
-        db.add_block_leaves(vec![preimage_key.0], 0).unwrap();
+        // Replace with something better
+        let client = reqwest::Client::new();
+        // let cloned_tx = transaction.clone();
+        // let tx = Tx {
+        //     ct: transaction.commitments,
+        //     nullifiers: transaction.nullifiers,
+        //     ciphertexts: transaction.ciphertexts,
+        //     proof: transaction.proof,
+        //     g_polys: transaction.g_polys,
+        //     phantom: std::marker::PhantomData,
+        // };
+        // let writer_str = serde_json::to_string(&tx).unwrap();
+        // ark_std::println!("Got writer str {}", writer_str);
+        // ark_std::println!(
+        //     "unwrapped: {:?}",
+        //     serde_json::from_str::<Tx<VestaConfig>>(&writer_str).unwrap()
+        // );
+        let res = client
+            .post("http://127.0.0.1:4000/transactions")
+            .json(&transaction)
+            .send()
+            .await;
+        // ark_std::println!("Posted res");
+        ark_std::println!("Got response {:?}", res);
         Ok(Json(transaction))
     }
 
+    pub async fn handle_block(
+        State(db): State<AppState>,
+        Json(block): Json<Block<curves::vesta::Fr>>,
+    ) -> StatusCode {
+        let mut db = db.state_db.lock().await;
+        db.update_preimages(block.clone());
+
+        db.add_block_leaves(block.commitments, block.block_number);
+        StatusCode::CREATED
+    }
+
     pub async fn create_keys(
-        State(db): State<WriteDatabase>,
+        State(db): State<AppState>,
         Json(mnemonic_str): Json<MnemonicInput>,
     ) -> Result<Json<UserKeys<PallasConfig>>, AppError> {
         let mnemonic = Mnemonic::new(mnemonic_str.mnemonic, bip32::Language::English)
             .map_err(|_| AppError::TxError)?;
         let keys = generate_keys::<PallasConfig>(mnemonic).map_err(|_| AppError::TxError)?;
-        db.lock()
+        db.state_db
+            .lock()
             .await
             .insert_key(keys.public_key, keys)
             .ok_or(AppError::TxError)?;
@@ -119,9 +192,9 @@ pub mod rest_api_entry {
     }
 
     pub async fn get_preimages(
-        State(db): State<WriteDatabase>,
+        State(db): State<AppState>,
     ) -> Result<Json<Vec<PreimageResponse<PallasConfig>>>, AppError> {
-        let db_locked = db.lock().await;
+        let db_locked = db.state_db.lock().await;
         let preimages: Vec<StoredPreimageInfo<PallasConfig>> = db_locked.get_all_preimages();
         let keys = preimages
             .iter()
@@ -156,10 +229,10 @@ pub mod rest_api_entry {
     // }
 
     pub async fn create_transfer(
-        State(db): State<WriteDatabase>,
+        State(db): State<AppState>,
         Json(transfer_details): Json<TransferInput<PallasConfig>>,
     ) -> Result<Json<Transaction<VestaConfig>>, AppError> {
-        let db_locked = db.lock().await;
+        let db_locked = db.state_db.lock().await;
         let stored_preimages: Vec<StoredPreimageInfo<PallasConfig>> = transfer_details
             .commitments_to_use
             .iter()
@@ -196,7 +269,11 @@ pub mod rest_api_entry {
 
         let ephemeral_key = crate::domain::EFq::from(10u64);
 
+        let prover = db.prover.lock().await;
+        let pk = prover.get_pk(CircuitType::Transfer).cloned();
+
         let recipients = PublicKey(transfer_details.recipient);
+
         let transaction =
             transfer_tokens::<PallasConfig, VestaConfig, _, InMemProver<VestaConfig>>(
                 old_preimages,
@@ -207,8 +284,10 @@ pub mod rest_api_entry {
                 sibling_path_indices,
                 root_key,
                 ephemeral_key,
+                pk.as_ref(),
             )
             .map_err(|_| AppError::TxError)?;
+
         Ok(Json(transaction))
     }
 }

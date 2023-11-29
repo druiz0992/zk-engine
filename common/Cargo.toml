@@ -6,15 +6,34 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+ark-bn254 = "0.4.0"
+ark-ec="0.4.2"
 ark-ff="0.4.2"
 ark-std="0.4.0"
-ark-bn254 = "0.4.0"
+ark-poly="0.4.2"
+ark-serialize="0.4.2"
 
 thiserror="1.0.50"
 poseidon-paramgen="0.4.0"
 poseidon-parameters="0.4.0"
-curves = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
 rayon="1.8.0"
+serde = {version = "1.0.192", features = ["derive"]}
+serde_json = "1.0.108"
+serde_with = "3.4.0"
+serde-hex = "0.1.0"
+derivative = "2.2.0"
+num-bigint = {version = "0.4.4", features = ["serde"]}
+num-traits = "0.2.17"
+
+
+jf-plonk = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master", features = ["test-srs"]}
+jf-relation = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
+jf-utils = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
+jf-primitives = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
+curves = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
+
+
+
 
 [[example]]
 name="poseidon-gen"

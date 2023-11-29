@@ -48,7 +48,7 @@ where
     pub low_nullifier: [IndexedNode<E::BaseField>; N],
     pub low_nullifier_indices: [E::BaseField; N],
     pub low_nullifier_mem_path: [[E::BaseField; 32]; N], // Path for nullifier non membership
-    pub vk_paths: [E::BaseField; 1],
+    pub vk_paths: [E::BaseField; 2],
     pub vk_path_index: E::BaseField,
     pub vk: VerifyingKey<E>,
     pub eph_pub_key: [E::BaseField; 2], // we just set x and y public
@@ -172,7 +172,7 @@ where
 
         //----------------------------Step 2: Membership check of vk_hash ---------------------------------
         // This <1> is the depth of the vk tree
-        let calc_vk_root_var = BinaryMerkleTreeGadget::<1, C1::BaseField>::calculate_root(
+        let calc_vk_root_var = BinaryMerkleTreeGadget::<2, C1::BaseField>::calculate_root(
             &mut circuit,
             vk_var_hash,
             input.vk_path_index,
@@ -911,7 +911,7 @@ pub mod base_test {
                 low_nullifier: low_nullifiers,
                 low_nullifier_indices: low_indices,
                 low_nullifier_mem_path: low_paths,
-                vk_paths: [Fr::zero()], // filled later
+                vk_paths: [Fr::zero(), Fr::zero()], // filled later
                 vk_path_index: Fr::zero(),
                 vk: transfer_ipa_vk.clone(),
                 eph_pub_key: [
