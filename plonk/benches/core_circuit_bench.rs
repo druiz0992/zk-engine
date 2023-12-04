@@ -116,7 +116,7 @@ pub fn benchmark_transfer(c: &mut Criterion) {
     let private_key = Poseidon::<Fq>::new()
         .hash(vec![root_key, private_key_domain])
         .unwrap();
-    let private_key_fr: Fr = field_switching(&private_key);
+    let private_key_fr: Fr = fq_to_fr_with_mask(&private_key); // must mask to truncate
     let old_commitment_leaf_index = 0u64; //u32::rand(&mut test_rng());
 
     let value = Fq::from_str("1").unwrap();
