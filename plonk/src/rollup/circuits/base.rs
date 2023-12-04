@@ -353,9 +353,7 @@ where
         let eph_pub_key_vars = input
             .eph_pub_key
             .iter()
-            .map(|x| {
-                circuit.create_variable(*x)
-            })
+            .map(|x| circuit.create_variable(*x))
             .collect::<Result<Vec<_>, _>>()?;
         // PI ordering is:
         // Comm tree root(s)
@@ -366,10 +364,10 @@ where
         let mut public_input_var = vec![]; // = [0usize; 2*N + C + 5];
         for i in 0..N {
             public_input_var.push(input_commitment_tree_root_vars[i]);
-        };
+        }
         for i in 0..N {
             public_input_var.push(nullifiers_fq[i]);
-        };
+        }
         for j in 0..C {
             public_input_var.push(commitments_var[j]);
         }
@@ -432,29 +430,30 @@ where
         if N == 1 {
             nullifier_leaf_hashes.push(input_nullifier_hashes[0]);
         } else if N == 2 {
-            let nullifier_subtree_leaf = PoseidonGadget::<PoseidonStateVar<3>, C1::BaseField>::hash(
-                &mut circuit,
-                input_nullifier_hashes.as_slice(),
-            )?;
+            let nullifier_subtree_leaf =
+                PoseidonGadget::<PoseidonStateVar<3>, C1::BaseField>::hash(
+                    &mut circuit,
+                    input_nullifier_hashes.as_slice(),
+                )?;
             nullifier_leaf_hashes.push(nullifier_subtree_leaf);
         } else if N == 3 {
             // TODO this sucks
-            let nullifier_subtree_leaf = PoseidonGadget::<PoseidonStateVar<4>, C1::BaseField>::hash(
-                &mut circuit,
-                input_nullifier_hashes.as_slice(),
+            let nullifier_subtree_leaf =
+                PoseidonGadget::<PoseidonStateVar<4>, C1::BaseField>::hash(
+                    &mut circuit,
+                    input_nullifier_hashes.as_slice(),
                 )?;
             nullifier_leaf_hashes.push(nullifier_subtree_leaf);
         } else if N == 4 {
-            let nullifier_subtree_leaf = PoseidonGadget::<PoseidonStateVar<5>, C1::BaseField>::hash(
-                &mut circuit,
-                input_nullifier_hashes.as_slice(),
+            let nullifier_subtree_leaf =
+                PoseidonGadget::<PoseidonStateVar<5>, C1::BaseField>::hash(
+                    &mut circuit,
+                    input_nullifier_hashes.as_slice(),
                 )?;
             nullifier_leaf_hashes.push(nullifier_subtree_leaf);
         } else {
             unimplemented!()
         }
-        
-        
     }
 
     let prover = AccProver::new();
@@ -583,8 +582,8 @@ pub mod base_test {
     use num_bigint::BigUint;
     use std::str::FromStr;
     use trees::membership_tree::{MembershipTree, Tree};
-    use trees::non_membership_tree::{IndexedMerkleTree, IndexedNode};
     use trees::non_membership_tree::NonMembershipTree;
+    use trees::non_membership_tree::{IndexedMerkleTree, IndexedNode};
     use trees::tree::AppendTree;
 
     use crate::client::circuits::mint::mint_circuit;
@@ -604,44 +603,47 @@ pub mod base_test {
     }
 
     fn test_base_rollup_helper_mint<const I: usize, const C: usize>() {
-
         let mut rng = test_rng();
         let mut client_inputs = vec![];
         let mut g_polys = vec![];
         for i in 0..I {
-            let mut mint_circuit = mint_circuit_helper_generator::<C>(ark_std::array::from_fn(|j| Fq::from((j + i) as u32)));
+            let mut mint_circuit =
+                mint_circuit_helper_generator::<C>(ark_std::array::from_fn(|j| {
+                    Fq::from((j + i) as u32)
+                }));
             mint_circuit.finalize_for_arithmetization().unwrap();
             let mint_ipa_srs = <PlonkIpaSnark<VestaConfig> as UniversalSNARK<VestaConfig>>::universal_setup_for_testing(
                 mint_circuit.srs_size().unwrap(),
                 &mut rng,
             ).unwrap();
             let (mint_ipa_pk, mint_ipa_vk) =
-            PlonkIpaSnark::<VestaConfig>::preprocess(&mint_ipa_srs, &mint_circuit).unwrap();
+                PlonkIpaSnark::<VestaConfig>::preprocess(&mint_ipa_srs, &mint_circuit).unwrap();
 
-            let (mint_ipa_proof, g_poly, _) = PlonkIpaSnark::<VestaConfig>::prove_for_partial::<
-                _,
-                _,
-                RescueTranscript<<VestaConfig as Pairing>::BaseField>,
-            >(&mut rng, &mint_circuit, &mint_ipa_pk, None)
-            .unwrap();
+            let (mint_ipa_proof, g_poly, _) =
+                PlonkIpaSnark::<VestaConfig>::prove_for_partial::<
+                    _,
+                    _,
+                    RescueTranscript<<VestaConfig as Pairing>::BaseField>,
+                >(&mut rng, &mint_circuit, &mint_ipa_pk, None)
+                .unwrap();
             PlonkIpaSnark::<VestaConfig>::verify::<
                 RescueTranscript<<VestaConfig as Pairing>::BaseField>,
-                >(
-                    &mint_ipa_vk,
-                    &mint_circuit.public_input().unwrap(),
-                    &mint_ipa_proof,
-                    None,
-                )
+            >(
+                &mint_ipa_vk,
+                &mint_circuit.public_input().unwrap(),
+                &mint_ipa_proof,
+                None,
+            )
             .unwrap();
             ark_std::println!("Client proof verified");
 
             let client_input: ClientInput<VestaConfig, C, 1> = ClientInput {
                 proof: mint_ipa_proof,
                 nullifiers: [Fq::zero()],
-                commitments: mint_circuit.public_input().unwrap()[2..2+C]
+                commitments: mint_circuit.public_input().unwrap()[2..2 + C]
                     .try_into()
                     .unwrap(),
-                commitment_tree_root: [Fq::zero()], 
+                commitment_tree_root: [Fq::zero()],
                 path_comm_tree_root_to_global_tree_root: [[Fr::zero(); 8]; 1],
                 path_comm_tree_index: [Fr::zero()],
                 low_nullifier: [Default::default()],
@@ -726,8 +728,8 @@ pub mod base_test {
         ark_std::println!("Base proof verified")
     }
 
-    pub fn test_base_rollup_helper_transfer<const I: usize, const N: usize, const C: usize>() -> StoredProof<PallasConfig, VestaConfig>
-    {
+    pub fn test_base_rollup_helper_transfer<const I: usize, const N: usize, const C: usize>(
+    ) -> StoredProof<PallasConfig, VestaConfig> {
         // Prepare transfer preamble (i.e. create fake mints)
         let poseidon = Poseidon::<Fq>::new();
         let root_key = Fq::rand(&mut test_rng());
@@ -752,8 +754,9 @@ pub mod base_test {
             let token_id = Fq::from_str("2").unwrap();
             let token_nonce = Fq::from(3u32);
             let token_owner = (PallasConfig::GENERATOR * private_key_fr).into_affine();
-    
-            let mint_values: [Fq; N] = ark_std::array::from_fn(|index| Fq::from((index + i*N) as u32));
+
+            let mint_values: [Fq; N] =
+                ark_std::array::from_fn(|index| Fq::from((index + i * N) as u32));
             let mint_commitments = mint_values
                 .into_iter()
                 .map(|v| {
@@ -769,7 +772,11 @@ pub mod base_test {
             let prev_commitment_tree = Tree::<Fq, 8>::from_leaves(mint_commitments.clone());
             let mut old_sib_paths: [[Fq; 8]; N] = [[Fq::zero(); 8]; N];
             for j in 0..N {
-                old_sib_paths[j] = prev_commitment_tree.membership_witness(j).unwrap().try_into().unwrap();
+                old_sib_paths[j] = prev_commitment_tree
+                    .membership_witness(j)
+                    .unwrap()
+                    .try_into()
+                    .unwrap();
             }
             let (mut transfer_circuit, transfer_inputs) = transfer_circuit_helper_generator::<C, N>(
                 mint_values,
@@ -777,13 +784,13 @@ pub mod base_test {
                 [prev_commitment_tree.root.0; N],
                 ark_std::array::from_fn(|i| i as u64),
             );
-            
+
             transfer_circuit.finalize_for_arithmetization().unwrap();
             let transfer_ipa_srs = <PlonkIpaSnark<VestaConfig> as UniversalSNARK<VestaConfig>>::universal_setup_for_testing(
                 transfer_circuit.srs_size().unwrap(),
                 &mut rng,
             ).unwrap();
-    
+
             let (transfer_ipa_pk, transfer_ipa_vk) =
                 PlonkIpaSnark::<VestaConfig>::preprocess(&transfer_ipa_srs, &transfer_circuit)
                     .unwrap();
@@ -812,7 +819,8 @@ pub mod base_test {
                 .iter()
                 .map(field_switching::<Fq, Fr>)
                 .collect::<Vec<_>>();
-            let mut low_nullifiers: [IndexedNode<Fr>; N] = [IndexedNode::new(Fr::zero(), 0, Fr::zero()); N];
+            let mut low_nullifiers: [IndexedNode<Fr>; N] =
+                [IndexedNode::new(Fr::zero(), 0, Fr::zero()); N];
             let mut low_indices: [Fr; N] = [Fr::zero(); N];
             let mut low_paths: [[Fr; 32]; N] = [[Fr::zero(); 32]; N];
             for (j, null) in lifted_nullifiers.iter().enumerate() {
@@ -825,7 +833,7 @@ pub mod base_test {
                     .unwrap();
                 low_indices[j] = Fr::from(low_null.tree_index as u32);
                 // TODO what was this before? Can't we get the root from the tree initially?
-                if i == 0 && j ==0 {
+                if i == 0 && j == 0 {
                     let this_poseidon = Poseidon::<Fr>::new();
                     let low_nullifier_hash = this_poseidon.hash_unchecked(vec![
                         low_null.node.value,
@@ -834,18 +842,18 @@ pub mod base_test {
                     ]);
 
                     init_nullifier_root = nullifier_tree
-                    .non_membership_witness(*null)
-                    .unwrap()
-                    .into_iter()
-                    .enumerate()
-                    .fold(low_nullifier_hash, |acc, (i, curr)| {
-                        if low_null.tree_index >> i & 1 == 0 {
-                            this_poseidon.hash_unchecked(vec![acc, curr])
-                        } else {
-                            this_poseidon.hash(vec![curr, acc]).unwrap()
-                        }
-                    });
-                } 
+                        .non_membership_witness(*null)
+                        .unwrap()
+                        .into_iter()
+                        .enumerate()
+                        .fold(low_nullifier_hash, |acc, (i, curr)| {
+                            if low_null.tree_index >> i & 1 == 0 {
+                                this_poseidon.hash_unchecked(vec![acc, curr])
+                            } else {
+                                this_poseidon.hash(vec![curr, acc]).unwrap()
+                            }
+                        });
+                }
                 // nullifier_tree.append_leaf(null);
                 nullifier_tree.update_low_nullifier(*null);
             }
@@ -856,22 +864,23 @@ pub mod base_test {
                 commitments: transfer_inputs.1,
                 commitment_tree_root: [prev_commitment_tree.root.0; N],
                 path_comm_tree_root_to_global_tree_root: [[Fr::zero(); 8]; N], // filled later
-                path_comm_tree_index: [Fr::zero(); N], // filled later
+                path_comm_tree_index: [Fr::zero(); N],                         // filled later
                 low_nullifier: low_nullifiers,
                 low_nullifier_indices: low_indices,
                 low_nullifier_mem_path: low_paths,
                 vk_paths: [Fr::zero()], // filled later
                 vk_path_index: Fr::zero(),
                 vk: transfer_ipa_vk.clone(),
-                eph_pub_key: [field_switching(&transfer_inputs.2[0]), field_switching(&transfer_inputs.2[1])],
+                eph_pub_key: [
+                    field_switching(&transfer_inputs.2[0]),
+                    field_switching(&transfer_inputs.2[1]),
+                ],
                 ciphertext: transfer_inputs.3,
             };
 
             client_inputs.push(client_input);
             global_comm_roots.push(field_switching(&prev_commitment_tree.root.0));
         }
-
-
 
         /* ----------------------------------------------------------------------------------
          * ---------------------------  Base Rollup Circuit ----------------------------------
@@ -884,14 +893,13 @@ pub mod base_test {
 
         let (vk_tree, _, _, global_comm_tree) =
             tree_generator(vks, comms, vec![], global_comm_roots);
-        
 
         for (i, ci) in client_inputs.iter_mut().enumerate() {
             let global_root_path = global_comm_tree
-            .membership_witness(i)
-            .unwrap()
-            .try_into()
-            .unwrap();
+                .membership_witness(i)
+                .unwrap()
+                .try_into()
+                .unwrap();
             ci.path_comm_tree_root_to_global_tree_root = [global_root_path; N];
             ci.path_comm_tree_index = [Fr::from(i as u32); N];
             ci.vk_paths = vk_tree.membership_witness(0).unwrap().try_into().unwrap();
@@ -1010,7 +1018,10 @@ pub mod base_test {
         let nullifier_key_domain = Fq::from_str("2").unwrap();
 
         let token_nonce = Fq::from(3u32);
-        let indices = old_leaf_index.iter().map(|i| Fq::from(*i)).collect::<Vec<_>>();
+        let indices = old_leaf_index
+            .iter()
+            .map(|i| Fq::from(*i))
+            .collect::<Vec<_>>();
         let total_value = value.iter().fold(Fq::zero(), |acc, x| acc + x);
         let mut new_values = [Fq::from(0 as u32); C];
         if C > 1 {
@@ -1042,10 +1053,10 @@ pub mod base_test {
         assert!(circuit.check_circuit_satisfiability(&public_inputs).is_ok());
 
         let client_input = (
-            public_inputs[N..2*N].try_into().unwrap(), // nullifiers
-            public_inputs[2*N..2*N + C].try_into().unwrap(), // new commitments
-            public_inputs[len-5..len-3].try_into().unwrap(), // eph pub key
-            public_inputs[len-3..len].try_into().unwrap(), // ciphertext
+            public_inputs[N..2 * N].try_into().unwrap(), // nullifiers
+            public_inputs[2 * N..2 * N + C].try_into().unwrap(), // new commitments
+            public_inputs[len - 5..len - 3].try_into().unwrap(), // eph pub key
+            public_inputs[len - 3..len].try_into().unwrap(), // ciphertext
         );
         (circuit, client_input)
     }

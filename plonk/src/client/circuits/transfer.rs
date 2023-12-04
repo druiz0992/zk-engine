@@ -92,7 +92,10 @@ where
     // Calculate the public nullifier hash
     let token_id_var = circuit.create_variable(token_id)?;
     // TODO public input can be a hash of old roots, to be re-calc'd in base circuit
-    let commitment_roots_vars = commitment_tree_root.iter().map(|r| circuit.create_public_variable(*r).unwrap()).collect::<Vec<_>>();
+    let commitment_roots_vars = commitment_tree_root
+        .iter()
+        .map(|r| circuit.create_public_variable(*r).unwrap())
+        .collect::<Vec<_>>();
     for (i, &old_commitment_val_var) in old_commitment_values_vars.iter().enumerate() {
         let old_commitment_nonce_var = circuit.create_variable(old_commitment_nonces[i])?;
         let old_commitment_hash_var = PoseidonGadget::<PoseidonStateVar<6>, P::ScalarField>::hash(
@@ -107,13 +110,12 @@ where
         )?;
         // Check the sibling path
         let commitment_root_var = commitment_roots_vars[i];
-        let calc_commitment_root_var =
-            BinaryMerkleTreeGadget::<D, P::ScalarField>::calculate_root(
-                &mut circuit,
-                old_commitment_hash_var,
-                old_commitment_leaf_index[i],
-                old_commitment_sibling_path[i],
-            )?;
+        let calc_commitment_root_var = BinaryMerkleTreeGadget::<D, P::ScalarField>::calculate_root(
+            &mut circuit,
+            old_commitment_hash_var,
+            old_commitment_leaf_index[i],
+            old_commitment_sibling_path[i],
+        )?;
         circuit.enforce_equal(calc_commitment_root_var, commitment_root_var)?;
 
         let nullifier_hash_var = PoseidonGadget::<PoseidonStateVar<3>, P::ScalarField>::hash(
@@ -169,7 +171,8 @@ where
     // This proves that they will be able to decrypt the information
     let gen = circuit.create_constant_sw_point_variable(E::GENERATOR.into())?;
     let ephemeral_key_var = circuit.create_variable(ephemeral_key)?;
-    let eph_key_bits = circuit.unpack(ephemeral_key_var, E::BaseField::MODULUS_BIT_SIZE as usize)?;
+    let eph_key_bits =
+        circuit.unpack(ephemeral_key_var, E::BaseField::MODULUS_BIT_SIZE as usize)?;
     let eph_public_key = circuit.variable_base_binary_sw_scalar_mul::<E>(&eph_key_bits, &gen)?;
     circuit.set_variable_public(eph_public_key.get_x())?;
     circuit.set_variable_public(eph_public_key.get_y())?;
@@ -188,8 +191,6 @@ where
         circuit.set_variable_public(ciphertext)?;
     }
 
-
-
     Ok(circuit)
 }
 
@@ -204,8 +205,11 @@ mod test {
     };
     use jf_relation::{errors::CircuitError, Circuit};
     use jf_utils::{fq_to_fr_with_mask, test_rng};
-    use trees::{membership_tree::{MembershipTree, Tree}, tree::AppendTree};
     use std::str::FromStr;
+    use trees::{
+        membership_tree::{MembershipTree, Tree},
+        tree::AppendTree,
+    };
     #[test]
     fn transfer_test() -> Result<(), CircuitError> {
         transfer_test_helper::<1, 1>()?;
@@ -234,14 +238,14 @@ mod test {
             let value = Fq::from(j as u32 + 10);
             let token_nonce = Fq::from(j as u32 + 3);
             let old_commitment_hash = Poseidon::<Fq>::new()
-            .hash(vec![
-                value,
-                token_id,
-                token_nonce,
-                token_owner.x,
-                token_owner.y,
-            ])
-            .unwrap();
+                .hash(vec![
+                    value,
+                    token_id,
+                    token_nonce,
+                    token_owner.x,
+                    token_owner.y,
+                ])
+                .unwrap();
             values.push(value);
             token_nonces.push(token_nonce);
             old_commitment_hashes.push(old_commitment_hash);

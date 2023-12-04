@@ -34,7 +34,7 @@ where
     circuit.create_public_variable(commitment_root)?;
     let nullifier = V::ScalarField::zero();
     circuit.create_public_variable(nullifier)?;
-    
+
     for i in 0..C {
         let commitment_preimage_var = vec![
             value[i],
