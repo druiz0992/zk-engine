@@ -31,6 +31,7 @@ use crate::primitives::circuits::{
 
 // Fixed constants - I: Number of Input proofs (assume 2)
 // C: number of commitments (1) , N: number of nullifiers(1)
+#[derive(Debug)]
 pub struct ClientInput<E, const C: usize, const N: usize>
 where
     E: Pairing,
@@ -48,6 +49,7 @@ where
     vk_paths: [E::BaseField; 1],
     vk_path_index: E::BaseField,
     vk: VerifyingKey<E>,
+    eph_pub_key: [E::BaseField; 2], // we just set x and y public
     ciphertext: [E::ScalarField; 3],
 }
 
@@ -173,6 +175,8 @@ where
         circuit.enforce_equal(calc_vk_root_var, global_vk_root_var)?;
 
         let mut input_nullifier_hashes = vec![];
+        let mut nullifiers_fq = vec![];
+        let mut input_commitment_tree_root_vars = vec![];
         // These steps occur for every nullifier in each input
         for i in 0..N {
             //--------Step 3: Membership check of client commitment tree roots in global commitment root ------
@@ -181,6 +185,7 @@ where
                 &input.commitment_tree_root[i],
             );
             let commitment_tree_root_var = circuit.create_variable(commitment_tree_root_fq)?;
+            input_commitment_tree_root_vars.push(commitment_tree_root_var);
             let calc_commitment_root_var =
                 // This <8> is the depth of the block level commitment tree
                 BinaryMerkleTreeGadget::<8, C1::BaseField>::calculate_root(
@@ -194,6 +199,7 @@ where
             let nullifier_fq =
                 fr_to_fq::<_, <<C1 as Pairing>::G1 as CurveGroup>::Config>(&input.nullifiers[i]);
             let nullifier = circuit.create_variable(nullifier_fq)?;
+            nullifiers_fq.push(nullifier);
             // Conditional check if nullifier is zero
             let nullifier_is_zero = circuit.is_zero(nullifier)?;
             // If the nullifier is zero, then we need to trivially pass the root check
@@ -322,19 +328,11 @@ where
                 input.low_nullifier_mem_path[i],
             )?;
             prev_nullifier_low_nullifier = [low_nullifier_value_var, leaf_count, nullifier];
-            ark_std::println!("Nullifier root: {:?}", circuit.witness(nullifier_new_root)?);
+            // ark_std::println!("Nullifier root: {:?}", circuit.witness(nullifier_new_root)?);
         }
         // Step 5: PV each input proof
         let proof_var = PlonkIpaSWProofNativeVar::create_variables(&mut circuit, &input.proof)?;
         let g_gen: SWPoint<C1::BaseField> = input.vk.open_key.g_bases[0].into();
-        let nullifier_fq = input
-            .nullifiers
-            .iter() // N
-            .map(|x| {
-                let x = fr_to_fq::<_, <<C1 as Pairing>::G1 as CurveGroup>::Config>(x);
-                circuit.create_variable(x)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
         let commitments_fq = input
             .commitments
             .iter() // C
@@ -352,13 +350,33 @@ where
                 circuit.create_variable(x)
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let public_input_var = [
-            nullifier_fq[0],
-            commitments_var[0],
-            ciphertext_vars[0],
-            ciphertext_vars[1],
-            ciphertext_vars[2],
-        ]; // Come back to this
+        let eph_pub_key_vars = input
+            .eph_pub_key
+            .iter()
+            .map(|x| circuit.create_variable(*x))
+            .collect::<Result<Vec<_>, _>>()?;
+        // PI ordering is:
+        // Comm tree root(s)
+        // Nullifier(s)
+        // New Commitment(s)
+        // Eph pub key (x2)
+        // Ciphertext (x3)
+        let mut public_input_var = vec![]; // = [0usize; 2*N + C + 5];
+        for i in 0..N {
+            public_input_var.push(input_commitment_tree_root_vars[i]);
+        }
+        for i in 0..N {
+            public_input_var.push(nullifiers_fq[i]);
+        }
+        for j in 0..C {
+            public_input_var.push(commitments_var[j]);
+        }
+        for k in 0..2 {
+            public_input_var.push(eph_pub_key_vars[k]);
+        }
+        for l in 0..3 {
+            public_input_var.push(ciphertext_vars[l]);
+        }
         let (g_comm_var, u_challenge_var) = &verifying_key_var.partial_verify_circuit_ipa_native(
             &mut circuit,
             &g_gen,
@@ -370,37 +388,72 @@ where
         // ----- Reaching this points means we have a valid proof
         // ----- Now we need to increment state
         // Step 6: Prove correct Acc of PV outputs
-        let g_comms = vec![circuit.sw_point_witness(g_comm_var)?];
+        let g_comm = circuit.sw_point_witness(g_comm_var)?;
         let mut u_challenges = vec![];
         let u_challenge_fq = circuit.witness(*u_challenge_var)?;
         let u_challenge = field_switching::<C1::BaseField, C1::ScalarField>(&u_challenge_fq);
         u_challenges.push(u_challenge);
 
-        for i in 0..g_comms.len() {
-            let instance = PCSInstance::<UnivariateIpaPCS<C1>>::new(
-                Commitment(g_comms[i].into()),
-                C2::BaseField::from(0u64),
-                u_challenges[i],
-            );
-            instances.push(instance);
-        }
+        let instance = PCSInstance::<UnivariateIpaPCS<C1>>::new(
+            Commitment(g_comm.into()),
+            C2::BaseField::from(0u64),
+            u_challenge,
+        );
+        instances.push(instance);
         // Step 7: Hash the output commitments pairwise
         // This loop creates 2 subtrees of depth 1 (but really log2(C))
         //  This is only if transaction has > 1 commitment
-        // let subtree_leaf = PoseidonGadget::<PoseidonStateVar<2>, C1::BaseField>::hash(
-        //     &mut circuit,
-        //     commitments_var.as_slice(),
-        // )?;
-        // leaf_hashes.push(subtree_leaf);
-        leaf_hashes.push(commitments_var[0]);
+        if C == 1 {
+            leaf_hashes.push(commitments_var[0]);
+        } else if C == 2 {
+            let subtree_leaf = PoseidonGadget::<PoseidonStateVar<3>, C1::BaseField>::hash(
+                &mut circuit,
+                commitments_var.as_slice(),
+            )?;
+            leaf_hashes.push(subtree_leaf);
+        } else if C == 3 {
+            let subtree_leaf = PoseidonGadget::<PoseidonStateVar<4>, C1::BaseField>::hash(
+                &mut circuit,
+                commitments_var.as_slice(),
+            )?;
+            leaf_hashes.push(subtree_leaf);
+        } else if C == 4 {
+            let subtree_leaf = PoseidonGadget::<PoseidonStateVar<5>, C1::BaseField>::hash(
+                &mut circuit,
+                commitments_var.as_slice(),
+            )?;
+            leaf_hashes.push(subtree_leaf);
+        } else {
+            unimplemented!()
+        }
 
-        //  This is only if transaction has > 1 nullifier
-        // let nullifier_subtree_leaf = PoseidonGadget::<PoseidonStateVar<3>, C1::BaseField>::hash(
-        //     &mut circuit,
-        //     input_nullifier_hashes.as_slice(),
-        // )?;
-        // nullifier_leaf_hashes.push(nullifier_subtree_leaf);
-        nullifier_leaf_hashes.push(input_nullifier_hashes[0]);
+        if N == 1 {
+            nullifier_leaf_hashes.push(input_nullifier_hashes[0]);
+        } else if N == 2 {
+            let nullifier_subtree_leaf =
+                PoseidonGadget::<PoseidonStateVar<3>, C1::BaseField>::hash(
+                    &mut circuit,
+                    input_nullifier_hashes.as_slice(),
+                )?;
+            nullifier_leaf_hashes.push(nullifier_subtree_leaf);
+        } else if N == 3 {
+            // TODO this sucks
+            let nullifier_subtree_leaf =
+                PoseidonGadget::<PoseidonStateVar<4>, C1::BaseField>::hash(
+                    &mut circuit,
+                    input_nullifier_hashes.as_slice(),
+                )?;
+            nullifier_leaf_hashes.push(nullifier_subtree_leaf);
+        } else if N == 4 {
+            let nullifier_subtree_leaf =
+                PoseidonGadget::<PoseidonStateVar<5>, C1::BaseField>::hash(
+                    &mut circuit,
+                    input_nullifier_hashes.as_slice(),
+                )?;
+            nullifier_leaf_hashes.push(nullifier_subtree_leaf);
+        } else {
+            unimplemented!()
+        }
     }
 
     let prover = AccProver::new();
@@ -411,38 +464,84 @@ where
 
     circuit.set_variable_public(nullifier_new_root)?;
     // Bag the roots of the subtrees created previously assuming I == 2
-    let commitment_subtree_root = PoseidonGadget::<PoseidonStateVar<3>, C1::BaseField>::hash(
-        &mut circuit,
-        leaf_hashes.as_slice(),
-    )?;
-    circuit.set_variable_public(commitment_subtree_root)?;
+    if I == 2 {
+        let commitment_subtree_root = PoseidonGadget::<PoseidonStateVar<3>, C1::BaseField>::hash(
+            &mut circuit,
+            leaf_hashes.as_slice(),
+        )?;
+        circuit.set_variable_public(commitment_subtree_root)?;
 
-    // nullfier_leaf_hash [left_n, right_n]
-    // IF left_n && right_n == 0, then nullifier_subtree_root = zero
-    // ELSE if left_n == 0, then swap left_n and right_n => H(right_n, left_n)
-    // otherwise H(left_n, right_n)
-    let left = nullifier_leaf_hashes[0];
-    let right = nullifier_leaf_hashes[1];
-    let left_is_zero = circuit.is_zero(left)?;
-    let right_is_zero = circuit.is_zero(right)?;
-    let right_is_not_zero = circuit.logic_neg(right_is_zero)?;
-    let left_and_right_zero = circuit.logic_and(left_is_zero, right_is_zero)?;
+        // nullfier_leaf_hash [left_n, right_n]
+        // IF left_n && right_n == 0, then nullifier_subtree_root = zero
+        // ELSE if left_n == 0, then swap left_n and right_n => H(right_n, left_n)
+        // otherwise H(left_n, right_n)
+        let left = nullifier_leaf_hashes[0];
+        let right = nullifier_leaf_hashes[1];
+        let left_is_zero = circuit.is_zero(left)?;
+        let right_is_zero = circuit.is_zero(right)?;
+        let right_is_not_zero = circuit.logic_neg(right_is_zero)?;
+        let left_and_right_zero = circuit.logic_and(left_is_zero, right_is_zero)?;
 
-    let swap_condition = circuit.logic_and(left_is_zero, right_is_not_zero)?;
-    let left = circuit.conditional_select(swap_condition, left, right)?;
-    let right = circuit.conditional_select(swap_condition, right, left)?;
+        let swap_condition = circuit.logic_and(left_is_zero, right_is_not_zero)?;
+        let left = circuit.conditional_select(swap_condition, left, right)?;
+        let right = circuit.conditional_select(swap_condition, right, left)?;
 
-    // Bag the roots of the nullifier subtrees created previously assuming I == 2
-    let left_right_nullifier_hash = PoseidonGadget::<PoseidonStateVar<3>, C1::BaseField>::hash(
-        &mut circuit,
-        [left, right].as_slice(),
-    )?;
-    let nullifier_subtree_root = circuit.conditional_select(
-        left_and_right_zero,
-        left_right_nullifier_hash,
-        circuit.zero(),
-    )?;
-    circuit.set_variable_public(nullifier_subtree_root)?;
+        // Bag the roots of the nullifier subtrees created previously assuming I == 2
+        let left_right_nullifier_hash = PoseidonGadget::<PoseidonStateVar<3>, C1::BaseField>::hash(
+            &mut circuit,
+            [left, right].as_slice(),
+        )?;
+        let nullifier_subtree_root = circuit.conditional_select(
+            left_and_right_zero,
+            left_right_nullifier_hash,
+            circuit.zero(),
+        )?;
+        circuit.set_variable_public(nullifier_subtree_root)?;
+    } else if I == 4 {
+        // flat hash for now
+        let commitment_subtree_root = PoseidonGadget::<PoseidonStateVar<5>, C1::BaseField>::hash(
+            &mut circuit,
+            leaf_hashes.as_slice(),
+        )?;
+        circuit.set_variable_public(commitment_subtree_root)?;
+
+        // flat hash ignoring zeros for now
+        let nullifier_subtree_root = PoseidonGadget::<PoseidonStateVar<5>, C1::BaseField>::hash(
+            &mut circuit,
+            nullifier_leaf_hashes.as_slice(),
+        )?;
+        circuit.set_variable_public(nullifier_subtree_root)?;
+    } else if I == 6 {
+        // flat hash for now
+        let commitment_subtree_root = PoseidonGadget::<PoseidonStateVar<7>, C1::BaseField>::hash(
+            &mut circuit,
+            leaf_hashes.as_slice(),
+        )?;
+        circuit.set_variable_public(commitment_subtree_root)?;
+
+        // flat hash ignoring zeros for now
+        let nullifier_subtree_root = PoseidonGadget::<PoseidonStateVar<7>, C1::BaseField>::hash(
+            &mut circuit,
+            nullifier_leaf_hashes.as_slice(),
+        )?;
+        circuit.set_variable_public(nullifier_subtree_root)?;
+    } else if I == 8 {
+        // flat hash for now
+        let commitment_subtree_root = PoseidonGadget::<PoseidonStateVar<9>, C1::BaseField>::hash(
+            &mut circuit,
+            leaf_hashes.as_slice(),
+        )?;
+        circuit.set_variable_public(commitment_subtree_root)?;
+
+        // flat hash ignoring zeros for now
+        let nullifier_subtree_root = PoseidonGadget::<PoseidonStateVar<9>, C1::BaseField>::hash(
+            &mut circuit,
+            nullifier_leaf_hashes.as_slice(),
+        )?;
+        circuit.set_variable_public(nullifier_subtree_root)?;
+    } else {
+        unimplemented!()
+    }
     verify_accumulation_gadget_sw_native::<
         C1,
         C2,
@@ -456,6 +555,7 @@ where
         &u_challenges_vars[..],
         &acc,
     )?;
+
     Ok((circuit, pi_star))
 }
 
@@ -482,8 +582,8 @@ pub mod base_test {
     use num_bigint::BigUint;
     use std::str::FromStr;
     use trees::membership_tree::{MembershipTree, Tree};
-    use trees::non_membership_tree::IndexedMerkleTree;
     use trees::non_membership_tree::NonMembershipTree;
+    use trees::non_membership_tree::{IndexedMerkleTree, IndexedNode};
     use trees::tree::AppendTree;
 
     use crate::client::circuits::mint::mint_circuit;
@@ -494,113 +594,104 @@ pub mod base_test {
     use super::{base_rollup_circuit, ClientInput};
     #[test]
     fn test_base_circuit() {
-        test_base_rollup_helper_mint();
-        test_base_rollup_helper_transfer();
+        test_base_rollup_helper_mint::<2, 2>();
+        // test_base_rollup_helper_mint::<2, 4>();
+        // test_base_rollup_helper_mint::<4, 2>();
+        test_base_rollup_helper_transfer::<2, 2, 2>();
+        // test_base_rollup_helper_transfer::<4, 2, 2>();
+        // test_base_rollup_helper_transfer::<4, 4, 1>();
     }
 
-    fn test_base_rollup_helper_mint() {
-        let mut mint_circuit = mint_circuit_helper_generator(Fq::one());
-        let mut mint_circuit_2 = mint_circuit_helper_generator(Fq::one() + Fq::one());
+    fn test_base_rollup_helper_mint<const I: usize, const C: usize>() {
         let mut rng = test_rng();
-        mint_circuit.finalize_for_arithmetization().unwrap();
-        mint_circuit_2.finalize_for_arithmetization().unwrap();
-        let mint_ipa_srs = <PlonkIpaSnark<VestaConfig> as UniversalSNARK<VestaConfig>>::universal_setup_for_testing(
-            mint_circuit.srs_size().unwrap(),
-            &mut rng,
-        ).unwrap();
+        let mut client_inputs = vec![];
+        let mut g_polys = vec![];
+        for i in 0..I {
+            let mut mint_circuit =
+                mint_circuit_helper_generator::<C>(ark_std::array::from_fn(|j| {
+                    Fq::from((j + i) as u32)
+                }));
+            mint_circuit.finalize_for_arithmetization().unwrap();
+            let mint_ipa_srs = <PlonkIpaSnark<VestaConfig> as UniversalSNARK<VestaConfig>>::universal_setup_for_testing(
+                mint_circuit.srs_size().unwrap(),
+                &mut rng,
+            ).unwrap();
+            let (mint_ipa_pk, mint_ipa_vk) =
+                PlonkIpaSnark::<VestaConfig>::preprocess(&mint_ipa_srs, &mint_circuit).unwrap();
 
-        let (mint_ipa_pk, mint_ipa_vk) =
-            PlonkIpaSnark::<VestaConfig>::preprocess(&mint_ipa_srs, &mint_circuit).unwrap();
-        let (mint_ipa_pk_2, _) =
-            PlonkIpaSnark::<VestaConfig>::preprocess(&mint_ipa_srs, &mint_circuit_2).unwrap();
-        // ark_std::println!("Mint circuit vk: {:?}", mint_ipa_vk_2);
-        let (mint_ipa_proof, g_poly, _) = PlonkIpaSnark::<VestaConfig>::prove_for_partial::<
-            _,
-            _,
-            RescueTranscript<<VestaConfig as Pairing>::BaseField>,
-        >(&mut rng, &mint_circuit, &mint_ipa_pk, None)
-        .unwrap();
-        let (mint_ipa_proof_2, g_poly_2, _) =
-            PlonkIpaSnark::<VestaConfig>::prove_for_partial::<
-                _,
-                _,
+            let (mint_ipa_proof, g_poly, _) =
+                PlonkIpaSnark::<VestaConfig>::prove_for_partial::<
+                    _,
+                    _,
+                    RescueTranscript<<VestaConfig as Pairing>::BaseField>,
+                >(&mut rng, &mint_circuit, &mint_ipa_pk, None)
+                .unwrap();
+            PlonkIpaSnark::<VestaConfig>::verify::<
                 RescueTranscript<<VestaConfig as Pairing>::BaseField>,
-            >(&mut rng, &mint_circuit_2, &mint_ipa_pk_2, None)
+            >(
+                &mint_ipa_vk,
+                &mint_circuit.public_input().unwrap(),
+                &mint_ipa_proof,
+                None,
+            )
             .unwrap();
-        PlonkIpaSnark::<VestaConfig>::verify::<
-            RescueTranscript<<VestaConfig as Pairing>::BaseField>,
-        >(
-            &mint_ipa_vk,
-            &mint_circuit_2.public_input().unwrap(),
-            &mint_ipa_proof_2,
-            None,
-        )
-        .unwrap();
-        ark_std::println!("Proof verified");
+            ark_std::println!("Client proof verified");
+
+            let client_input: ClientInput<VestaConfig, C, 1> = ClientInput {
+                proof: mint_ipa_proof,
+                nullifiers: [Fq::zero()],
+                commitments: mint_circuit.public_input().unwrap()[2..2 + C]
+                    .try_into()
+                    .unwrap(),
+                commitment_tree_root: [Fq::zero()],
+                path_comm_tree_root_to_global_tree_root: [[Fr::zero(); 8]; 1],
+                path_comm_tree_index: [Fr::zero()],
+                low_nullifier: [Default::default()],
+                low_nullifier_indices: [Fr::one()],
+                low_nullifier_mem_path: [[Fr::zero(); 32]],
+                vk_paths: [Fr::zero()], // filled later
+                vk_path_index: Fr::from(0u64),
+                vk: mint_ipa_vk.clone(),
+                eph_pub_key: [Fr::zero(); 2],
+                ciphertext: [Fq::zero(); 3],
+            };
+
+            client_inputs.push(client_input);
+            g_polys.push(g_poly);
+        }
+
         /* ----------------------------------------------------------------------------------
          * ---------------------------  Base Rollup Circuit ----------------------------------
          * ----------------------------------------------------------------------------------
          */
 
-        let vks = vec![mint_ipa_vk.clone()];
+        // all have the same vk
+        let vks = vec![client_inputs[0].vk.clone()];
         let comms: Vec<Fq> = vec![];
         let nullifiers: Vec<Fq> = vec![];
         let global_comm_roots: Vec<Fr> = vec![];
-        let (vk_tree, commitment_tree, nullifier_tree, global_comm_tree) =
+        let (vk_tree, _, nullifier_tree, global_comm_tree) =
             tree_generator(vks, comms, nullifiers, global_comm_roots);
-        // Mint is the first slot
-        let vk_paths = [
-            vk_tree.membership_witness(0).unwrap(),
-            vk_tree.membership_witness(0).unwrap(),
-        ];
-        let client_input: ClientInput<VestaConfig, 1, 1> = ClientInput {
-            proof: mint_ipa_proof,
-            nullifiers: [Fq::zero()],
-            commitments: [mint_circuit.public_input().unwrap()[1]]
-                .as_slice()
-                .try_into()
-                .unwrap(),
-            commitment_tree_root: [commitment_tree.root.0],
-            path_comm_tree_root_to_global_tree_root: [[Fr::zero(); 8]; 1],
-            path_comm_tree_index: [Fr::zero()],
-            low_nullifier: [Default::default()],
-            low_nullifier_indices: [Fr::one()],
-            low_nullifier_mem_path: [[Fr::zero(); 32]],
-            vk_paths: vk_paths[0].clone().try_into().unwrap(),
-            vk_path_index: Fr::from(0u64),
-            vk: mint_ipa_vk.clone(),
-            ciphertext: [Fq::zero(); 3],
-        };
-        // Print client input 1 public inputs
-        let client_input_2: ClientInput<VestaConfig, 1, 1> = ClientInput {
-            proof: mint_ipa_proof_2,
-            nullifiers: [Fq::zero()],
-            commitments: [mint_circuit_2.public_input().unwrap()[1]]
-                .as_slice()
-                .try_into()
-                .unwrap(),
-            commitment_tree_root: [commitment_tree.root.0],
-            path_comm_tree_root_to_global_tree_root: [[Fr::zero(); 8]; 1],
-            path_comm_tree_index: [Fr::zero()],
-            low_nullifier: [Default::default()],
-            low_nullifier_indices: [Fr::one()],
-            low_nullifier_mem_path: [[Fr::zero(); 32]],
-            vk_paths: vk_paths[0].clone().try_into().unwrap(),
-            vk_path_index: Fr::from(0u64),
-            vk: mint_ipa_vk,
-            ciphertext: [Fq::zero(); 3],
-        };
 
-        let (commit_key_vesta, _) = mint_ipa_srs.trim(mint_circuit.srs_size().unwrap()).unwrap();
+        for ci in client_inputs.iter_mut() {
+            ci.vk_paths = vk_tree.membership_witness(0).unwrap().try_into().unwrap();
+            // vk index is already (correctly) zero
+        }
+
+        let vesta_srs = <PlonkIpaSnark<VestaConfig> as UniversalSNARK<VestaConfig>>::universal_setup_for_testing(
+            2usize.pow(21),
+            &mut rng,
+        ).unwrap();
+        let (vesta_commit_key, _) = vesta_srs.trim(2usize.pow(21)).unwrap();
         let (mut base_rollup_circuit, _) =
-            base_rollup_circuit::<VestaConfig, PallasConfig, 2, 1, 1>(
-                [client_input, client_input_2],
+            base_rollup_circuit::<VestaConfig, PallasConfig, I, C, 1>(
+                client_inputs.try_into().unwrap(),
                 vk_tree.root.0,
                 nullifier_tree.root,
                 nullifier_tree.leaf_count.into(),
                 global_comm_tree.root.0,
-                [g_poly, g_poly_2],
-                commit_key_vesta,
+                g_polys.try_into().unwrap(),
+                vesta_commit_key,
             )
             .unwrap();
         ark_std::println!(
@@ -634,16 +725,11 @@ pub mod base_test {
             None,
         )
         .unwrap();
-        ark_std::println!("Proof verified")
+        ark_std::println!("Base proof verified")
     }
 
-    pub fn test_base_rollup_helper_transfer() -> StoredProof<PallasConfig, VestaConfig>
-//     PlonkCircuit<Fr>,
-    //     Proof<PallasConfig>,
-    //     VerifyingKey<PallasConfig>,
-    //     (CommitKey<VestaConfig>, CommitKey<PallasConfig>),
-    //     DensePolynomial<Fq>,
-    {
+    pub fn test_base_rollup_helper_transfer<const I: usize, const N: usize, const C: usize>(
+    ) -> StoredProof<PallasConfig, VestaConfig> {
         // Prepare transfer preamble (i.e. create fake mints)
         let poseidon = Poseidon::<Fq>::new();
         let root_key = Fq::rand(&mut test_rng());
@@ -657,182 +743,168 @@ pub mod base_test {
 
         let private_key_fr = Fr::from_le_bytes_mod_order(&private_key_bytes);
 
-        // let private_key_fr: Fr = field_switching(&private_key);
-
-        let token_id = Fq::from_str("2").unwrap();
-        let token_nonce = Fq::from(3u32);
-        let token_owner = (PallasConfig::GENERATOR * private_key_fr).into_affine();
-
-        let mint_commitments = [Fq::one(), Fq::one() + Fq::one()]
-            .into_iter()
-            .map(|v| {
-                poseidon.hash_unchecked(vec![
-                    v,
-                    token_id,
-                    token_nonce,
-                    token_owner.x,
-                    token_owner.y,
-                ])
-            })
-            .collect::<Vec<_>>();
-        let prev_commitment_tree = Tree::<Fq, 8>::from_leaves(mint_commitments.clone());
-        // Build transfer circuits
-        let mut transfer_circuits = mint_commitments
-            .iter()
-            .enumerate()
-            .map(|(i, &_)| {
-                let old_sib_path = prev_commitment_tree.membership_witness(i).unwrap();
-
-                transfer_circuit_helper_generator(
-                    Fq::from((i + 1) as u64),
-                    old_sib_path,
-                    prev_commitment_tree.root.0,
-                    i as u64,
-                )
-            })
-            .collect::<Vec<_>>();
-
         let mut rng = test_rng();
-        transfer_circuits
-            .iter_mut()
-            .for_each(|c| c.finalize_for_arithmetization().unwrap());
-        let transfer_ipa_srs = <PlonkIpaSnark<VestaConfig> as UniversalSNARK<VestaConfig>>::universal_setup_for_testing(
-            transfer_circuits[0].srs_size().unwrap(),
-            &mut rng,
-        ).unwrap();
+        let mut client_inputs = vec![];
+        let mut global_comm_roots: Vec<Fr> = vec![];
+        let mut nullifier_tree = IndexedMerkleTree::<Fr, 32>::new();
+        let mut init_nullifier_root = Fr::zero();
+        let mut g_polys = vec![];
 
-        let (transfer_ipa_pk, transfer_ipa_vk) =
-            PlonkIpaSnark::<VestaConfig>::preprocess(&transfer_ipa_srs, &transfer_circuits[0])
+        for i in 0..I {
+            let token_id = Fq::from_str("2").unwrap();
+            let token_nonce = Fq::from(3u32);
+            let token_owner = (PallasConfig::GENERATOR * private_key_fr).into_affine();
+
+            let mint_values: [Fq; N] =
+                ark_std::array::from_fn(|index| Fq::from((index + i * N) as u32));
+            let mint_commitments = mint_values
+                .into_iter()
+                .map(|v| {
+                    poseidon.hash_unchecked(vec![
+                        v,
+                        token_id,
+                        token_nonce,
+                        token_owner.x,
+                        token_owner.y,
+                    ])
+                })
+                .collect::<Vec<_>>();
+            let prev_commitment_tree = Tree::<Fq, 8>::from_leaves(mint_commitments.clone());
+            let mut old_sib_paths: [[Fq; 8]; N] = [[Fq::zero(); 8]; N];
+            for j in 0..N {
+                old_sib_paths[j] = prev_commitment_tree
+                    .membership_witness(j)
+                    .unwrap()
+                    .try_into()
+                    .unwrap();
+            }
+            let (mut transfer_circuit, transfer_inputs) = transfer_circuit_helper_generator::<C, N>(
+                mint_values,
+                old_sib_paths,
+                [prev_commitment_tree.root.0; N],
+                ark_std::array::from_fn(|i| i as u64),
+            );
+
+            transfer_circuit.finalize_for_arithmetization().unwrap();
+            let transfer_ipa_srs = <PlonkIpaSnark<VestaConfig> as UniversalSNARK<VestaConfig>>::universal_setup_for_testing(
+                transfer_circuit.srs_size().unwrap(),
+                &mut rng,
+            ).unwrap();
+
+            let (transfer_ipa_pk, transfer_ipa_vk) =
+                PlonkIpaSnark::<VestaConfig>::preprocess(&transfer_ipa_srs, &transfer_circuit)
+                    .unwrap();
+
+            let (transfer_ipa_proof, g_poly, _) =
+                PlonkIpaSnark::<VestaConfig>::prove_for_partial::<
+                    _,
+                    _,
+                    RescueTranscript<<VestaConfig as Pairing>::BaseField>,
+                >(&mut rng, &transfer_circuit, &transfer_ipa_pk, None)
                 .unwrap();
-        let (transfer_ipa_pk_2, _) =
-            PlonkIpaSnark::<VestaConfig>::preprocess(&transfer_ipa_srs, &transfer_circuits[1])
-                .unwrap();
-        // ark_std::println!("Mint circuit vk: {:?}", mint_ipa_vk_2);
-        let (transfer_ipa_proof, g_poly, _) =
-            PlonkIpaSnark::<VestaConfig>::prove_for_partial::<
-                _,
-                _,
+            g_polys.push(g_poly);
+            PlonkIpaSnark::<VestaConfig>::verify::<
                 RescueTranscript<<VestaConfig as Pairing>::BaseField>,
-            >(&mut rng, &transfer_circuits[0], &transfer_ipa_pk, None)
+            >(
+                &transfer_ipa_vk,
+                &transfer_circuit.public_input().unwrap(),
+                &transfer_ipa_proof,
+                None,
+            )
             .unwrap();
-        let (transfer_ipa_proof_2, g_poly_2, _) =
-            PlonkIpaSnark::<VestaConfig>::prove_for_partial::<
-                _,
-                _,
-                RescueTranscript<<VestaConfig as Pairing>::BaseField>,
-            >(&mut rng, &transfer_circuits[1], &transfer_ipa_pk_2, None)
-            .unwrap();
-        PlonkIpaSnark::<VestaConfig>::verify::<
-            RescueTranscript<<VestaConfig as Pairing>::BaseField>,
-        >(
-            &transfer_ipa_vk,
-            &transfer_circuits[1].public_input().unwrap(),
-            &transfer_ipa_proof_2,
-            None,
-        )
-        .unwrap();
-        ark_std::println!("Proof verified");
+            ark_std::println!("Client proof verified");
+
+            let nullifiers = transfer_inputs.0;
+            let lifted_nullifiers = nullifiers
+                .iter()
+                .map(field_switching::<Fq, Fr>)
+                .collect::<Vec<_>>();
+            let mut low_nullifiers: [IndexedNode<Fr>; N] =
+                [IndexedNode::new(Fr::zero(), 0, Fr::zero()); N];
+            let mut low_indices: [Fr; N] = [Fr::zero(); N];
+            let mut low_paths: [[Fr; 32]; N] = [[Fr::zero(); 32]; N];
+            for (j, null) in lifted_nullifiers.iter().enumerate() {
+                let low_null = nullifier_tree.find_predecessor(*null);
+                low_nullifiers[j] = low_null.node.clone();
+                low_paths[j] = nullifier_tree
+                    .non_membership_witness(*null)
+                    .unwrap()
+                    .try_into()
+                    .unwrap();
+                low_indices[j] = Fr::from(low_null.tree_index as u32);
+                // TODO what was this before? Can't we get the root from the tree initially?
+                if i == 0 && j == 0 {
+                    let this_poseidon = Poseidon::<Fr>::new();
+                    let low_nullifier_hash = this_poseidon.hash_unchecked(vec![
+                        low_null.node.value,
+                        Fr::from(low_null.tree_index as u64),
+                        low_null.node.next_value,
+                    ]);
+
+                    init_nullifier_root = nullifier_tree
+                        .non_membership_witness(*null)
+                        .unwrap()
+                        .into_iter()
+                        .enumerate()
+                        .fold(low_nullifier_hash, |acc, (i, curr)| {
+                            if low_null.tree_index >> i & 1 == 0 {
+                                this_poseidon.hash_unchecked(vec![acc, curr])
+                            } else {
+                                this_poseidon.hash(vec![curr, acc]).unwrap()
+                            }
+                        });
+                }
+                // nullifier_tree.append_leaf(null);
+                nullifier_tree.update_low_nullifier(*null);
+            }
+
+            let client_input: ClientInput<VestaConfig, C, N> = ClientInput {
+                proof: transfer_ipa_proof,
+                nullifiers,
+                commitments: transfer_inputs.1,
+                commitment_tree_root: [prev_commitment_tree.root.0; N],
+                path_comm_tree_root_to_global_tree_root: [[Fr::zero(); 8]; N], // filled later
+                path_comm_tree_index: [Fr::zero(); N],                         // filled later
+                low_nullifier: low_nullifiers,
+                low_nullifier_indices: low_indices,
+                low_nullifier_mem_path: low_paths,
+                vk_paths: [Fr::zero()], // filled later
+                vk_path_index: Fr::zero(),
+                vk: transfer_ipa_vk.clone(),
+                eph_pub_key: [
+                    field_switching(&transfer_inputs.2[0]),
+                    field_switching(&transfer_inputs.2[1]),
+                ],
+                ciphertext: transfer_inputs.3,
+            };
+
+            client_inputs.push(client_input);
+            global_comm_roots.push(field_switching(&prev_commitment_tree.root.0));
+        }
 
         /* ----------------------------------------------------------------------------------
          * ---------------------------  Base Rollup Circuit ----------------------------------
          * ----------------------------------------------------------------------------------
          */
 
-        let vks = vec![transfer_ipa_vk.clone()];
+        // all have the same vk
+        let vks = vec![client_inputs[0].vk.clone()];
         let comms: Vec<Fq> = vec![];
-        let nullifiers: Vec<Fq> = transfer_circuits
-            .iter()
-            .map(|t| t.public_input().unwrap()[0])
-            .collect::<Vec<_>>();
-        let lifted_nullifiers = nullifiers
-            .iter()
-            .map(field_switching::<Fq, Fr>)
-            .collect::<Vec<_>>();
 
-        let global_comm_roots: Vec<Fr> = vec![field_switching(&prev_commitment_tree.root.0)];
         let (vk_tree, _, _, global_comm_tree) =
             tree_generator(vks, comms, vec![], global_comm_roots);
-        let mut nullifier_tree = IndexedMerkleTree::<Fr, 32>::new();
-        let low_nullifier = nullifier_tree.find_predecessor(lifted_nullifiers[0]);
 
-        // Mint is the first slot
-        let vk_paths = [
-            vk_tree.membership_witness(0).unwrap(),
-            vk_tree.membership_witness(0).unwrap(),
-        ];
-        let poseidon = Poseidon::<Fr>::new();
-        let low_nullifier_hash = poseidon.hash_unchecked(vec![
-            low_nullifier.node.value,
-            Fr::from(low_nullifier.tree_index as u64),
-            low_nullifier.node.next_value,
-        ]);
-        let witness_hash = nullifier_tree
-            .non_membership_witness(lifted_nullifiers[0])
-            .unwrap()
-            .into_iter()
-            .enumerate()
-            .fold(low_nullifier_hash, |acc, (i, curr)| {
-                if low_nullifier.tree_index >> i & 1 == 0 {
-                    poseidon.hash_unchecked(vec![acc, curr])
-                } else {
-                    poseidon.hash(vec![curr, acc]).unwrap()
-                }
-            });
-
-        let client_input: ClientInput<VestaConfig, 1, 1> = ClientInput {
-            proof: transfer_ipa_proof,
-            nullifiers: [nullifiers[0]],
-            commitments: [transfer_circuits[0].public_input().unwrap()[1]],
-            commitment_tree_root: [prev_commitment_tree.root.0],
-            path_comm_tree_root_to_global_tree_root: [global_comm_tree
-                .membership_witness(0)
+        for (i, ci) in client_inputs.iter_mut().enumerate() {
+            let global_root_path = global_comm_tree
+                .membership_witness(i)
                 .unwrap()
                 .try_into()
-                .unwrap()],
-            path_comm_tree_index: [Fr::zero()],
-            low_nullifier: [low_nullifier.node.clone()],
-            low_nullifier_indices: [Fr::from(low_nullifier.tree_index as u64)],
-            low_nullifier_mem_path: [nullifier_tree
-                .non_membership_witness(lifted_nullifiers[0])
-                .unwrap()
-                .try_into()
-                .unwrap()],
-            vk_paths: vk_paths[0].clone().try_into().unwrap(),
-            vk_path_index: Fr::from(0u64),
-            vk: transfer_ipa_vk.clone(),
-            ciphertext: transfer_circuits[0].public_input().unwrap()[2..]
-                .try_into()
-                .unwrap(),
-        };
-        // nullifier_tree.append_leaf(lifted_nullifiers[0]);
-        nullifier_tree.update_low_nullifier(lifted_nullifiers[0]);
-        let low_nullifier = nullifier_tree.find_predecessor(lifted_nullifiers[1]);
-
-        let client_input_2: ClientInput<VestaConfig, 1, 1> = ClientInput {
-            proof: transfer_ipa_proof_2,
-            nullifiers: [nullifiers[1]],
-            commitments: [transfer_circuits[1].public_input().unwrap()[1]],
-            commitment_tree_root: [prev_commitment_tree.root.0],
-            path_comm_tree_root_to_global_tree_root: [global_comm_tree
-                .membership_witness(0)
-                .unwrap()
-                .try_into()
-                .unwrap()],
-            path_comm_tree_index: [Fr::zero()],
-            low_nullifier: [low_nullifier.node.clone()],
-            low_nullifier_indices: [Fr::from(low_nullifier.tree_index as u64)],
-            low_nullifier_mem_path: [nullifier_tree
-                .non_membership_witness(lifted_nullifiers[1])
-                .unwrap()
-                .try_into()
-                .unwrap()],
-            vk_paths: vk_paths[0].clone().try_into().unwrap(),
-            vk_path_index: Fr::from(0u64),
-            vk: transfer_ipa_vk,
-            ciphertext: transfer_circuits[1].public_input().unwrap()[2..]
-                .try_into()
-                .unwrap(),
-        };
+                .unwrap();
+            ci.path_comm_tree_root_to_global_tree_root = [global_root_path; N];
+            ci.path_comm_tree_index = [Fr::from(i as u32); N];
+            ci.vk_paths = vk_tree.membership_witness(0).unwrap().try_into().unwrap();
+            // vk index is already (correctly) zero
+        }
 
         let vesta_srs = <PlonkIpaSnark<VestaConfig> as UniversalSNARK<VestaConfig>>::universal_setup_for_testing(
             2usize.pow(21),
@@ -847,14 +919,14 @@ pub mod base_test {
         let (pallas_commit_key, _) = pallas_srs.trim(2usize.pow(21)).unwrap();
         let initial_nullifier_tree = IndexedMerkleTree::<Fr, 32>::new();
         let (mut base_rollup_circuit, pi_star) =
-            base_rollup_circuit::<VestaConfig, PallasConfig, 2, 1, 1>(
-                [client_input, client_input_2],
+            base_rollup_circuit::<VestaConfig, PallasConfig, I, C, N>(
+                client_inputs.try_into().unwrap(),
                 vk_tree.root.0,
                 // initial_nullifier_tree.root,
-                witness_hash,
+                init_nullifier_root,
                 initial_nullifier_tree.leaf_count.into(),
                 global_comm_tree.root.0,
-                [g_poly, g_poly_2],
+                g_polys.try_into().unwrap(),
                 vesta_commit_key.clone(),
             )
             .unwrap();
@@ -931,12 +1003,13 @@ pub mod base_test {
             pi_stars: (Default::default(), pi_star),
         }
     }
-    fn transfer_circuit_helper_generator(
-        value: Fq,
-        old_sib_path: Vec<Fq>,
-        root: Fq,
-        old_leaf_index: u64,
-    ) -> PlonkCircuit<Fq> {
+
+    fn transfer_circuit_helper_generator<const C: usize, const N: usize>(
+        value: [Fq; N],
+        old_sib_path: [[Fq; 8]; N],
+        root: [Fq; N],
+        old_leaf_index: [u64; N],
+    ) -> (PlonkCircuit<Fq>, ([Fq; N], [Fq; C], [Fq; 2], [Fq; 3])) {
         let recipient_public_key = Affine::rand(&mut test_rng());
         let ephemeral_key = Fq::rand(&mut test_rng());
         let token_id = Fq::from_str("2").unwrap();
@@ -945,15 +1018,27 @@ pub mod base_test {
         let nullifier_key_domain = Fq::from_str("2").unwrap();
 
         let token_nonce = Fq::from(3u32);
+        let indices = old_leaf_index
+            .iter()
+            .map(|i| Fq::from(*i))
+            .collect::<Vec<_>>();
+        let total_value = value.iter().fold(Fq::zero(), |acc, x| acc + x);
+        let mut new_values = [Fq::from(0 as u32); C];
+        if C > 1 {
+            new_values[0] = total_value - Fq::from(1 as u32);
+            new_values[1] = Fq::from(1 as u32);
+        } else {
+            new_values[0] = total_value;
+        }
 
-        let circuit = transfer_circuit::<PallasConfig, VestaConfig, 1, 1, 8>(
-            [value],
-            [token_nonce],
-            [old_sib_path.try_into().unwrap()],
-            [Fq::from(old_leaf_index)],
-            [root],
-            [value],
-            [Fq::from(old_leaf_index)],
+        let circuit = transfer_circuit::<PallasConfig, VestaConfig, N, C, 8>(
+            value,
+            [token_nonce; N],
+            old_sib_path.try_into().unwrap(),
+            indices.clone().try_into().unwrap(),
+            root,
+            new_values,
+            indices[0..C].try_into().unwrap(),
             token_id,
             recipient_public_key,
             root_key,
@@ -964,21 +1049,29 @@ pub mod base_test {
         .unwrap();
 
         let public_inputs = circuit.public_input().unwrap();
+        let len = public_inputs.len();
         assert!(circuit.check_circuit_satisfiability(&public_inputs).is_ok());
-        circuit
+
+        let client_input = (
+            public_inputs[N..2 * N].try_into().unwrap(), // nullifiers
+            public_inputs[2 * N..2 * N + C].try_into().unwrap(), // new commitments
+            public_inputs[len - 5..len - 3].try_into().unwrap(), // eph pub key
+            public_inputs[len - 3..len].try_into().unwrap(), // ciphertext
+        );
+        (circuit, client_input)
     }
 
-    fn mint_circuit_helper_generator(value: Fq) -> PlonkCircuit<Fq> {
-        let token_id = Fq::from_str("2").unwrap();
-        let token_nonce = Fq::from_str("3").unwrap();
+    fn mint_circuit_helper_generator<const C: usize>(value: [Fq; C]) -> PlonkCircuit<Fq> {
+        let token_id = [Fq::from(12 as u64); C];
+        let token_nonce = [Fq::from(13 as u64); C];
         let secret_key = Fq::from_str("4").unwrap();
         let secret_key_fr = field_switching::<Fq, Fr>(&secret_key);
         let token_owner = (PallasConfig::GENERATOR * secret_key_fr).into_affine();
-        let circuit = mint_circuit::<PallasConfig, VestaConfig, 1>(
-            [value],
-            [token_id],
-            [token_nonce],
-            [token_owner],
+        let circuit = mint_circuit::<PallasConfig, VestaConfig, C>(
+            value,
+            token_id,
+            token_nonce,
+            [token_owner; C],
         )
         .unwrap();
 

@@ -29,10 +29,12 @@ where
 {
     // Calculate output hash of the commitment
     let mut circuit = PlonkCircuit::new_turbo_plonk();
-    for _ in 0..C {
-        let nullifier = V::ScalarField::zero();
-        circuit.create_public_variable(nullifier)?;
-    }
+    // We pretend N=1
+    let commitment_root = V::ScalarField::zero();
+    circuit.create_public_variable(commitment_root)?;
+    let nullifier = V::ScalarField::zero();
+    circuit.create_public_variable(nullifier)?;
+
     for i in 0..C {
         let commitment_preimage_var = vec![
             value[i],
@@ -49,6 +51,10 @@ where
             commitment_preimage_var.as_slice(),
         )?;
         circuit.set_variable_public(commitment_var)?;
+    }
+    let eph_pub_key = [V::ScalarField::zero(); 2];
+    for e in eph_pub_key.iter() {
+        circuit.create_public_variable(*e)?;
     }
     let ciphertexts = [V::ScalarField::zero(); 3];
     for c in ciphertexts.iter() {
@@ -95,7 +101,10 @@ mod test {
         assert!(circuit
             .check_circuit_satisfiability(&[
                 Fq::from(0),
+                Fq::from(0),
                 public_commitment,
+                Fq::from(0),
+                Fq::from(0),
                 Fq::from(0),
                 Fq::from(0),
                 Fq::from(0)

@@ -14,7 +14,7 @@ pub trait NonMembershipTree: MembershipTree {
     fn update_low_nullifier(&mut self, leaf: Self::Field);
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct IndexedNode<F: PrimeField> {
     pub value: F,
     pub next_index: usize,
