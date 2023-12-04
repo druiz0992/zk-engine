@@ -69,6 +69,9 @@ opt-level = 3
 [profile.bench]
 opt-level = 3
 
+[[bench]]
+name = "base_circuit_bench"
+harness = false
 
 [[bench]]
 name = "core_circuit_bench"
