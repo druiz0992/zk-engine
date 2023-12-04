@@ -54,5 +54,5 @@ jobs:
       - name: Cargo Test Rollup 
         uses: actions-rs/cargo@v1
         with:
-        command: test --release  --package plonk-prover --lib -- rollup::circuits::bounce_merge::bounce_merge_test::bounce_merge_test --exact --nocapture
+          command: test --release  --package plonk-prover --lib -- rollup::circuits::bounce_merge::bounce_merge_test::bounce_merge_test --exact --nocapture
 
