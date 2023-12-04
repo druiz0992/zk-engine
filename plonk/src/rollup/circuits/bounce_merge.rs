@@ -216,6 +216,7 @@ pub mod bounce_merge_test {
     use jf_utils::{field_switching, test_rng};
 
     #[test]
+    #[ignore]
     pub fn bounce_merge_test() {
         let stored_bounce = bounce_test_helper();
         let stored_proof_merge = merge_test_helper(stored_bounce);

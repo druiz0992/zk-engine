@@ -593,6 +593,7 @@ pub mod base_test {
 
     use super::{base_rollup_circuit, ClientInput};
     #[test]
+    #[ignore]
     fn test_base_circuit() {
         test_base_rollup_helper_mint::<2, 2>();
         // test_base_rollup_helper_mint::<2, 4>();

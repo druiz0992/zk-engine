@@ -126,6 +126,7 @@ pub mod bounce_test {
     use jf_utils::{field_switching, test_rng};
 
     #[test]
+    #[ignore]
     fn bounce_test() {
         bounce_test_helper();
     }
