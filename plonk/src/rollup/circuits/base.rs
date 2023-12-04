@@ -31,26 +31,26 @@ use crate::primitives::circuits::{
 
 // Fixed constants - I: Number of Input proofs (assume 2)
 // C: number of commitments (1) , N: number of nullifiers(1)
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ClientInput<E, const C: usize, const N: usize>
 where
     E: Pairing,
     <<E as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = E::BaseField>,
 {
-    proof: Proof<E>,
-    nullifiers: [E::ScalarField; N], // List of nullifiers in transaction
-    commitments: [E::ScalarField; C], // List of commitments in transaction
-    commitment_tree_root: [E::ScalarField; N], // Tree root for comm membership
-    path_comm_tree_root_to_global_tree_root: [[E::BaseField; 8]; N],
-    path_comm_tree_index: [E::BaseField; N],
-    low_nullifier: [IndexedNode<E::BaseField>; N],
-    low_nullifier_indices: [E::BaseField; N],
-    low_nullifier_mem_path: [[E::BaseField; 32]; N], // Path for nullifier non membership
-    vk_paths: [E::BaseField; 1],
-    vk_path_index: E::BaseField,
-    vk: VerifyingKey<E>,
-    eph_pub_key: [E::BaseField; 2], // we just set x and y public
-    ciphertext: [E::ScalarField; 3],
+    pub proof: Proof<E>,
+    pub nullifiers: [E::ScalarField; N], // List of nullifiers in transaction
+    pub commitments: [E::ScalarField; C], // List of commitments in transaction
+    pub commitment_tree_root: [E::ScalarField; N], // Tree root for comm membership
+    pub path_comm_tree_root_to_global_tree_root: [[E::BaseField; 8]; N],
+    pub path_comm_tree_index: [E::BaseField; N],
+    pub low_nullifier: [IndexedNode<E::BaseField>; N],
+    pub low_nullifier_indices: [E::BaseField; N],
+    pub low_nullifier_mem_path: [[E::BaseField; 32]; N], // Path for nullifier non membership
+    pub vk_paths: [E::BaseField; 1],
+    pub vk_path_index: E::BaseField,
+    pub vk: VerifyingKey<E>,
+    pub eph_pub_key: [E::BaseField; 2], // we just set x and y public
+    pub ciphertext: [E::ScalarField; 3],
 }
 
 #[allow(clippy::type_complexity)]
