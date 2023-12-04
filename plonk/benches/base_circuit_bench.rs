@@ -1,6 +1,6 @@
-use ark_ec::{short_weierstrass::SWCurveConfig, CurveGroup, pairing::Pairing};
+use ark_ec::{pairing::Pairing, short_weierstrass::SWCurveConfig, CurveGroup};
+use ark_ff::{One, Zero};
 use ark_std::UniformRand;
-use ark_ff::{Zero, One};
 use common::crypto::poseidon::Poseidon;
 use criterion::{criterion_group, criterion_main, Criterion};
 use curves::{
@@ -8,18 +8,23 @@ use curves::{
     vesta::VestaConfig,
 };
 use jf_plonk::{
-    proof_system::{UniversalSNARK, structs::VK},
-    transcript::RescueTranscript, nightfall::{PlonkIpaSnark, ipa_structs::VerifyingKey},
+    nightfall::{ipa_structs::VerifyingKey, PlonkIpaSnark},
+    proof_system::{structs::VK, UniversalSNARK},
+    transcript::RescueTranscript,
 };
 use jf_primitives::pcs::StructuredReferenceString;
 use jf_relation::{Arithmetization, Circuit, PlonkCircuit};
 use jf_utils::{field_switching, fq_to_fr_with_mask, test_rng};
 use plonk_prover::{
     client::circuits::{mint::mint_circuit, transfer::transfer_circuit},
-    rollup::circuits::base::{ClientInput, base_rollup_circuit}
+    rollup::circuits::base::{base_rollup_circuit, ClientInput},
 };
-use trees::{membership_tree::{Tree, MembershipTree}, non_membership_tree::{IndexedMerkleTree, IndexedNode, NonMembershipTree}, tree::AppendTree};
 use std::str::FromStr;
+use trees::{
+    membership_tree::{MembershipTree, Tree},
+    non_membership_tree::{IndexedMerkleTree, IndexedNode, NonMembershipTree},
+    tree::AppendTree,
+};
 
 fn tree_generator(
     vks: Vec<VerifyingKey<VestaConfig>>,
@@ -138,12 +143,12 @@ pub fn benchmark_mints<const I: usize, const C: usize>(c: &mut Criterion) {
     let mut client_inputs = vec![];
     let mut g_polys = vec![];
     let mut mint_ipa_srs = Default::default(); // avoid re-generating
-    // Can't do the below as no default exists
-    // let mut mint_ipa_vk= VerifyingKey::dummy(1, 2^10);
-    // let mut mint_ipa_pk= ProvingKey { sigmas: Default::default()};
+                                               // Can't do the below as no default exists
+                                               // let mut mint_ipa_vk= VerifyingKey::dummy(1, 2^10);
+                                               // let mut mint_ipa_pk= ProvingKey { sigmas: Default::default()};
     ark_std::println!("Creating {} Mint Circuits", I);
     for i in 0..I {
-        let value = ark_std::array::from_fn(|j| {Fq::from((j + i) as u32)});
+        let value = ark_std::array::from_fn(|j| Fq::from((j + i) as u32));
         let token_id = [Fq::from(12 as u64); C];
         let token_nonce = [Fq::from(13 as u64); C];
         let secret_key = Fq::from_str("4").unwrap();
@@ -154,23 +159,23 @@ pub fn benchmark_mints<const I: usize, const C: usize>(c: &mut Criterion) {
             token_id,
             token_nonce,
             [token_owner; C],
-        ).unwrap();
+        )
+        .unwrap();
         mint_circuit.finalize_for_arithmetization().unwrap();
-        if i ==0 {
+        if i == 0 {
             mint_ipa_srs = <PlonkIpaSnark<VestaConfig> as UniversalSNARK<VestaConfig>>::universal_setup_for_testing(
                 mint_circuit.srs_size().unwrap(),
                 &mut rng,
             ).unwrap();
         }
         let (mint_ipa_pk, mint_ipa_vk) =
-        PlonkIpaSnark::<VestaConfig>::preprocess(&mint_ipa_srs, &mint_circuit).unwrap();
-        let (mint_ipa_proof, g_poly, _) =
-            PlonkIpaSnark::<VestaConfig>::prove_for_partial::<
-                _,
-                _,
-                RescueTranscript<<VestaConfig as Pairing>::BaseField>,
-            >(&mut rng, &mint_circuit, &mint_ipa_pk, None)
-            .unwrap();
+            PlonkIpaSnark::<VestaConfig>::preprocess(&mint_ipa_srs, &mint_circuit).unwrap();
+        let (mint_ipa_proof, g_poly, _) = PlonkIpaSnark::<VestaConfig>::prove_for_partial::<
+            _,
+            _,
+            RescueTranscript<<VestaConfig as Pairing>::BaseField>,
+        >(&mut rng, &mint_circuit, &mint_ipa_pk, None)
+        .unwrap();
 
         let client_input: ClientInput<VestaConfig, C, 1> = ClientInput {
             proof: mint_ipa_proof,
@@ -197,12 +202,13 @@ pub fn benchmark_mints<const I: usize, const C: usize>(c: &mut Criterion) {
     ark_std::println!("Created {} Mint Proofs", I);
     let (vk_tree, _, nullifier_tree, global_comm_tree) =
         tree_generator(vec![client_inputs[0].vk.clone()], vec![], vec![], vec![]);
-    let vesta_srs = <PlonkIpaSnark<VestaConfig> as UniversalSNARK<VestaConfig>>::universal_setup_for_testing(
-        2usize.pow(21),
-        &mut rng,
-    ).unwrap();
+    let vesta_srs =
+        <PlonkIpaSnark<VestaConfig> as UniversalSNARK<VestaConfig>>::universal_setup_for_testing(
+            2usize.pow(21),
+            &mut rng,
+        )
+        .unwrap();
     let (vesta_commit_key, _) = vesta_srs.trim(2usize.pow(21)).unwrap();
-
 
     // BELOW - if we want to bench witness gen, uncomment
     // ==================================================
@@ -233,8 +239,7 @@ pub fn benchmark_mints<const I: usize, const C: usize>(c: &mut Criterion) {
 
     // BELOW - if we DON'T want to bench witness gen, comment
     // ==================================================
-    let (mut base_circuit, _) =
-    base_rollup_circuit::<VestaConfig, PallasConfig, I, C, 1>(
+    let (mut base_circuit, _) = base_rollup_circuit::<VestaConfig, PallasConfig, I, C, 1>(
         client_inputs.clone().try_into().unwrap(),
         vk_tree.root.0,
         nullifier_tree.root,
@@ -245,14 +250,16 @@ pub fn benchmark_mints<const I: usize, const C: usize>(c: &mut Criterion) {
     )
     .unwrap();
     base_circuit.finalize_for_arithmetization().unwrap();
-    let base_ipa_srs = <PlonkIpaSnark<PallasConfig> as UniversalSNARK<PallasConfig>>::universal_setup_for_testing(
-        base_circuit.srs_size().unwrap(),
-        &mut rng,
-    ).unwrap();
+    let base_ipa_srs =
+        <PlonkIpaSnark<PallasConfig> as UniversalSNARK<PallasConfig>>::universal_setup_for_testing(
+            base_circuit.srs_size().unwrap(),
+            &mut rng,
+        )
+        .unwrap();
     // ==================================================
     // we must preprocess here because there is no pk default to init
     let (base_ipa_pk, _) =
-    PlonkIpaSnark::<PallasConfig>::preprocess(&base_ipa_srs, &base_circuit).unwrap();
+        PlonkIpaSnark::<PallasConfig>::preprocess(&base_ipa_srs, &base_circuit).unwrap();
     c.bench_function("Base with I Mints - Output: Proof Generation", |b| {
         b.iter(|| {
             let _ = PlonkIpaSnark::<PallasConfig>::prove::<
@@ -329,8 +336,7 @@ pub fn benchmark_transfers<const I: usize, const N: usize, const C: usize>(c: &m
         }
 
         let (transfer_ipa_pk, transfer_ipa_vk) =
-            PlonkIpaSnark::<VestaConfig>::preprocess(&transfer_ipa_srs, &transfer_circuit)
-                .unwrap();
+            PlonkIpaSnark::<VestaConfig>::preprocess(&transfer_ipa_srs, &transfer_circuit).unwrap();
 
         let (transfer_ipa_proof, g_poly, _) =
             PlonkIpaSnark::<VestaConfig>::prove_for_partial::<
@@ -409,33 +415,33 @@ pub fn benchmark_transfers<const I: usize, const N: usize, const C: usize>(c: &m
         global_comm_roots.push(field_switching(&prev_commitment_tree.root.0));
     }
     ark_std::println!("Created {} Transfer Proofs", I);
-        // all have the same vk
-        let vks = vec![client_inputs[0].vk.clone()];
-        let comms: Vec<Fq> = vec![];
+    // all have the same vk
+    let vks = vec![client_inputs[0].vk.clone()];
+    let comms: Vec<Fq> = vec![];
 
-        let (vk_tree, _, _, global_comm_tree) =
-            tree_generator(vks, comms, vec![], global_comm_roots);
+    let (vk_tree, _, _, global_comm_tree) = tree_generator(vks, comms, vec![], global_comm_roots);
 
-        for (i, ci) in client_inputs.iter_mut().enumerate() {
-            let global_root_path = global_comm_tree
-                .membership_witness(i)
-                .unwrap()
-                .try_into()
-                .unwrap();
-            ci.path_comm_tree_root_to_global_tree_root = [global_root_path; N];
-            ci.path_comm_tree_index = [Fr::from(i as u32); N];
-            ci.vk_paths = vk_tree.membership_witness(0).unwrap().try_into().unwrap();
-            // vk index is already (correctly) zero
-        }
+    for (i, ci) in client_inputs.iter_mut().enumerate() {
+        let global_root_path = global_comm_tree
+            .membership_witness(i)
+            .unwrap()
+            .try_into()
+            .unwrap();
+        ci.path_comm_tree_root_to_global_tree_root = [global_root_path; N];
+        ci.path_comm_tree_index = [Fr::from(i as u32); N];
+        ci.vk_paths = vk_tree.membership_witness(0).unwrap().try_into().unwrap();
+        // vk index is already (correctly) zero
+    }
 
-        let vesta_srs = <PlonkIpaSnark<VestaConfig> as UniversalSNARK<VestaConfig>>::universal_setup_for_testing(
+    let vesta_srs =
+        <PlonkIpaSnark<VestaConfig> as UniversalSNARK<VestaConfig>>::universal_setup_for_testing(
             2usize.pow(21),
             &mut rng,
-        ).unwrap();
-        let (vesta_commit_key, _) = vesta_srs.trim(2usize.pow(21)).unwrap();
+        )
+        .unwrap();
+    let (vesta_commit_key, _) = vesta_srs.trim(2usize.pow(21)).unwrap();
 
-        let initial_nullifier_tree = IndexedMerkleTree::<Fr, 32>::new();
-
+    let initial_nullifier_tree = IndexedMerkleTree::<Fr, 32>::new();
 
     // BELOW - if we want to bench witness gen, uncomment
     // ==================================================
@@ -466,8 +472,7 @@ pub fn benchmark_transfers<const I: usize, const N: usize, const C: usize>(c: &m
 
     // BELOW - if we DON'T want to bench witness gen, comment
     // ==================================================
-    let (mut base_circuit, _) =
-    base_rollup_circuit::<VestaConfig, PallasConfig, I, C, N>(
+    let (mut base_circuit, _) = base_rollup_circuit::<VestaConfig, PallasConfig, I, C, N>(
         client_inputs.try_into().unwrap(),
         vk_tree.root.0,
         init_nullifier_root,
@@ -478,14 +483,16 @@ pub fn benchmark_transfers<const I: usize, const N: usize, const C: usize>(c: &m
     )
     .unwrap();
     base_circuit.finalize_for_arithmetization().unwrap();
-    let base_ipa_srs = <PlonkIpaSnark<PallasConfig> as UniversalSNARK<PallasConfig>>::universal_setup_for_testing(
-        base_circuit.srs_size().unwrap(),
-        &mut rng,
-    ).unwrap();
+    let base_ipa_srs =
+        <PlonkIpaSnark<PallasConfig> as UniversalSNARK<PallasConfig>>::universal_setup_for_testing(
+            base_circuit.srs_size().unwrap(),
+            &mut rng,
+        )
+        .unwrap();
     // ==================================================
     // we must preprocess here because there is no pk default to init
     let (base_ipa_pk, _) =
-    PlonkIpaSnark::<PallasConfig>::preprocess(&base_ipa_srs, &base_circuit).unwrap();
+        PlonkIpaSnark::<PallasConfig>::preprocess(&base_ipa_srs, &base_circuit).unwrap();
     c.bench_function("Base with I Transfers - Output: Proof Generation", |b| {
         b.iter(|| {
             let _ = PlonkIpaSnark::<PallasConfig>::prove::<
