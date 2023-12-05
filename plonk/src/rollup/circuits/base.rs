@@ -481,6 +481,12 @@ where
     // TODO enforce I == 2 if swap in circuit
     let same_swap_fields = circuit.is_equal(swap_vars[0].into(), swap_vars[1].into())?;
     circuit.enforce_true(same_swap_fields.into())?;
+    if C == 1 {
+        // fix out of bounds err
+        // TODO make better if C = 1, since there is no swap
+        out_commitments[1].push(0 as usize);
+        out_commitments[0].push(0 as usize);
+    }
     let out_1_match = circuit.is_equal(out_commitments[0][0], out_commitments[1][1])?;
     let out_2_match = circuit.is_equal(out_commitments[1][0], out_commitments[0][1])?;
     let both_match = circuit.logic_and(out_2_match, out_1_match)?;
