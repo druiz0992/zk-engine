@@ -676,7 +676,7 @@ pub mod base_test {
                 proof: mint_ipa_proof,
                 swap_field: false,
                 nullifiers: [Fq::zero()],
-                commitments: mint_circuit.public_input().unwrap()[2..2 + C]
+                commitments: mint_circuit.public_input().unwrap()[3..3 + C]
                     .try_into()
                     .unwrap(),
                 commitment_tree_root: [Fq::zero()],
@@ -1344,8 +1344,8 @@ pub mod base_test {
         assert!(circuit.check_circuit_satisfiability(&public_inputs).is_ok());
 
         let client_input = (
-            public_inputs[N..2 * N].try_into().unwrap(), // nullifiers
-            public_inputs[2 * N..2 * N + C].try_into().unwrap(), // new commitments
+            public_inputs[N+1..=2*N].try_into().unwrap(), // nullifiers
+            public_inputs[2*N+1..=2*N+C].try_into().unwrap(), // new commitments
             public_inputs[len - 5..len - 3].try_into().unwrap(), // eph pub key
             public_inputs[len - 3..len].try_into().unwrap(), // ciphertext
         );
