@@ -37,6 +37,9 @@ where
 {
     let mut circuit = PlonkCircuit::new_turbo_plonk();
 
+    // Swap_field = true
+    circuit.create_public_boolean_variable(true)?;
+
     // Derive Keys - ToDo, remove this once we have HSM-compatible key derivation
     let private_key_domain_var = circuit.create_constant_variable(private_key_domain)?;
     let nullifier_key_domain_var = circuit.create_constant_variable(nullifier_key_domain)?;
@@ -66,10 +69,11 @@ where
         &[root_key_var, nullifier_key_domain_var],
     )?;
 
-
     // Calculate the private old commitment hash and check the sibling path
     let outgoing_token_id_var = circuit.create_variable(outgoing_token_id)?;
-    let commitment_root_var = circuit.create_public_variable(commitment_tree_root).unwrap();
+    let commitment_root_var = circuit
+        .create_public_variable(commitment_tree_root)
+        .unwrap();
     let old_commitment_nonce_var = circuit.create_variable(old_commitment_nonce)?;
     let old_commitment_val_var = circuit.create_variable(old_commitment_value)?;
 
@@ -119,7 +123,6 @@ where
     circuit.set_variable_public(recipient_commitment_hash_var)?;
 
     // Calculate the expected incoming commitment as agreed in the swap
-    // Calculate the public nullifier hash
     let incoming_token_id_var = circuit.create_variable(incoming_token_id)?;
     let incoming_commitment_nonce_var = circuit.create_variable(incoming_commitment_nonce)?;
     let incoming_commitment_val_var = circuit.create_variable(incoming_commitment_value)?;
@@ -136,7 +139,6 @@ where
     )?;
 
     circuit.set_variable_public(incoming_commitment_hash_var)?;
-
 
     // Check the encryption of secret information to the recipient
     // This proves that they will be able to decrypt the information
@@ -227,7 +229,7 @@ mod test {
             .unwrap();
         let comm_tree: Tree<Fq, 8> = Tree::from_leaves(vec![old_commitment_hash]);
         let old_comm_path: [Fq; 8] = comm_tree.membership_witness(0).unwrap().try_into().unwrap();
-    
+
         let expected_new_commitment_hash = Poseidon::<Fq>::new()
             .hash(vec![
                 outgoing_value,
@@ -239,7 +241,6 @@ mod test {
             .unwrap();
 
         let ephemeral_key = Fq::rand(&mut test_rng());
-
 
         let circuit = super::swap_circuit::<PallasConfig, VestaConfig, 8>(
             outgoing_value,
@@ -259,8 +260,8 @@ mod test {
         )?;
 
         let public_inputs = circuit.public_input()?;
-        assert!(expected_new_commitment_hash == public_inputs[2]);
-        assert!(incoming_commitment_hash == public_inputs[3]);
+        assert!(expected_new_commitment_hash == public_inputs[3]);
+        assert!(incoming_commitment_hash == public_inputs[4]);
         assert!(circuit.check_circuit_satisfiability(&public_inputs).is_ok());
         Ok(())
     }

@@ -179,6 +179,7 @@ pub fn benchmark_mints<const I: usize, const C: usize>(c: &mut Criterion) {
 
         let client_input: ClientInput<VestaConfig, C, 1> = ClientInput {
             proof: mint_ipa_proof,
+            swap_field: false,
             nullifiers: [Fq::zero()],
             commitments: mint_circuit.public_input().unwrap()[2..2 + C]
                 .try_into()
@@ -393,6 +394,7 @@ pub fn benchmark_transfers<const I: usize, const N: usize, const C: usize>(c: &m
 
         let client_input: ClientInput<VestaConfig, C, N> = ClientInput {
             proof: transfer_ipa_proof,
+            swap_field: false,
             nullifiers,
             commitments: transfer_inputs.1,
             commitment_tree_root: [prev_commitment_tree.root.0; N],
