@@ -29,6 +29,8 @@ where
 {
     // Calculate output hash of the commitment
     let mut circuit = PlonkCircuit::new_turbo_plonk();
+    // Swap_field = false
+    circuit.create_public_boolean_variable(false)?;
     // We pretend N=1
     let commitment_root = V::ScalarField::zero();
     circuit.create_public_variable(commitment_root)?;
@@ -100,6 +102,7 @@ mod test {
 
         assert!(circuit
             .check_circuit_satisfiability(&[
+                Fq::from(0),
                 Fq::from(0),
                 Fq::from(0),
                 public_commitment,

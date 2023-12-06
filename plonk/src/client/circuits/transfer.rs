@@ -38,6 +38,9 @@ where
 {
     let mut circuit = PlonkCircuit::new_turbo_plonk();
 
+    // Swap_field = false
+    circuit.create_public_boolean_variable(false)?;
+
     // Derive Keys - ToDo, remove this once we have HSM-compatible key derivation
     let private_key_domain_var = circuit.create_constant_variable(private_key_domain)?;
     let nullifier_key_domain_var = circuit.create_constant_variable(nullifier_key_domain)?;
