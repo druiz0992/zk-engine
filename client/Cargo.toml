@@ -16,11 +16,17 @@ ark-poly="0.4.2"
 ark-serialize="0.4.2"
 
 # JF Deps
-jf-plonk = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master", features = ["test-srs"]}
-jf-relation = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
-jf-utils = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
-jf-primitives = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
-curves = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
+# jf-plonk = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master", features = ["test-srs"]}
+# jf-relation = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
+# jf-utils = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
+# jf-primitives = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
+jf-plonk = {path = "/Users/ilyasridhuan/Code/jellyfish/plonk", features = ["test-srs"]}
+jf-relation = {path = "/Users/ilyasridhuan/Code/jellyfish/relation"}
+jf-utils = {path = "/Users/ilyasridhuan/Code/jellyfish/utilities"}
+jf-primitives = {path = "/Users/ilyasridhuan/Code/jellyfish/primitives"}
+curves = {path = "/Users/ilyasridhuan/Code/jellyfish/curves"}
+# curves = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
+
 
 common = {path = "../common"}
 trees = {path = "../trees"}

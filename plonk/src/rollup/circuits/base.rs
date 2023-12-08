@@ -171,7 +171,7 @@ where
         //------------------------------------------------------------------------------
 
         //----------------------------Step 2: Membership check of vk_hash ---------------------------------
-        // This <1> is the depth of the vk tree
+        // This <2> is the depth of the vk tree
         let calc_vk_root_var = BinaryMerkleTreeGadget::<2, C1::BaseField>::calculate_root(
             &mut circuit,
             vk_var_hash,
@@ -180,6 +180,7 @@ where
         )?;
         circuit.enforce_equal(calc_vk_root_var, global_vk_root_var)?;
 
+        ark_std::println!("After vk root check, gates: {:?}", circuit.num_gates());
         let mut input_nullifier_hashes = vec![];
         let mut nullifiers_fq = vec![];
         let mut input_commitment_tree_root_vars = vec![];
@@ -187,6 +188,10 @@ where
         for i in 0..N {
             //--------Step 3: Membership check of client commitment tree roots in global commitment root ------
             // This happens per nullifier as a user can use commitments from different blocks
+            ark_std::println!(
+                "before commitment tree check, gates: {:?}",
+                circuit.num_gates()
+            );
             let commitment_tree_root_fq = fr_to_fq::<_, <<C1 as Pairing>::G1 as CurveGroup>::Config>(
                 &input.commitment_tree_root[i],
             );
@@ -200,6 +205,11 @@ where
                     input.path_comm_tree_index[i],
                     input.path_comm_tree_root_to_global_tree_root[i],
                 )?;
+
+            ark_std::println!(
+                "after commitment tree check, gates: {:?}",
+                circuit.num_gates()
+            );
 
             // Nullifiers are in Vesta Fr and are safely lifted to this Pallas Fr (which is Vesta Fq)
             let nullifier_fq =
@@ -286,6 +296,7 @@ where
                 ]
                 .as_slice(),
             )?;
+            ark_std::println!("before non_mem check, gates: {:?}", circuit.num_gates());
             // This <32> is the depth of the Nullifier tree
             let calc_nullifier_root_var =
                 BinaryMerkleTreeGadget::<32, C1::BaseField>::calculate_root(
@@ -294,6 +305,7 @@ where
                     input.low_nullifier_indices[i],
                     input.low_nullifier_mem_path[i],
                 )?;
+            ark_std::println!("after non_mem check, gates: {:?}", circuit.num_gates());
             let nullifier_root_select = circuit.conditional_select(
                 nullifier_is_zero,
                 calc_nullifier_root_var,
@@ -305,12 +317,12 @@ where
                 circuit.logic_or(low_nullifier_is_prev_nullifier, nullifier_root_equality)?;
             circuit.enforce_true(nullifier_root_enforce_equal.into())?;
 
-            let new_low_nullifier_hash =
-                PoseidonGadget::<PoseidonStateVar<4>, C1::BaseField>::hash(
-                    &mut circuit,
-                    [low_nullifier_value_var, leaf_count, nullifier].as_slice(),
-                )?;
-
+            // let new_low_nullifier_hash =
+            //     PoseidonGadget::<PoseidonStateVar<4>, C1::BaseField>::hash(
+            //         &mut circuit,
+            //         [low_nullifier_value_var, leaf_count, nullifier].as_slice(),
+            //     )?;
+            //
             let new_inserted_nullifier =
                 PoseidonGadget::<PoseidonStateVar<4>, C1::BaseField>::hash(
                     &mut circuit,
@@ -327,15 +339,20 @@ where
             // Step 8: Hash the input  nullifiers pairwise
             // Use low nullifier mem path but with new hash
             leaf_count = circuit.add_constant(leaf_count, &C1::BaseField::one())?;
-            nullifier_new_root = BinaryMerkleTreeGadget::<32, C1::BaseField>::calculate_root(
-                &mut circuit,
-                new_low_nullifier_hash,
-                input.low_nullifier_indices[i],
-                input.low_nullifier_mem_path[i],
-            )?;
+            ark_std::println!("before update root, gates: {:?}", circuit.num_gates());
+
+            // nullifier_new_root = BinaryMerkleTreeGadget::<32, C1::BaseField>::calculate_root(
+            //     &mut circuit,
+            //     new_low_nullifier_hash,
+            //     input.low_nullifier_indices[i],
+            //     input.low_nullifier_mem_path[i],
+            // )?;
+            ark_std::println!("after update root, gates: {:?}", circuit.num_gates());
+
             prev_nullifier_low_nullifier = [low_nullifier_value_var, leaf_count, nullifier];
             // ark_std::println!("Nullifier root: {:?}", circuit.witness(nullifier_new_root)?);
         }
+        ark_std::println!("After nullifier check, gates: {:?}", circuit.num_gates());
         let swap_var = circuit.create_boolean_variable(input.swap_field)?;
         swap_vars.push(swap_var);
         // TODO: enforce I == 2 inside circuit
@@ -349,6 +366,7 @@ where
         }
         // In a swap, the first output commitment is c
         // Step 5: PV each input proof
+        ark_std::println!("Before PV, gates: {:?}", circuit.num_gates());
         let proof_var = PlonkIpaSWProofNativeVar::create_variables(&mut circuit, &input.proof)?;
         let g_gen: SWPoint<C1::BaseField> = input.vk.open_key.g_bases[0].into();
         let commitments_fq = input
@@ -398,12 +416,14 @@ where
         for l in 0..3 {
             public_input_var.push(ciphertext_vars[l]);
         }
+        ark_std::println!("Right before PV, gates: {:?}", circuit.num_gates());
         let (g_comm_var, u_challenge_var) = &verifying_key_var.partial_verify_circuit_ipa_native(
             &mut circuit,
             &g_gen,
             &public_input_var,
             &proof_var,
         )?;
+        ark_std::println!("Right after PV, gates: {:?}", circuit.num_gates());
         g_comms_vars.push(*g_comm_var);
         u_challenges_vars.push(*u_challenge_var);
         // ----- Reaching this points means we have a valid proof
@@ -484,8 +504,8 @@ where
     if C == 1 {
         // fix out of bounds err
         // TODO make better if C = 1, since there is no swap
-        out_commitments[1].push(0 as usize);
-        out_commitments[0].push(0 as usize);
+        out_commitments[1].push(0);
+        out_commitments[0].push(0);
     }
     let out_1_match = circuit.is_equal(out_commitments[0][0], out_commitments[1][1])?;
     let out_2_match = circuit.is_equal(out_commitments[1][0], out_commitments[0][1])?;
@@ -508,32 +528,36 @@ where
             leaf_hashes.as_slice(),
         )?;
         circuit.set_variable_public(commitment_subtree_root)?;
+        let nullifier_subtree_root = PoseidonGadget::<PoseidonStateVar<3>, C1::BaseField>::hash(
+            &mut circuit,
+            nullifier_leaf_hashes.as_slice(),
+        )?;
 
         // nullfier_leaf_hash [left_n, right_n]
         // IF left_n && right_n == 0, then nullifier_subtree_root = zero
         // ELSE if left_n == 0, then swap left_n and right_n => H(right_n, left_n)
         // otherwise H(left_n, right_n)
-        let left = nullifier_leaf_hashes[0];
-        let right = nullifier_leaf_hashes[1];
-        let left_is_zero = circuit.is_zero(left)?;
-        let right_is_zero = circuit.is_zero(right)?;
-        let right_is_not_zero = circuit.logic_neg(right_is_zero)?;
-        let left_and_right_zero = circuit.logic_and(left_is_zero, right_is_zero)?;
-
-        let swap_condition = circuit.logic_and(left_is_zero, right_is_not_zero)?;
-        let left = circuit.conditional_select(swap_condition, left, right)?;
-        let right = circuit.conditional_select(swap_condition, right, left)?;
-
-        // Bag the roots of the nullifier subtrees created previously assuming I == 2
-        let left_right_nullifier_hash = PoseidonGadget::<PoseidonStateVar<3>, C1::BaseField>::hash(
-            &mut circuit,
-            [left, right].as_slice(),
-        )?;
-        let nullifier_subtree_root = circuit.conditional_select(
-            left_and_right_zero,
-            left_right_nullifier_hash,
-            circuit.zero(),
-        )?;
+        // let left = nullifier_leaf_hashes[0];
+        // let right = nullifier_leaf_hashes[1];
+        // let left_is_zero = circuit.is_zero(left)?;
+        // let right_is_zero = circuit.is_zero(right)?;
+        // let right_is_not_zero = circuit.logic_neg(right_is_zero)?;
+        // let left_and_right_zero = circuit.logic_and(left_is_zero, right_is_zero)?;
+        //
+        // let swap_condition = circuit.logic_and(left_is_zero, right_is_not_zero)?;
+        // let left = circuit.conditional_select(swap_condition, left, right)?;
+        // let right = circuit.conditional_select(swap_condition, right, left)?;
+        //
+        // // Bag the roots of the nullifier subtrees created previously assuming I == 2
+        // let left_right_nullifier_hash = PoseidonGadget::<PoseidonStateVar<3>, C1::BaseField>::hash(
+        //     &mut circuit,
+        //     [left, right].as_slice(),
+        // )?;
+        // let nullifier_subtree_root = circuit.conditional_select(
+        //     left_and_right_zero,
+        //     left_right_nullifier_hash,
+        //     circuit.zero(),
+        // )?;
         circuit.set_variable_public(nullifier_subtree_root)?;
     } else if I == 4 {
         // flat hash for now
@@ -580,6 +604,7 @@ where
     } else {
         unimplemented!()
     }
+    ark_std::println!("Right before acc, gates: {:?}", circuit.num_gates());
     verify_accumulation_gadget_sw_native::<
         C1,
         C2,
@@ -593,6 +618,7 @@ where
         &u_challenges_vars[..],
         &acc,
     )?;
+    ark_std::println!("Right after acc, gates: {:?}", circuit.num_gates());
 
     Ok((circuit, pi_star))
 }
@@ -632,15 +658,14 @@ pub mod base_test {
 
     use super::{base_rollup_circuit, ClientInput};
     #[test]
-    #[ignore]
     fn test_base_circuit() {
-        test_base_rollup_helper_mint::<2, 2>();
+        // test_base_rollup_helper_mint::<2, 2>();
         // test_base_rollup_helper_mint::<2, 4>();
         // test_base_rollup_helper_mint::<4, 2>();
         test_base_rollup_helper_transfer::<2, 2, 2>();
         // test_base_rollup_helper_transfer::<4, 2, 2>();
         // test_base_rollup_helper_transfer::<4, 4, 1>();
-        test_base_rollup_helper_swap();
+        // test_base_rollup_helper_swap();
     }
 
     fn test_base_rollup_helper_mint<const I: usize, const C: usize>() {
@@ -691,7 +716,7 @@ pub mod base_test {
                 low_nullifier: [Default::default()],
                 low_nullifier_indices: [Fr::one()],
                 low_nullifier_mem_path: [[Fr::zero(); 32]],
-                vk_paths: [Fr::zero()], // filled later
+                vk_paths: [Fr::zero(), Fr::zero()], // filled later
                 vk_path_index: Fr::from(0u64),
                 vk: mint_ipa_vk.clone(),
                 eph_pub_key: [Fr::zero(); 2],
@@ -1178,7 +1203,7 @@ pub mod base_test {
                 low_nullifier: [low_null.node],
                 low_nullifier_indices: [low_index],
                 low_nullifier_mem_path: [low_path],
-                vk_paths: [Fr::zero()], // filled later
+                vk_paths: [Fr::zero(), Fr::zero()], // filled later
                 vk_path_index: Fr::from(0u64),
                 vk: swap_ipa_vk.clone(),
                 eph_pub_key: [
@@ -1431,7 +1456,7 @@ pub mod base_test {
         nullifiers: Vec<Fq>,
         global_comm_roots: Vec<Fr>,
     ) -> (
-        Tree<Fr, 1>,
+        Tree<Fr, 2>,
         Tree<Fq, 8>,
         IndexedMerkleTree<Fr, 32>,
         Tree<Fr, 8>,
@@ -1463,7 +1488,7 @@ pub mod base_test {
             poseidon.hash_unchecked(vec![outlier_pair[0], outlier_pair[1], total_leaves[0]])
         });
 
-        let vk_tree: Tree<Fr, 1> = Tree::from_leaves(vk_hashes.collect::<Vec<_>>());
+        let vk_tree: Tree<Fr, 2> = Tree::from_leaves(vk_hashes.collect::<Vec<_>>());
 
         // commitment trees
         let commitment_tree: Tree<Fq, 8> = Tree::from_leaves(comms);

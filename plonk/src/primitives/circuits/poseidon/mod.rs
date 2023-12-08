@@ -24,8 +24,21 @@ pub trait PoseidonGadget<T, P> {
     ) -> Result<T, CircuitError>;
     fn mix(&mut self, state: T, matrix: &[Vec<P>]) -> Result<T, CircuitError>;
     fn hash(&mut self, inputs: &[Variable]) -> Result<Variable, CircuitError>;
-    fn full_round(&mut self, state: T, matrix: &[Vec<P>]) -> Result<T, CircuitError>;
-    fn partial_round(&mut self, state: T, matrix: &[Vec<P>]) -> Result<T, CircuitError>;
+    fn last_round_mix(&mut self, state: T, matrix: &[Vec<P>]) -> Result<T, CircuitError>;
+    fn full_round(
+        &mut self,
+        state: T,
+        matrix: &[Vec<P>],
+        constants: &[P],
+        it: usize,
+    ) -> Result<T, CircuitError>;
+    fn partial_round(
+        &mut self,
+        state: T,
+        matrix: &[Vec<P>],
+        constants: &[P],
+        it: usize,
+    ) -> Result<T, CircuitError>;
 }
 
 pub type PoseidonStateVar<const N: usize> = [Variable; N];
@@ -93,18 +106,26 @@ where
         let (constants, matrix) = F::load_subset_constants(t);
 
         if N <= 4 {
+            state = self.ark(state, constants.as_slice(), 0)?;
             for i in 0..F::N_ROUND_FULL / 2 {
-                state = self.ark(state, constants.as_slice(), i * t)?;
-                state = self.full_round(state, matrix.as_slice())?;
+                state =
+                    self.full_round(state, matrix.as_slice(), constants.as_slice(), (i + 1) * t)?;
             }
             for i in F::N_ROUND_FULL / 2..n_rounds_p + F::N_ROUND_FULL / 2 {
-                state = self.ark(state, constants.as_slice(), i * t)?;
-                state = self.partial_round(state, matrix.as_slice())?;
+                // state = self.ark(state, constants.as_slice(), i * t)?;
+                state = self.partial_round(
+                    state,
+                    matrix.as_slice(),
+                    constants.as_slice(),
+                    (i + 1) * t,
+                )?;
             }
-            for i in n_rounds_p + F::N_ROUND_FULL / 2..F::N_ROUND_FULL + n_rounds_p {
-                state = self.ark(state, constants.as_slice(), i * t)?;
-                state = self.full_round(state, matrix.as_slice())?;
+            for i in n_rounds_p + F::N_ROUND_FULL / 2..F::N_ROUND_FULL + n_rounds_p - 1 {
+                // state = self.ark(state, constants.as_slice(), i * t)?;
+                state =
+                    self.full_round(state, matrix.as_slice(), constants.as_slice(), (i + 1) * t)?;
             }
+            state = self.last_round_mix(state, matrix.as_slice())?;
             return Ok(state[0]);
         }
         for i in 0..(n_rounds_p + F::N_ROUND_FULL) {
@@ -115,7 +136,7 @@ where
         Ok(state[0])
     }
 
-    fn full_round(
+    fn last_round_mix(
         &mut self,
         state: PoseidonStateVar<N>,
         matrix: &[Vec<F>],
@@ -158,6 +179,59 @@ where
                 &wire_vars,
                 Box::new(FullRoundGate::<F> {
                     matrix_vector: matrix_row,
+                    constant: F::zero(),
+                }),
+            )?;
+        }
+        Ok(output_vars.try_into().unwrap())
+    }
+
+    fn full_round(
+        &mut self,
+        state: PoseidonStateVar<N>,
+        matrix: &[Vec<F>],
+        constants: &[F],
+        it: usize,
+    ) -> Result<PoseidonStateVar<N>, CircuitError> {
+        self.check_vars_bound(&state)?;
+        // Only to be used when N < 5 (i.e. Poseidon 4 or Poseidon 5)
+
+        let state_vals = state
+            .iter()
+            .map(|&s| self.witness(s))
+            .collect::<Result<Vec<_>, _>>()?;
+        // Perform i^5 - S-Box
+        let x5s = state_vals
+            .iter()
+            .map(|&s| s.pow([5u64]))
+            .collect::<Vec<_>>();
+        let mut output = [F::zero(); N];
+        // Run Mix
+        for i in 0..N {
+            let matrix_row = &matrix[i];
+            let dot_product = x5s
+                .iter()
+                .zip(matrix_row.iter())
+                .fold(F::zero(), |acc, (&a, &b)| acc + (a * b));
+            output[i] = dot_product + constants[it + i];
+        }
+        // Enforce constraints using a custom gate
+        let output_vars = output
+            .iter()
+            .map(|&o| self.create_variable(o))
+            .collect::<Result<Vec<_>, _>>()?;
+        for i in 0..N {
+            let mut wire_vars = [0, 0, 0, 0, output_vars[i]];
+            for (i, s) in state.iter().enumerate() {
+                wire_vars[i] = *s;
+            }
+            let mut matrix_row = matrix[i].clone();
+            matrix_row.resize(4, F::zero());
+            self.insert_gate(
+                &wire_vars,
+                Box::new(FullRoundGate::<F> {
+                    matrix_vector: matrix_row,
+                    constant: constants[it + i],
                 }),
             )?;
         }
@@ -168,6 +242,8 @@ where
         &mut self,
         state: PoseidonStateVar<N>,
         matrix: &[Vec<F>],
+        constants: &[F],
+        it: usize,
     ) -> Result<PoseidonStateVar<N>, CircuitError> {
         self.check_vars_bound(&state)?;
         // Only to be used when N < 5 (i.e. Poseidon 4 or Poseidon 5)
@@ -184,7 +260,7 @@ where
                 .iter()
                 .zip(matrix_row.iter())
                 .fold(F::zero(), |acc, (&a, &b)| acc + (a * b));
-            output[i] = dot_product;
+            output[i] = dot_product + constants[it + i];
         }
         let output_vars = output
             .iter()
@@ -201,6 +277,7 @@ where
                 &wire_vars,
                 Box::new(PartialRoundGate::<F> {
                     matrix_vector: matrix_row,
+                    constant: constants[it + i],
                 }),
             )?;
         }
@@ -235,6 +312,7 @@ mod test {
         let circuit_hash =
             PoseidonGadget::<PoseidonStateVar<N>, Fq>::hash(&mut circuit, data_arr.as_slice())
                 .unwrap();
+        ark_std::println!("Optimised poseidon: {:?}", circuit.num_gates());
         assert_eq!(
             h.to_string(),
             circuit.witness(circuit_hash).unwrap().to_string()
