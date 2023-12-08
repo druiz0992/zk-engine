@@ -84,7 +84,7 @@ where
     // Set g_comm_var to public
     circuit.set_variable_public(g_comm_var.get_x())?;
     circuit.set_variable_public(g_comm_var.get_y())?;
-    circuit.set_variable_public(g_comm_var.get_inf().into())?;
+    // circuit.set_variable_public(g_comm_var.get_inf().into())?;
     // Set evaluation to zero and public
     circuit.create_public_emulated_variable(C1::ScalarField::zero())?;
     // This is to make "point" of the instance public
@@ -97,9 +97,9 @@ where
     let mut public_outputs = base_public_inputs;
     public_outputs.push(field_switching(&circuit.witness(g_comm_var.get_x())?));
     public_outputs.push(field_switching(&circuit.witness(g_comm_var.get_y())?));
-    public_outputs.push(field_switching(
-        &circuit.witness(g_comm_var.get_inf().into())?,
-    ));
+    // public_outputs.push(field_switching(
+    //     &circuit.witness(g_comm_var.get_inf().into())?,
+    // ));
     public_outputs.push(C2::BaseField::zero());
     public_outputs.push(circuit.emulated_witness(u_var)?);
 
@@ -114,7 +114,7 @@ pub mod bounce_test {
         structs::AccInstance, utils::StoredProof,
     };
     use ark_ec::pairing::Pairing;
-    use ark_ff::One;
+    use ark_ff::{One, Zero};
     use curves::{
         pallas::PallasConfig,
         vesta::{Fq, VestaConfig},
@@ -145,6 +145,7 @@ pub mod bounce_test {
             passthrough_instance,
         )
         .unwrap();
+        ark_std::println!("Bounce constraints: {}", bounce_circuit.num_gates());
         bounce_circuit
             .check_circuit_satisfiability(&bounce_circuit.public_input().unwrap())
             .unwrap();
@@ -183,20 +184,20 @@ pub mod bounce_test {
             comm: SWPoint(
                 public_outputs[7],
                 public_outputs[8],
-                public_outputs[9] == Fq::one(),
+                public_outputs[7] == Fq::zero(),
             ),
             // These are originally Vesta Fr => small => safe conversion
-            eval: field_switching(&public_outputs[10]),
-            eval_point: field_switching(&public_outputs[11]),
+            eval: field_switching(&public_outputs[9]),
+            eval_point: field_switching(&public_outputs[10]),
         };
 
         // This is the Pallas acc we just made by Pv'ing base
         let instance = AccInstance {
             // This is originally a Pallas point => safe conversion
             comm: SWPoint(
-                field_switching(&public_outputs[public_outputs.len() - 5]),
                 field_switching(&public_outputs[public_outputs.len() - 4]),
-                public_outputs[public_outputs.len() - 3] == Fq::one(),
+                field_switching(&public_outputs[public_outputs.len() - 3]),
+                public_outputs[public_outputs.len() - 4] == Fq::zero(),
             ),
             eval: public_outputs[public_outputs.len() - 2], // = 0 because we only PV one base
             eval_point: public_outputs[public_outputs.len() - 1],

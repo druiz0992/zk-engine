@@ -92,7 +92,7 @@ impl<C: Pairing> AccInstance<C> {
         let vars = vec![
             self.comm.0,
             self.comm.1,
-            self.comm.2.into(),
+            // self.comm.2.into(),
             field_switching(&self.eval),
             field_switching(&self.eval_point),
         ];
@@ -102,7 +102,7 @@ impl<C: Pairing> AccInstance<C> {
         let vars = vec![
             field_switching(&self.comm.0),
             field_switching(&self.comm.1),
-            self.comm.2.into(),
+            // self.comm.2.into(),
             field_switching(&self.eval),
             field_switching(&self.eval_point),
         ];
@@ -115,7 +115,7 @@ impl<C: Pairing> AccInstance<C> {
         let vars = vec![
             circuit.create_variable(self.comm.0)?,
             circuit.create_variable(self.comm.1)?,
-            circuit.create_variable(self.comm.2.into())?,
+            // circuit.create_variable(self.comm.2.into())?,
             circuit.create_variable(field_switching(&self.eval))?,
             circuit.create_variable(field_switching(&self.eval_point))?,
         ];
@@ -128,7 +128,7 @@ impl<C: Pairing> AccInstance<C> {
         let vars = vec![
             circuit.create_public_variable(self.comm.0)?,
             circuit.create_public_variable(self.comm.1)?,
-            circuit.create_public_variable(self.comm.2.into())?,
+            // circuit.create_public_variable(self.comm.2.into())?,
             circuit.create_public_variable(field_switching(&self.eval))?,
             circuit.create_public_variable(field_switching(&self.eval_point))?,
         ];

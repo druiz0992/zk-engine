@@ -268,7 +268,6 @@ impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> NonMembershipTre
 {
     fn non_membership_witness(&self, leaf: Self::Field) -> Option<Vec<Self::Field>> {
         // find predecessor
-        ark_std::println!("Finding predecessor: {}", leaf);
         let low_nullifier = self.find_predecessor(leaf);
         // It is a member therefore return None
         if low_nullifier.node.next_value == leaf {

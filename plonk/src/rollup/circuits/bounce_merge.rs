@@ -72,7 +72,6 @@ where
     // =======================================================
     // Public inputs for merge PV
     // first: global state
-    let merge_public_inputs: Vec<C2::BaseField> = global_state.to_vec();
     let mut merge_public_inputs_vars = global_state
         .to_vec()
         .into_iter()
@@ -145,39 +144,39 @@ where
         .prove_accumulation(&commit_key, &instances, &g_polys)
         .unwrap();
 
-    // TODO 23.11 create vars above and re-use for PV
     let mut g_comms_vars = vec![*g_comm_var];
     let g_comm_bounce = circuit.create_sw_point_variable(bounce_accs[0].comm)?;
     let g_comm_bounce_2 = circuit.create_sw_point_variable(bounce_accs[1].comm)?;
     let mut emul_g_comm_bounce: Vec<EmulatedVariable<_>> = vec![];
-    emul_g_comm_bounce.extend(bounce_acc_vars[0..=2].to_vec());
-    emul_g_comm_bounce.extend(bounce_acc_vars[5..=7].to_vec());
+    emul_g_comm_bounce.extend(bounce_acc_vars[0..2].to_vec());
+    emul_g_comm_bounce.extend(bounce_acc_vars[4..6].to_vec());
 
     let _ = vec![
         g_comm_bounce.get_x(),
         g_comm_bounce.get_y(),
-        g_comm_bounce.get_inf().into(),
         g_comm_bounce_2.get_x(),
         g_comm_bounce_2.get_y(),
-        g_comm_bounce_2.get_inf().into(),
     ]
     .iter()
     .zip(emul_g_comm_bounce)
     .map(|(x, y)| {
-        let res = circuit.recombine_limbs(&y.native_vars(), <C1 as Pairing>::ScalarField::B)?;
-        circuit.enforce_equal(*x, res)
+        // TODO does this correctly enforce?
+        let res = circuit
+            .recombine_limbs(&y.native_vars(), <C1 as Pairing>::ScalarField::B)
+            .unwrap();
+        circuit.enforce_equal(*x, res).unwrap();
     });
 
     g_comms_vars.push(g_comm_bounce);
     g_comms_vars.push(g_comm_bounce_2);
 
     let mut eval_vars = vec![circuit.create_emulated_variable(C1::ScalarField::zero())?];
-    eval_vars.push(bounce_acc_vars[3].clone());
-    eval_vars.push(bounce_acc_vars[8].clone());
+    eval_vars.push(bounce_acc_vars[2].clone());
+    eval_vars.push(bounce_acc_vars[6].clone());
 
     let mut eval_point_vars = vec![u_var.clone()];
-    eval_point_vars.push(bounce_acc_vars[4].clone());
-    eval_point_vars.push(bounce_acc_vars[9].clone());
+    eval_point_vars.push(bounce_acc_vars[3].clone());
+    eval_point_vars.push(bounce_acc_vars[7].clone());
     // 1 SW Point + 2 Field element made public here
     verify_accumulation_gadget_sw::<C1, C2, _, _, <<C1 as Pairing>::G1 as CurveGroup>::Config>(
         &mut circuit,
@@ -189,7 +188,6 @@ where
     // Acc.comm.0
     public_outputs.push(field_switching(&acc.instance.comm.0.x));
     public_outputs.push(field_switching(&acc.instance.comm.0.y));
-    public_outputs.push(acc.instance.comm.0.infinity.into());
     public_outputs.push(acc.instance.value);
     public_outputs.push(acc.instance.point);
 
@@ -204,7 +202,7 @@ pub mod bounce_merge_test {
         merge::merge_test::merge_test_helper, structs::AccInstance, utils::StoredProof,
     };
     use ark_ec::pairing::Pairing;
-    use ark_ff::One;
+    use ark_ff::Zero;
     use curves::{
         pallas::PallasConfig,
         vesta::{Fq, VestaConfig},
@@ -245,6 +243,10 @@ pub mod bounce_merge_test {
                 ],
             )
             .unwrap();
+        ark_std::println!(
+            "Bounce_merge circuit constraints: {}",
+            bounce_circuit.num_gates()
+        );
         bounce_circuit
             .check_circuit_satisfiability(&bounce_circuit.public_input().unwrap())
             .unwrap();
@@ -283,20 +285,20 @@ pub mod bounce_merge_test {
             comm: SWPoint(
                 public_outputs[7],
                 public_outputs[8],
-                public_outputs[9] == Fq::one(),
+                public_outputs[7] == Fq::zero(),
             ),
             // These are originally Vesta Fr => small => safe conversion
-            eval: field_switching(&public_outputs[10]),
-            eval_point: field_switching(&public_outputs[11]),
+            eval: field_switching(&public_outputs[9]),
+            eval_point: field_switching(&public_outputs[10]),
         };
 
         // This is the Pallas acc we just made by Pv'ing base
         let instance = AccInstance {
             // This is originally a Pallas point => safe conversion
             comm: SWPoint(
-                field_switching(&public_outputs[public_outputs.len() - 5]),
                 field_switching(&public_outputs[public_outputs.len() - 4]),
-                public_outputs[public_outputs.len() - 3] == Fq::one(),
+                field_switching(&public_outputs[public_outputs.len() - 3]),
+                public_outputs[public_outputs.len() - 4] == Fq::zero(),
             ),
             eval: public_outputs[public_outputs.len() - 2], // = 0 because we only PV one base
             eval_point: public_outputs[public_outputs.len() - 1],

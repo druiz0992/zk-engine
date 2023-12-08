@@ -180,7 +180,6 @@ where
         )?;
         circuit.enforce_equal(calc_vk_root_var, global_vk_root_var)?;
 
-        ark_std::println!("After vk root check, gates: {:?}", circuit.num_gates());
         let mut input_nullifier_hashes = vec![];
         let mut nullifiers_fq = vec![];
         let mut input_commitment_tree_root_vars = vec![];
@@ -188,10 +187,6 @@ where
         for i in 0..N {
             //--------Step 3: Membership check of client commitment tree roots in global commitment root ------
             // This happens per nullifier as a user can use commitments from different blocks
-            ark_std::println!(
-                "before commitment tree check, gates: {:?}",
-                circuit.num_gates()
-            );
             let commitment_tree_root_fq = fr_to_fq::<_, <<C1 as Pairing>::G1 as CurveGroup>::Config>(
                 &input.commitment_tree_root[i],
             );
@@ -205,11 +200,6 @@ where
                     input.path_comm_tree_index[i],
                     input.path_comm_tree_root_to_global_tree_root[i],
                 )?;
-
-            ark_std::println!(
-                "after commitment tree check, gates: {:?}",
-                circuit.num_gates()
-            );
 
             // Nullifiers are in Vesta Fr and are safely lifted to this Pallas Fr (which is Vesta Fq)
             let nullifier_fq =
@@ -296,7 +286,6 @@ where
                 ]
                 .as_slice(),
             )?;
-            ark_std::println!("before non_mem check, gates: {:?}", circuit.num_gates());
             // This <32> is the depth of the Nullifier tree
             let calc_nullifier_root_var =
                 BinaryMerkleTreeGadget::<32, C1::BaseField>::calculate_root(
@@ -305,7 +294,6 @@ where
                     input.low_nullifier_indices[i],
                     input.low_nullifier_mem_path[i],
                 )?;
-            ark_std::println!("after non_mem check, gates: {:?}", circuit.num_gates());
             let nullifier_root_select = circuit.conditional_select(
                 nullifier_is_zero,
                 calc_nullifier_root_var,
@@ -339,7 +327,6 @@ where
             // Step 8: Hash the input  nullifiers pairwise
             // Use low nullifier mem path but with new hash
             leaf_count = circuit.add_constant(leaf_count, &C1::BaseField::one())?;
-            ark_std::println!("before update root, gates: {:?}", circuit.num_gates());
 
             // nullifier_new_root = BinaryMerkleTreeGadget::<32, C1::BaseField>::calculate_root(
             //     &mut circuit,
@@ -347,12 +334,10 @@ where
             //     input.low_nullifier_indices[i],
             //     input.low_nullifier_mem_path[i],
             // )?;
-            ark_std::println!("after update root, gates: {:?}", circuit.num_gates());
 
             prev_nullifier_low_nullifier = [low_nullifier_value_var, leaf_count, nullifier];
             // ark_std::println!("Nullifier root: {:?}", circuit.witness(nullifier_new_root)?);
         }
-        ark_std::println!("After nullifier check, gates: {:?}", circuit.num_gates());
         let swap_var = circuit.create_boolean_variable(input.swap_field)?;
         swap_vars.push(swap_var);
         // TODO: enforce I == 2 inside circuit
@@ -366,7 +351,6 @@ where
         }
         // In a swap, the first output commitment is c
         // Step 5: PV each input proof
-        ark_std::println!("Before PV, gates: {:?}", circuit.num_gates());
         let proof_var = PlonkIpaSWProofNativeVar::create_variables(&mut circuit, &input.proof)?;
         let g_gen: SWPoint<C1::BaseField> = input.vk.open_key.g_bases[0].into();
         let commitments_fq = input
@@ -416,14 +400,12 @@ where
         for l in 0..3 {
             public_input_var.push(ciphertext_vars[l]);
         }
-        ark_std::println!("Right before PV, gates: {:?}", circuit.num_gates());
         let (g_comm_var, u_challenge_var) = &verifying_key_var.partial_verify_circuit_ipa_native(
             &mut circuit,
             &g_gen,
             &public_input_var,
             &proof_var,
         )?;
-        ark_std::println!("Right after PV, gates: {:?}", circuit.num_gates());
         g_comms_vars.push(*g_comm_var);
         u_challenges_vars.push(*u_challenge_var);
         // ----- Reaching this points means we have a valid proof
@@ -604,7 +586,6 @@ where
     } else {
         unimplemented!()
     }
-    ark_std::println!("Right before acc, gates: {:?}", circuit.num_gates());
     verify_accumulation_gadget_sw_native::<
         C1,
         C2,
@@ -618,7 +599,6 @@ where
         &u_challenges_vars[..],
         &acc,
     )?;
-    ark_std::println!("Right after acc, gates: {:?}", circuit.num_gates());
 
     Ok((circuit, pi_star))
 }
@@ -659,13 +639,13 @@ pub mod base_test {
     use super::{base_rollup_circuit, ClientInput};
     #[test]
     fn test_base_circuit() {
-        // test_base_rollup_helper_mint::<2, 2>();
+        test_base_rollup_helper_mint::<2, 2>();
         // test_base_rollup_helper_mint::<2, 4>();
         // test_base_rollup_helper_mint::<4, 2>();
         test_base_rollup_helper_transfer::<2, 2, 2>();
         // test_base_rollup_helper_transfer::<4, 2, 2>();
         // test_base_rollup_helper_transfer::<4, 4, 1>();
-        // test_base_rollup_helper_swap();
+        test_base_rollup_helper_swap();
     }
 
     fn test_base_rollup_helper_mint<const I: usize, const C: usize>() {
@@ -1055,11 +1035,11 @@ pub mod base_test {
             comm: SWPoint(
                 public_inputs[7],
                 public_inputs[8],
-                public_inputs[9] == Fr::one(),
+                public_inputs[7] == Fr::zero(),
             ),
             // values are originally Vesta scalar => safe switch back into 'native'
-            eval: field_switching(&public_inputs[10]),
-            eval_point: field_switching(&public_inputs[11]),
+            eval: field_switching(&public_inputs[9]),
+            eval_point: field_switching(&public_inputs[10]),
         };
 
         StoredProof {
