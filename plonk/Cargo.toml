@@ -77,6 +77,18 @@ name = "base_circuit_bench"
 harness = false
 
 [[bench]]
+name = "bounce_circuit_bench"
+harness = false
+
+[[bench]]
+name = "merge_circuit_bench"
+harness = false
+
+[[bench]]
+name = "bounce_merge_circuit_bench"
+harness = false
+
+[[bench]]
 name = "core_circuit_bench"
 harness = false
 

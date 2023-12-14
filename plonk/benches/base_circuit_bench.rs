@@ -4,19 +4,18 @@ use ark_std::UniformRand;
 use common::crypto::poseidon::Poseidon;
 use criterion::{criterion_group, criterion_main, Criterion};
 use curves::{
-    pallas::{Affine, Fq, Fr, PallasConfig},
+    pallas::{Fq, Fr, PallasConfig},
     vesta::VestaConfig,
 };
 use jf_plonk::{
-    nightfall::{ipa_structs::VerifyingKey, PlonkIpaSnark},
-    proof_system::{structs::VK, UniversalSNARK},
-    transcript::RescueTranscript,
+    nightfall::PlonkIpaSnark, proof_system::UniversalSNARK, transcript::RescueTranscript,
 };
 use jf_primitives::pcs::StructuredReferenceString;
-use jf_relation::{Arithmetization, Circuit, PlonkCircuit};
+use jf_relation::{Arithmetization, Circuit};
 use jf_utils::{field_switching, fq_to_fr_with_mask, test_rng};
+use plonk_prover::utils::bench_utils::{transfer_circuit_helper_generator, tree_generator};
 use plonk_prover::{
-    client::circuits::{mint::mint_circuit, transfer::transfer_circuit},
+    client::circuits::mint::mint_circuit,
     rollup::circuits::base::{base_rollup_circuit, ClientInput},
 };
 use std::str::FromStr;
@@ -25,117 +24,6 @@ use trees::{
     non_membership_tree::{IndexedMerkleTree, IndexedNode, NonMembershipTree},
     tree::AppendTree,
 };
-
-fn tree_generator(
-    vks: Vec<VerifyingKey<VestaConfig>>,
-    comms: Vec<Fq>,
-    nullifiers: Vec<Fq>,
-    global_comm_roots: Vec<Fr>,
-) -> (
-    Tree<Fr, 1>,
-    Tree<Fq, 8>,
-    IndexedMerkleTree<Fr, 32>,
-    Tree<Fr, 8>,
-) {
-    // Vk trees
-    let poseidon: Poseidon<Fr> = Poseidon::new();
-    let vk_hashes = vks.iter().map(|vk| {
-        let vk_sigmas = vk.sigma_comms();
-        let vk_selectors = vk.selector_comms();
-        let vk_sigma_hashes = vk_sigmas
-            .iter()
-            .map(|v| poseidon.hash_unchecked(vec![v.0.x, v.0.y]));
-        let vk_selector_hashes = vk_selectors
-            .iter()
-            .map(|v| poseidon.hash_unchecked(vec![v.0.x, v.0.y]));
-        let vk_hashes = vk_sigma_hashes
-            .chain(vk_selector_hashes)
-            .collect::<Vec<_>>();
-        let outlier_pair = vk_hashes[0..2].to_vec();
-        let mut total_leaves = vk_hashes[2..].to_vec();
-        for _ in 0..4 {
-            let lefts = total_leaves.iter().step_by(2);
-            let rights = total_leaves.iter().skip(1).step_by(2);
-            let pairs = lefts.zip(rights);
-            total_leaves = pairs
-                .map(|(&x, &y)| poseidon.hash_unchecked(vec![x, y]))
-                .collect::<Vec<_>>();
-        }
-        poseidon.hash_unchecked(vec![outlier_pair[0], outlier_pair[1], total_leaves[0]])
-    });
-
-    let vk_tree: Tree<Fr, 1> = Tree::from_leaves(vk_hashes.collect::<Vec<_>>());
-
-    // commitment trees
-    let commitment_tree: Tree<Fq, 8> = Tree::from_leaves(comms);
-    // nullifier trees
-    let lifted_nullifiers = nullifiers
-        .iter()
-        .map(field_switching::<Fq, Fr>)
-        .collect::<Vec<_>>();
-    let nullifier_tree: IndexedMerkleTree<Fr, 32> =
-        IndexedMerkleTree::from_leaves(lifted_nullifiers);
-    // global root tree
-    let global_root_tree: Tree<Fr, 8> = Tree::from_leaves(global_comm_roots);
-    (vk_tree, commitment_tree, nullifier_tree, global_root_tree)
-}
-
-fn transfer_circuit_helper_generator<const C: usize, const N: usize>(
-    value: [Fq; N],
-    old_sib_path: [[Fq; 8]; N],
-    root: [Fq; N],
-    old_leaf_index: [u64; N],
-) -> (PlonkCircuit<Fq>, ([Fq; N], [Fq; C], [Fq; 2], [Fq; 3])) {
-    let recipient_public_key = Affine::rand(&mut test_rng());
-    let ephemeral_key = Fq::rand(&mut test_rng());
-    let token_id = Fq::from_str("2").unwrap();
-    let root_key = Fq::rand(&mut test_rng());
-    let private_key_domain = Fq::from_str("1").unwrap();
-    let nullifier_key_domain = Fq::from_str("2").unwrap();
-
-    let token_nonce = Fq::from(3u32);
-    let indices = old_leaf_index
-        .iter()
-        .map(|i| Fq::from(*i))
-        .collect::<Vec<_>>();
-    let total_value = value.iter().fold(Fq::zero(), |acc, x| acc + x);
-    let mut new_values = [Fq::from(0 as u32); C];
-    if C > 1 {
-        new_values[0] = total_value - Fq::from(1 as u32);
-        new_values[1] = Fq::from(1 as u32);
-    } else {
-        new_values[0] = total_value;
-    }
-
-    let circuit = transfer_circuit::<PallasConfig, VestaConfig, N, C, 8>(
-        value,
-        [token_nonce; N],
-        old_sib_path.try_into().unwrap(),
-        indices.clone().try_into().unwrap(),
-        root,
-        new_values,
-        indices[0..C].try_into().unwrap(),
-        token_id,
-        recipient_public_key,
-        root_key,
-        ephemeral_key,
-        private_key_domain,
-        nullifier_key_domain,
-    )
-    .unwrap();
-
-    let public_inputs = circuit.public_input().unwrap();
-    let len = public_inputs.len();
-    assert!(circuit.check_circuit_satisfiability(&public_inputs).is_ok());
-
-    let client_input = (
-        public_inputs[N + 1..=2 * N].try_into().unwrap(), // nullifiers
-        public_inputs[2 * N + 1..=2 * N + C].try_into().unwrap(), // new commitments
-        public_inputs[len - 5..len - 3].try_into().unwrap(), // eph pub key
-        public_inputs[len - 3..len].try_into().unwrap(),  // ciphertext
-    );
-    (circuit, client_input)
-}
 
 pub fn benchmark_mints<const I: usize, const C: usize>(c: &mut Criterion) {
     // Below taken from test_base_rollup_helper_mint
@@ -190,7 +78,7 @@ pub fn benchmark_mints<const I: usize, const C: usize>(c: &mut Criterion) {
             low_nullifier: [Default::default()],
             low_nullifier_indices: [Fr::one()],
             low_nullifier_mem_path: [[Fr::zero(); 32]],
-            vk_paths: [Fr::zero()], // filled later
+            vk_paths: [Fr::zero(); 2], // filled later
             vk_path_index: Fr::from(0u64),
             vk: mint_ipa_vk.clone(),
             eph_pub_key: [Fr::zero(); 2],
@@ -406,7 +294,7 @@ pub fn benchmark_transfers<const I: usize, const N: usize, const C: usize>(c: &m
             low_nullifier: low_nullifiers,
             low_nullifier_indices: low_indices,
             low_nullifier_mem_path: low_paths,
-            vk_paths: [Fr::zero()], // filled later
+            vk_paths: [Fr::zero(); 2], // filled later
             vk_path_index: Fr::zero(),
             vk: transfer_ipa_vk.clone(),
             eph_pub_key: [
