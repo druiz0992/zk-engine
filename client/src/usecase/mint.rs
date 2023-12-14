@@ -42,6 +42,7 @@ where
         Proof::prove::<P>(Mint, circuit_inputs, proving_key).unwrap();
 
     let client_pub_inputs: ClientPubInputs<_, 0, 1> = pub_inputs.try_into()?;
+
     let transaction = Transaction::new(
         client_pub_inputs
             .commitments
@@ -56,6 +57,8 @@ where
         client_pub_inputs.ciphertexts,
         proof,
         g_polys,
+        client_pub_inputs.ephemeral_public_key,
+        client_pub_inputs.swap_field,
     );
     Ok(transaction)
 }

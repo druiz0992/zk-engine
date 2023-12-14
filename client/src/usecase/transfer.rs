@@ -87,6 +87,8 @@ where
         client_pub_inputs.ciphertexts,
         proof,
         g_polys,
+        client_pub_inputs.ephemeral_public_key,
+        client_pub_inputs.swap_field,
     );
 
     Ok(transaction)

@@ -52,6 +52,9 @@ where
     pub proof: Proof<P>,
     #[serde(serialize_with = "ark_se_std", deserialize_with = "ark_de_std")]
     pub g_polys: DensePolynomial<P::ScalarField>,
+    #[serde(serialize_with = "ark_se_std", deserialize_with = "ark_de_std")]
+    pub eph_pub_key: Vec<P::ScalarField>,
+    pub swap_field: bool,
 }
 
 impl<P: Pairing> Transaction<P>
@@ -64,6 +67,8 @@ where
         ciphertexts: Vec<P::ScalarField>,
         proof: Proof<P>,
         g_polys: DensePolynomial<P::ScalarField>,
+        eph_pub_key: Vec<P::ScalarField>,
+        swap_field: bool,
     ) -> Self {
         Self {
             commitments,
@@ -71,6 +76,8 @@ where
             ciphertexts,
             proof,
             g_polys,
+            eph_pub_key,
+            swap_field,
         }
     }
 }
