@@ -173,7 +173,7 @@ where
             vk_path_index: F::from(vks_indices[i] as u64),
             vk: vks[i].clone(),
             ciphertext: [V::ScalarField::from(0u8); 3],
-            eph_pub_key: [t.eph_pub_key.x, t.eph_pub_key.y], // we just set x and y public
+            eph_pub_key: [F::from(0u8); 2],
             swap_field: t.swap_field,
         })
         .collect::<Vec<_>>();

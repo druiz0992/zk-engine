@@ -53,7 +53,7 @@ where
     #[serde(serialize_with = "ark_se_std", deserialize_with = "ark_de_std")]
     pub g_polys: DensePolynomial<P::ScalarField>,
     #[serde(serialize_with = "ark_se_std", deserialize_with = "ark_de_std")]
-    pub eph_pub_key: P::G1Affine,
+    pub eph_pub_key: Vec<P::ScalarField>,
     pub swap_field: bool,
 }
 
@@ -67,7 +67,7 @@ where
         ciphertexts: Vec<P::ScalarField>,
         proof: Proof<P>,
         g_polys: DensePolynomial<P::ScalarField>,
-        eph_pub_key: P::G1Affine,
+        eph_pub_key: Vec<P::ScalarField>,
         swap_field: bool,
     ) -> Self {
         Self {
