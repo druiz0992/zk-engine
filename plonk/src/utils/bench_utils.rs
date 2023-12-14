@@ -1,4 +1,3 @@
-
 use crate::{
     client::circuits::transfer::transfer_circuit,
     rollup::circuits::{
