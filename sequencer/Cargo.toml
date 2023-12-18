@@ -1,41 +1,39 @@
 [package]
-name = "common"
+name = "sequencer"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ark-bn254 = "0.4.0"
 ark-ec="0.4.2"
 ark-ff="0.4.2"
 ark-std="0.4.0"
 ark-poly="0.4.2"
 ark-serialize="0.4.2"
 
-thiserror="1.0.50"
-poseidon-paramgen="0.4.0"
-poseidon-parameters="0.4.0"
-rayon="1.8.0"
-serde = {version = "1.0.192", features = ["derive"]}
-serde_json = "1.0.108"
-serde_with = "3.4.0"
-serde-hex = "0.1.0"
-derivative = "2.2.0"
-num-bigint = {version = "0.4.4", features = ["serde"]}
-num-traits = "0.2.17"
-
-
+# JF Deps
 jf-plonk = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master", features = ["test-srs"]}
 jf-relation = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
 jf-utils = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
 jf-primitives = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
 curves = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
 
+common = {path = "../common"}
+trees = {path = "../trees"}
+plonk-prover = { path="../plonk"}
 
-
-
-[[example]]
-name="poseidon-gen"
-path = "examples/poseidon_gen.rs"
+tokio = {version = "1.29.1", features = ["full"]}
+axum = { version = "0.6.20", features = ["json"]}
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"
+dotenvy = "0.15.7"
+serde = {version = "1.0.192", features = ["derive"]}
+serde_json = "1.0.108"
+serde_with = "3.4.0"
+hex= {version= "0.4.3", features = ["serde"]}
+serde-hex = "0.1.0"
+reqwest = {version = "0.11.22", features = ["json"]}
+rand = { version = "0.8.5", features = ["std"]}
+rand_chacha = "0.3.1"
 

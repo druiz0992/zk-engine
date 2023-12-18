@@ -1,19 +1,15 @@
 pub mod in_mem_storage {
     use std::{collections::HashMap, fmt::Debug};
 
-    use ark_ec::{
-        short_weierstrass::{Affine, SWCurveConfig},
-        CurveConfig,
-    };
+    use ark_ec::short_weierstrass::{Affine, SWCurveConfig};
     use ark_ff::PrimeField;
-    use common::crypto::poseidon::constants::PoseidonParams;
+    use common::{crypto::poseidon::constants::PoseidonParams, structs::Block};
     use trees::{
         membership_tree::{MembershipTree, Tree},
         tree::AppendTree,
     };
 
     use crate::{
-        domain::Preimage,
         ports::storage::{KeyDB, PreimageDB, StoredPreimageInfo, TreeDB},
         services::derive_keys::UserKeys,
     };
@@ -79,6 +75,24 @@ pub mod in_mem_storage {
             let mut v = Vec::new();
             self.preimage_db.values().for_each(|&x| v.push(x.clone()));
             v
+        }
+
+        fn update_preimages(&mut self, block: Block<F>) {
+            // Find all commitments in block and set to them to spendable
+            block.commitments.iter().enumerate().for_each(|(i, c)| {
+                if let Some(preimage) = self.preimage_db.get_mut(&c.to_string()) {
+                    preimage.block_number = Some(block.block_number);
+                    preimage.leaf_index = Some(i);
+                }
+            });
+            // Find all nullifiers in block and set to them to spent
+            block.nullifiers.iter().for_each(|&n| {
+                if let Some(preimage) = self.preimage_db.get_mut(&n.to_string()) {
+                    if preimage.nullifier == n {
+                        preimage.spent = true;
+                    }
+                }
+            });
         }
     }
 

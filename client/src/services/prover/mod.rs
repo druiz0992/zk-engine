@@ -2,14 +2,13 @@ pub mod in_memory_prover {
     use ark_ec::{
         pairing::Pairing,
         short_weierstrass::{Affine, Projective, SWCurveConfig},
-        CurveGroup,
+        CurveConfig, CurveGroup,
     };
     use ark_poly::univariate::DensePolynomial;
     use ark_std::str::FromStr;
-    use common::crypto::poseidon::constants::PoseidonParams;
     use jf_plonk::{
         nightfall::{
-            ipa_structs::{Proof, VerifyingKey},
+            ipa_structs::{Proof, ProvingKey, VerifyingKey},
             PlonkIpaSnark,
         },
         proof_system::UniversalSNARK,
@@ -33,14 +32,37 @@ pub mod in_memory_prover {
     pub struct InMemProver<V: Pairing>
     where
         V: Pairing,
-        <V::G1 as CurveGroup>::Config: SWCurveConfig,
+        <V::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = V::BaseField>,
     {
-        vk_storage: HashMap<String, VerifyingKey<V>>,
+        pub key_storage: HashMap<String, ProvingKey<V>>,
     }
 
-    impl<V, P, VSW> Prover<V, P, VSW> for InMemProver<V>
+    impl<V> InMemProver<V>
     where
-        P: SWCurveConfig<BaseField = V::ScalarField>,
+        V: Pairing,
+        <V::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = V::BaseField>,
+    {
+        pub fn new() -> Self {
+            Self {
+                key_storage: HashMap::new(),
+            }
+        }
+    }
+
+    impl<V> Default for InMemProver<V>
+    where
+        V: Pairing,
+        <V::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = V::BaseField>,
+    {
+        fn default() -> Self {
+            Self {
+                key_storage: HashMap::new(),
+            }
+        }
+    }
+
+    impl<V, VSW> Prover<V, VSW> for InMemProver<V>
+    where
         V: Pairing<G1Affine = Affine<VSW>, G1 = Projective<VSW>>,
         <V as Pairing>::BaseField: RescueParameter + SWToTEConParam,
 
@@ -50,17 +72,23 @@ pub mod in_memory_prover {
             ScalarField = <V as Pairing>::ScalarField,
         >,
     {
-        fn prove(
+        fn prove<P>(
             circuit_type: CircuitType,
             circuit_inputs: CircuitInputs<P>,
+            proving_key: Option<&ProvingKey<V>>,
         ) -> Result<
             (
                 Proof<V>,
                 Vec<V::ScalarField>,
                 DensePolynomial<V::ScalarField>,
+                ProvingKey<V>,
             ),
             CircuitError,
-        > {
+        >
+        where
+            P: SWCurveConfig<BaseField = V::ScalarField>,
+            <P as CurveConfig>::BaseField: KemDemParams<Field = V::ScalarField>,
+        {
             /// Prefix for hashes for zkp private ket and nullifier
             /// PRIVATE_KEY_PREFIX = keccak256('zkpPrivateKey'), need to update for Pasta
             const PRIVATE_KEY_PREFIX: &str =
@@ -107,13 +135,16 @@ pub mod in_memory_prover {
             let mut rng = &mut jf_utils::test_rng();
             ark_std::println!("Constraint count: {}", circuit.num_gates());
             let now = Instant::now();
-            let srs = <PlonkIpaSnark<V> as UniversalSNARK<V>>::universal_setup_for_testing(
-                circuit.srs_size()?,
-                &mut rng,
-            )?;
-            ark_std::println!("SRS size {} done: {:?}", circuit.srs_size()?, now.elapsed());
-            let now = Instant::now();
-            let (pk, vk) = PlonkIpaSnark::<V>::preprocess(&srs, &circuit)?;
+            let pk = if proving_key.is_none() {
+                let srs = <PlonkIpaSnark<V> as UniversalSNARK<V>>::universal_setup_for_testing(
+                    circuit.srs_size()?,
+                    &mut rng,
+                )?;
+                let (pk, _) = PlonkIpaSnark::<V>::preprocess(&srs, &circuit)?;
+                pk
+            } else {
+                proving_key.unwrap().clone()
+            };
             ark_std::println!("Preprocess done: {:?}", now.elapsed());
 
             let public_inputs = circuit.public_input()?;
@@ -126,7 +157,7 @@ pub mod in_memory_prover {
             >(&mut rng, &circuit, &pk, None)?;
             ark_std::println!("Proof done: {:?}", now.elapsed());
 
-            Ok((proof, circuit.public_input()?, g_poly))
+            Ok((proof, circuit.public_input()?, g_poly, pk.clone()))
         }
 
         fn verify(
@@ -143,14 +174,14 @@ pub mod in_memory_prover {
             .is_ok()
         }
 
-        fn get_vk(&self, circuit_type: CircuitType) -> Option<&VerifyingKey<V>> {
-            self.vk_storage.get(&circuit_type.to_string())
+        fn store_pk(&mut self, circuit_type: CircuitType, pk: ProvingKey<V>) {
+            if self.key_storage.get(&circuit_type.to_string()).is_none() {
+                self.key_storage.insert(circuit_type.to_string(), pk);
+            }
         }
 
-        fn store_vk(&mut self, circuit_type: CircuitType, vk: VerifyingKey<V>) {
-            if self.vk_storage.get(&circuit_type.to_string()).is_none() {
-                self.vk_storage.insert(circuit_type.to_string(), vk);
-            }
+        fn get_pk(&self, circuit_type: CircuitType) -> Option<&ProvingKey<V>> {
+            self.key_storage.get(&circuit_type.to_string())
         }
     }
 }

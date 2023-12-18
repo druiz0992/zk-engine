@@ -165,13 +165,9 @@ where
             // assert_eq!(val, circuit.witness(recombined_var)?, "NOT EQUAL - global state");
             bounce_public_inputs_var.extend(limb_vars);
         }
-        g_comms_vars.push(SWPointVariable::new(
-            base_acc_vars[0],
-            base_acc_vars[1],
-            BoolVar(base_acc_vars[2]),
-        ));
-        u_challenges_vars.push(base_acc_vars[4]);
-        eval_vars.push(base_acc_vars[3]);
+        g_comms_vars.push(SWPointVariable::new(base_acc_vars[0], base_acc_vars[1]));
+        u_challenges_vars.push(base_acc_vars[3]);
+        eval_vars.push(base_acc_vars[2]);
         g_polys.push(base_pi_stars[i].clone());
 
         // we push passthrough last (it was the PV result at the end of bounce)
@@ -180,11 +176,6 @@ where
         );
         bounce_public_inputs_var.push(
             circuit.create_public_variable(field_switching(&passthrough_pv_acc[i].comm.get_y()))?,
-        );
-        bounce_public_inputs_var.push(
-            circuit
-                .create_public_boolean_variable(passthrough_pv_acc[i].comm.get_inf())?
-                .into(),
         );
 
         let emul_val = from_emulated_field(field_switching::<_, C1::BaseField>(
@@ -293,7 +284,7 @@ pub mod merge_test {
         utils::StoredProof,
     };
     use ark_ec::pairing::Pairing;
-    use ark_ff::One;
+    use ark_ff::Zero;
     use curves::{
         pallas::PallasConfig,
         vesta::{Fq, VestaConfig},
@@ -374,9 +365,9 @@ pub mod merge_test {
         };
         let instance = AccInstance {
             comm: SWPoint(
-                all_pi[all_pi.len() - 7],
                 all_pi[all_pi.len() - 6],
-                all_pi[all_pi.len() - 5] == Fq::one(),
+                all_pi[all_pi.len() - 5],
+                all_pi[all_pi.len() - 6] == Fq::zero(),
             ),
             eval: field_switching(&all_pi[all_pi.len() - 4]),
             eval_point: field_switching(&all_pi[all_pi.len() - 3]),

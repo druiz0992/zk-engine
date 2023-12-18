@@ -134,22 +134,6 @@ where
     }
 }
 
-#[derive(Clone, Deserialize, Serialize, Default, Debug)]
-pub struct Commitment<F: PrimeField>(
-    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")] pub F,
-);
-
-impl<F: PrimeField> From<F> for Commitment<F> {
-    fn from(value: F) -> Self {
-        Commitment(value)
-    }
-}
-
-#[derive(Clone, Deserialize, Serialize, Default)]
-pub struct Nullifier<F: PrimeField>(
-    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")] pub F,
-);
-
 #[derive(
     Derivative, Default, Debug, Serialize, Deserialize, CanonicalSerialize, CanonicalDeserialize,
 )]
@@ -197,41 +181,5 @@ impl<EmbedCurve: SWCurveConfig> Preimage<EmbedCurve> {
     }
     pub fn get_salt(&self) -> &EmbedCurve::BaseField {
         &self.salt
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct Transaction<P: Pairing>
-where
-    <<P as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig,
-{
-    pub(crate) commitments: Vec<Commitment<P::ScalarField>>,
-    pub(crate) nullifiers: Vec<Nullifier<P::ScalarField>>,
-    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
-    pub(crate) ciphertexts: Vec<P::ScalarField>,
-    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
-    pub(crate) proof: Proof<P>,
-    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
-    pub(crate) g_polys: DensePolynomial<P::ScalarField>,
-}
-
-impl<P: Pairing> Transaction<P>
-where
-    <<P as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig,
-{
-    pub fn new(
-        commitments: Vec<Commitment<P::ScalarField>>,
-        nullifiers: Vec<Nullifier<P::ScalarField>>,
-        ciphertexts: Vec<P::ScalarField>,
-        proof: Proof<P>,
-        g_polys: DensePolynomial<P::ScalarField>,
-    ) -> Self {
-        Self {
-            commitments,
-            nullifiers,
-            ciphertexts,
-            proof,
-            g_polys,
-        }
     }
 }

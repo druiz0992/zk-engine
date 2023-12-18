@@ -200,6 +200,7 @@ where
 #[cfg(test)]
 mod test {
     use ark_ec::{short_weierstrass::SWCurveConfig, CurveGroup};
+    use ark_ff::{Field, PrimeField};
     use ark_std::UniformRand;
     use common::crypto::poseidon::Poseidon;
     use curves::{
@@ -208,6 +209,7 @@ mod test {
     };
     use jf_relation::{errors::CircuitError, Circuit};
     use jf_utils::{fq_to_fr_with_mask, test_rng};
+    use num_bigint::BigUint;
     use std::str::FromStr;
     use trees::{
         membership_tree::{MembershipTree, Tree},
@@ -228,7 +230,10 @@ mod test {
         let private_key: Fq = Poseidon::<Fq>::new()
             .hash(vec![root_key, private_key_domain])
             .unwrap();
-        let private_key_trunc: Fr = fq_to_fr_with_mask(&private_key);
+        let private_key_bn: BigUint = private_key.into();
+        let mut private_key_bytes = private_key_bn.to_bytes_le();
+        private_key_bytes.truncate(31);
+        let private_key_trunc = Fr::from_le_bytes_mod_order(&private_key_bytes);
 
         let token_owner = (PallasConfig::GENERATOR * private_key_trunc).into_affine();
         let token_id = Fq::from_str("2").unwrap();

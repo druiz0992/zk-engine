@@ -1,11 +1,10 @@
 use ark_ec::{
-    pairing::Pairing,
     short_weierstrass::{Affine, SWCurveConfig},
     CurveConfig,
 };
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use common::crypto::poseidon::constants::PoseidonParams;
+use common::{crypto::poseidon::constants::PoseidonParams, structs::Block};
 use derivative::Derivative;
 use serde::{Deserialize, Serialize};
 
@@ -28,6 +27,8 @@ pub struct StoredPreimageInfo<E: SWCurveConfig> {
     pub preimage: Preimage<E>,
     pub block_number: Option<u64>,
     pub leaf_index: Option<usize>,
+    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
+    pub nullifier: E::BaseField,
     pub spent: bool,
 }
 
@@ -50,6 +51,7 @@ pub trait PreimageDB {
         key: <Self::E as CurveConfig>::BaseField,
         preimage: StoredPreimageInfo<Self::E>,
     ) -> Option<()>;
+    fn update_preimages(&mut self, block: Block<<Self::E as CurveConfig>::BaseField>);
 }
 
 pub trait TreeDB {

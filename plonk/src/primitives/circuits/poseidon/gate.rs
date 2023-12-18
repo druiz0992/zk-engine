@@ -4,6 +4,7 @@ use jf_relation::{constants::GATE_WIDTH, gates::Gate};
 #[derive(Debug, Clone)]
 pub struct FullRoundGate<F> {
     pub matrix_vector: Vec<F>,
+    pub constant: F,
 }
 
 impl<F: PrimeField> Gate<F> for FullRoundGate<F> {
@@ -20,6 +21,10 @@ impl<F: PrimeField> Gate<F> for FullRoundGate<F> {
         ]
     }
 
+    fn q_c(&self) -> F {
+        self.constant
+    }
+
     fn q_o(&self) -> F {
         F::one()
     }
@@ -28,6 +33,7 @@ impl<F: PrimeField> Gate<F> for FullRoundGate<F> {
 #[derive(Debug, Clone)]
 pub struct PartialRoundGate<F> {
     pub matrix_vector: Vec<F>,
+    pub constant: F,
 }
 
 impl<F: PrimeField> Gate<F> for PartialRoundGate<F> {
@@ -48,6 +54,11 @@ impl<F: PrimeField> Gate<F> for PartialRoundGate<F> {
     fn q_hash(&self) -> [F; GATE_WIDTH] {
         [self.matrix_vector[0], F::zero(), F::zero(), F::zero()]
     }
+
+    fn q_c(&self) -> F {
+        self.constant
+    }
+
     fn q_o(&self) -> F {
         F::one()
     }
