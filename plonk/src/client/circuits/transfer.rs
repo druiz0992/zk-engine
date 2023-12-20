@@ -58,12 +58,8 @@ where
         .take(248)
         .collect::<Vec<_>>();
 
-    let private_key_var_trunc_bits = private_key_var_trunc.as_slice();
-    let generator_point_var = &circuit.create_constant_sw_point_variable(E::GENERATOR.into())?;
-
-    // Implicit mod being done here
     let public_key_var = circuit
-        .variable_base_binary_sw_scalar_mul::<E>(private_key_var_trunc_bits, generator_point_var)?;
+        .fixed_base_binary_sw_scalar_mul::<E>(private_key_var_trunc, &E::GENERATOR.into())?;
 
     let nullifier_key_var = PoseidonGadget::<PoseidonStateVar<3>, P::ScalarField>::hash(
         &mut circuit,
@@ -172,11 +168,9 @@ where
 
     // Check the encryption of secret information to the recipient
     // This proves that they will be able to decrypt the information
-    let gen = circuit.create_constant_sw_point_variable(E::GENERATOR.into())?;
     let ephemeral_key_var = circuit.create_variable(ephemeral_key)?;
-    let eph_key_bits =
-        circuit.unpack(ephemeral_key_var, E::BaseField::MODULUS_BIT_SIZE as usize)?;
-    let eph_public_key = circuit.variable_base_binary_sw_scalar_mul::<E>(&eph_key_bits, &gen)?;
+    let eph_public_key =
+        circuit.fixed_base_sw_scalar_mul::<E>(ephemeral_key_var, &E::GENERATOR.into())?;
     circuit.set_variable_public(eph_public_key.get_x())?;
     circuit.set_variable_public(eph_public_key.get_y())?;
 
