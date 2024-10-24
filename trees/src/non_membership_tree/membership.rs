@@ -1,33 +1,14 @@
 use ark_ff::PrimeField;
 use common::crypto::poseidon::constants::PoseidonParams;
 
-use crate::membership_path::MembershipPath;
-use crate::{
-    membership_tree::MembershipTree,
-    tree::{AppendTree, Position},
-};
+use crate::membership_tree::MembershipTree;
 
 use super::IndexedMerkleTree;
 
-impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> MembershipTree
+impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> MembershipTree<H>
     for IndexedMerkleTree<F, H>
 {
     type Field = F;
-
-    fn membership_witness(&self, leaf_index: usize) -> Option<MembershipPath<Self::Field>> {
-        if leaf_index >= self.leaf_count as usize {
-            return None;
-        }
-        let mut curr_position = Position::new(leaf_index, 0);
-        let mut witness_path = MembershipPath::new(self.sibling_node(curr_position));
-        for i in 1..H {
-            // Go up one level
-            curr_position = Position::new(curr_position.index / 2, i);
-            // Append sibling
-            witness_path.append(self.sibling_node(curr_position));
-        }
-        Some(witness_path)
-    }
 }
 
 #[cfg(test)]

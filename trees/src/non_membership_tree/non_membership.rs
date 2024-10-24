@@ -8,13 +8,9 @@ use crate::{
 
 use super::IndexedMerkleTree;
 use crate::membership_path::MembershipPath;
+use crate::non_membership_tree::NonMembershipTree;
 
-pub trait NonMembershipTree: MembershipTree {
-    fn non_membership_witness(&self, leaf: Self::Field) -> Option<MembershipPath<Self::Field>>;
-    fn update_low_nullifier(&mut self, leaf: Self::Field);
-}
-
-impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> NonMembershipTree
+impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> NonMembershipTree<H>
     for IndexedMerkleTree<F, H>
 {
     fn non_membership_witness(&self, leaf: Self::Field) -> Option<MembershipPath<Self::Field>> {
@@ -27,6 +23,7 @@ impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> NonMembershipTre
         // Return membership proof that low_nullifier is in tree
         self.membership_witness(low_nullifier.tree_index)
     }
+
     fn update_low_nullifier(&mut self, leaf: F) {
         let poseidon: Poseidon<F> = Poseidon::new();
         let mut low_nullifier = self.find_predecessor(leaf);

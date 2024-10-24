@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use ark_ff::PrimeField;
 use common::crypto::poseidon::{constants::PoseidonParams, Poseidon};
-use rayon::prelude::*;
 
 use super::tree::AppendTree;
 use crate::tree::Position;
@@ -11,13 +10,14 @@ mod append;
 mod membership;
 mod non_membership;
 
-pub use non_membership::NonMembershipTree;
+use super::membership_path::MembershipPath;
+use super::membership_tree::MembershipTree;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct IndexedNode<F: PrimeField> {
-    pub value: F,
-    pub next_index: usize,
-    pub next_value: F,
+    value: F,
+    next_index: usize,
+    next_value: F,
 }
 
 impl<F: PrimeField> IndexedNode<F> {
@@ -27,6 +27,18 @@ impl<F: PrimeField> IndexedNode<F> {
             next_index,
             next_value,
         }
+    }
+
+    pub fn value(&self) -> F {
+        self.value
+    }
+
+    pub fn next_index(&self) -> u64 {
+        self.next_index as u64
+    }
+
+    pub fn next_value(&self) -> F {
+        self.next_value
     }
 }
 
@@ -38,10 +50,10 @@ pub struct SortedIndexedNode<F: PrimeField> {
 
 #[derive(Clone, Debug)]
 pub struct IndexedMerkleTree<F: PrimeField, const H: usize> {
-    pub inner: HashMap<Position, F>,           // leaf position indexed
-    pub sorted_vec: Vec<SortedIndexedNode<F>>, //leaf position indexed
-    pub leaf_count: u64,
-    pub root: F,
+    inner: HashMap<Position, F>,           // leaf position indexed
+    sorted_vec: Vec<SortedIndexedNode<F>>, //leaf position indexed
+    leaf_count: u64,
+    root: F,
 }
 
 impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> Default
@@ -57,7 +69,7 @@ impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> IndexedMerkleTre
         let zeroth_node: IndexedNode<F> = Default::default();
         let sorted_vec = vec![SortedIndexedNode {
             tree_index: 0,
-            node: zeroth_node.clone(),
+            node: zeroth_node,
         }];
         let leaf_count = 1;
         let zeroth_node_hash = Self::leaf_hash(zeroth_node);
@@ -78,18 +90,38 @@ impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> IndexedMerkleTre
     }
 
     pub fn find_predecessor(&self, val: F) -> SortedIndexedNode<F> {
-        // A better way would be to use a binary search
-        // This unwrap is safe because there is always a zeroth_node in the list
         let max_node = self.sorted_vec.last().unwrap();
         if val > max_node.node.value {
             return max_node.clone(); // The predecessor is the max_node
         }
-        // Else the predecessor is array and filtered_window.length > 0
-        let filtered_window = self
-            .sorted_vec
-            .par_windows(2)
-            .filter(|window| window[0].node.value <= val && val < window[1].node.value)
-            .collect::<Vec<_>>();
-        filtered_window[0][0].clone()
+
+        let find_previous_item =
+            |sorted_items: &[SortedIndexedNode<F>], target_value: F| -> SortedIndexedNode<F> {
+                let mut low = 0;
+                let mut high = sorted_items.len() as isize - 1;
+
+                while low <= high {
+                    let mid = (low + high) / 2;
+
+                    if sorted_items[mid as usize].node.value < target_value {
+                        low = mid + 1;
+                    } else {
+                        high = mid - 1;
+                    }
+                }
+
+                sorted_items[high as usize].clone()
+            };
+
+        find_previous_item(&self.sorted_vec, val)
     }
+
+    pub fn root(&self) -> F {
+        self.root
+    }
+}
+
+pub trait NonMembershipTree<const H: usize>: MembershipTree<H> {
+    fn non_membership_witness(&self, leaf: Self::Field) -> Option<MembershipPath<Self::Field>>;
+    fn update_low_nullifier(&mut self, leaf: Self::Field);
 }

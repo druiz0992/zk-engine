@@ -2,7 +2,7 @@ use ark_ff::PrimeField;
 use common::crypto::poseidon::constants::PoseidonParams;
 use std::collections::HashMap;
 
-use super::{Node, Tree};
+use super::Tree;
 use crate::tree::{AppendTree, Position};
 
 impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> AppendTree<H> for Tree<F, H> {
@@ -21,37 +21,39 @@ impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> AppendTree<H> fo
             inner,
         };
         let root = tree.add_leaves(leaves);
-        tree.root = Node(root);
+        tree.root = root;
         tree
     }
 
     // There will be a better way to implement this when we store intermediary nodes
     fn append_leaf(&mut self, leaf: Self::F) {
         let new_leaf_pos = Position::new(self.leaf_count as usize, 0);
-        self.inner.insert(new_leaf_pos, Node(leaf));
+        self.inner.insert(new_leaf_pos, leaf);
         self.update_by_leaf_index(self.leaf_count as usize);
         self.leaf_count += 1;
     }
 
     fn get_node(&self, position: Position) -> Self::F {
-        if let Some(node) = self.inner.get(&position) {
-            node.0
-        } else {
-            Self::F::zero()
+        *self.inner.get(&position).unwrap_or(&Self::F::zero())
+    }
+
+    //TODO: should i update if not found?
+    fn update_node(&mut self, position: Position, new_node: Self::F) {
+        if let Some(node) = self.inner.get_mut(&position) {
+            *node = new_node;
         }
     }
 
-    fn update_node(&mut self, position: Position, new_node: Self::F) {
-        if let Some(node) = self.inner.get_mut(&position) {
-            node.0 = new_node;
-        }
-    }
     fn insert_node(&mut self, position: Position, new_node: Self::F) {
-        self.inner.insert(position, Node(new_node));
+        self.inner.insert(position, new_node);
     }
 
     fn update_root(&mut self, new_node: Self::F) {
-        self.root = Node(new_node);
+        self.root = new_node;
+    }
+
+    fn leaf_count(&self) -> u64 {
+        self.leaf_count
     }
 }
 
@@ -114,7 +116,7 @@ mod test {
         let tree = super::Tree::<F, H>::from_leaves(leaves.clone());
         assert_eq!(tree.leaf_count, leaves.len() as u64);
         assert_eq!(tree.inner.len(), (leaves.len() * 2 - 1) + H - 2);
-        assert_eq!(tree.root.0, leaves_hash);
+        assert_eq!(tree.root, leaves_hash);
 
         // Try an ODd number of leaves
         let leaves = vec![F::from(1u128), F::from(2u128), F::from(3u128)];
@@ -132,7 +134,7 @@ mod test {
         let tree = super::Tree::<F, H>::from_leaves(leaves.clone());
         assert_eq!(tree.leaf_count, leaves.len() as u64);
         assert_eq!(tree.inner.len(), 6 + H - 2);
-        assert_eq!(tree.root.0, leaves_hash);
+        assert_eq!(tree.root, leaves_hash);
     }
 
     #[test]
@@ -154,7 +156,7 @@ mod test {
         let tree = super::Tree::<F, H>::from_leaves(leaves.clone());
         leaves.resize(1 << H, F::zero());
         let helper_hash = hash_subtree_helper(leaves);
-        assert_eq!(helper_hash, tree.root.0);
+        assert_eq!(helper_hash, tree.root);
     }
 
     #[test]
@@ -177,7 +179,7 @@ mod test {
         for _ in 0..(H - 2) {
             leaves_hash = poseidon.hash(vec![leaves_hash, F::zero()]).unwrap();
         }
-        assert_eq!(tree.root.0, leaves_hash);
+        assert_eq!(tree.root, leaves_hash);
         ark_std::println!("Initial hash is ok");
         // Append a leaf = 4 to the tree
         let new_leaf = F::from(4u128);
@@ -191,6 +193,6 @@ mod test {
         for _ in 0..(H - 2) {
             leaves_hash = poseidon.hash(vec![leaves_hash, F::zero()]).unwrap();
         }
-        assert_eq!(tree.root.0, leaves_hash);
+        assert_eq!(tree.root, leaves_hash);
     }
 }

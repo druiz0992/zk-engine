@@ -16,16 +16,19 @@ impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> AppendTree<H>
     fn append_leaf(&mut self, leaf: Self::F) {
         let poseidon: Poseidon<F> = Poseidon::new();
         let mut low_nullifier = self.find_predecessor(leaf);
+
         let new_node = IndexedNode {
             value: leaf,
             next_value: low_nullifier.node.next_value,
             next_index: low_nullifier.node.next_index,
         };
+
         let new_node_hash = poseidon.hash_unchecked(vec![
             leaf,
             F::from(low_nullifier.node.next_index as u64),
             low_nullifier.node.next_value,
         ]);
+
         low_nullifier.node.next_index = self.leaf_count as usize;
         low_nullifier.node.next_value = leaf;
 
@@ -43,14 +46,17 @@ impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> AppendTree<H>
 
         self.inner
             .insert(Position::new(self.leaf_count as usize, 0), new_node_hash);
+
         self.update_by_leaf_index(low_nullifier.tree_index);
         self.update_by_leaf_index(self.leaf_count as usize);
 
         let search_val = low_nullifier.node.value;
-        for s in self.sorted_vec.iter_mut() {
-            if s.node.value == search_val {
-                *s = low_nullifier.clone();
-            }
+        if let Some(s) = self
+            .sorted_vec
+            .iter_mut()
+            .find(|s| s.node.value == search_val)
+        {
+            *s = low_nullifier.clone();
         }
 
         self.sorted_vec.push(SortedIndexedNode {
@@ -73,7 +79,8 @@ impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> AppendTree<H>
         // Sorted vec is the tuple (insertion_index, val)
         let mut sorted_vec = leaves.into_iter().enumerate().collect::<Vec<_>>();
         // Sort by val.
-        sorted_vec.sort_by(|(_, a), (_, b)| a.cmp(b));
+        sorted_vec.sort_unstable_by(|(_, a), (_, b)| a.cmp(b));
+
         // This is a parallel window of overlapping pairs
         // We assign the next details of the left to that of the right
         // we also maintain original insertion index so we can "un-sort" this after
@@ -99,27 +106,27 @@ impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> AppendTree<H>
         // Before un-sorting, create a sorted IndexedNode vector that will help with appending
         // other tree operations later.
         let sorted_vec = sorted_nodes
-            .clone()
-            .into_iter()
-            .map(|(tree_index, node)| SortedIndexedNode { tree_index, node })
+            .iter()
+            .map(|(tree_index, node)| SortedIndexedNode {
+                tree_index: *tree_index,
+                node: *node,
+            })
             .collect();
 
         // unsort the array before we insert into the tree (so it matches the original order)
         sorted_nodes.sort_by(|(i, _), (j, _)| i.cmp(j));
         // Hash the nodes into leaves.
         let leaf_hashes = sorted_nodes
-            .clone()
-            .into_par_iter()
-            .map(|(_, node)| Self::leaf_hash(node))
+            .par_iter()
+            .map(|(_, node)| Self::leaf_hash(*node))
             .collect::<Vec<_>>();
 
         // Calculate the root
         // let root: Self::F = Self::get_root_in_place(leaf_hashes);
         // Insert into tree
-        let inner = HashMap::with_capacity(leaf_count as usize * 2 + 1);
         // let inner: HashMap<usize, IndexedNode<F>> = HashMap::from_iter(sorted_nodes.into_iter());
         let mut tree = Self {
-            inner,
+            inner: HashMap::with_capacity(leaf_count as usize * 2 + 1),
             sorted_vec,
             leaf_count,
             root: Default::default(),
@@ -151,6 +158,10 @@ impl<F: PrimeField + PoseidonParams<Field = F>, const H: usize> AppendTree<H>
 
     fn update_root(&mut self, new_node: Self::F) {
         self.root = new_node
+    }
+
+    fn leaf_count(&self) -> u64 {
+        self.leaf_count
     }
 }
 
