@@ -7,6 +7,7 @@ pub mod in_mem_storage {
     use trees::{
         membership_tree::{MembershipTree, Tree},
         tree::AppendTree,
+        MembershipPath,
     };
 
     use crate::{
@@ -103,7 +104,11 @@ pub mod in_mem_storage {
     {
         type F = F;
 
-        fn get_sibling_path(&self, block_number: &u64, leaf_index: usize) -> Option<Vec<Self::F>> {
+        fn get_sibling_path(
+            &self,
+            block_number: &u64,
+            leaf_index: usize,
+        ) -> Option<MembershipPath<Self::F>> {
             self.commitment_tree_db
                 .get(block_number)
                 .and_then(|t| t.membership_witness(leaf_index))

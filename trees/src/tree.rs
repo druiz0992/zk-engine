@@ -2,6 +2,11 @@ use ark_ff::{PrimeField, Zero};
 use common::crypto::poseidon::{constants::PoseidonParams, Poseidon};
 use rayon::prelude::*;
 
+pub use super::membership_tree::{MembershipTree, Tree};
+pub use super::non_membership_tree::{
+    IndexedMerkleTree, IndexedNode, NonMembershipTree, SortedIndexedNode,
+};
+/// Position represents the location of a node within a tree
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct Position {
     pub index: usize,  // 0 is the left most
@@ -14,6 +19,7 @@ impl Position {
     }
 }
 
+/// Template for trees with a given Height (H) using Poseidon Hashing
 pub trait AppendTree<const H: usize> {
     type F: PrimeField + PoseidonParams<Field = Self::F>;
 

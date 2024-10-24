@@ -7,6 +7,7 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use common::{crypto::poseidon::constants::PoseidonParams, structs::Block};
 use derivative::Derivative;
 use serde::{Deserialize, Serialize};
+use trees::MembershipPath;
 
 use crate::domain::{ark_de, ark_se, Preimage};
 
@@ -56,7 +57,11 @@ pub trait PreimageDB {
 
 pub trait TreeDB {
     type F: PrimeField + PoseidonParams<Field = Self::F>;
-    fn get_sibling_path(&self, block_number: &u64, leaf_index: usize) -> Option<Vec<Self::F>>;
+    fn get_sibling_path(
+        &self,
+        block_number: &u64,
+        leaf_index: usize,
+    ) -> Option<MembershipPath<Self::F>>;
     fn add_block_leaves(&mut self, leaves: Vec<Self::F>, block_number: u64) -> Option<()>;
     fn get_root(&self, block_number: &u64) -> Option<Self::F>;
 }

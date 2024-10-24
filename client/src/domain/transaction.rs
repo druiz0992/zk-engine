@@ -7,6 +7,7 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use derivative::Derivative;
 use jf_plonk::nightfall::ipa_structs::Proof;
 use serde::{Deserialize, Serialize};
+use trees::MembershipPath;
 
 use super::{ark_de, ark_se, ECurve, Fr, PublicKey};
 
@@ -44,7 +45,7 @@ where
     pub recipients: Vec<PublicKey<E>>,
     pub old_token_values: Vec<E::BaseField>,
     pub old_token_salts: Vec<E::BaseField>,
-    pub membership_path: Vec<Vec<E::BaseField>>,
+    pub membership_path: Vec<MembershipPath<E::BaseField>>,
     pub commitment_tree_root: Vec<E::BaseField>,
     pub membership_path_index: Vec<E::BaseField>,
     pub root_key: E::BaseField,
@@ -113,7 +114,10 @@ where
         self.old_token_salts = old_token_salts;
         self
     }
-    pub fn add_membership_path(&mut self, membership_path: Vec<Vec<E::BaseField>>) -> &mut Self {
+    pub fn add_membership_path(
+        &mut self,
+        membership_path: Vec<MembershipPath<E::BaseField>>,
+    ) -> &mut Self {
         self.membership_path = membership_path;
         self
     }

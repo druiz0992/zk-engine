@@ -17,6 +17,7 @@ use trees::{
     membership_tree::{MembershipTree, Tree},
     non_membership_tree::{IndexedMerkleTree, IndexedNode, NonMembershipTree},
     tree::AppendTree,
+    MembershipPath,
 };
 
 use crate::{
@@ -79,14 +80,14 @@ where
     Prover: SequencerProver<V, P, SW>,
 {
     ark_std::println!("vk_paths");
-    let vk_paths: Vec<Vec<F>> = vks_indices
+    let vk_paths: Vec<MembershipPath<F>> = vks_indices
         .iter()
         .map(|vk| global_state_trees.get_vk_tree().membership_witness(*vk))
-        .collect::<Option<Vec<_>>>()
+        .collect::<Option<Vec<MembershipPath<_>>>>()
         .ok_or("Invalid vk index")?;
 
     ark_std::println!("low nullifier path");
-    let low_nullifier_path: Vec<Vec<F>> = transactions
+    let low_nullifier_path: Vec<MembershipPath<F>> = transactions
         .iter()
         .flat_map(|tx| {
             tx.nullifiers

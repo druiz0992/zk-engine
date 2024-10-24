@@ -14,6 +14,7 @@ pub mod rest_api_entry {
     use serde::{Deserialize, Serialize};
     use std::sync::Arc;
     use tokio::sync::Mutex;
+    use trees::MembershipPath;
 
     use axum::{
         extract::State,
@@ -250,7 +251,7 @@ pub mod rest_api_entry {
             .map(|x| x.leaf_index.map(|x| crate::domain::EFq::from(x as u64)))
             .collect::<Option<_>>()
             .ok_or(AppError::TxError)?;
-        let sibling_paths: Vec<Vec<Fr>> = stored_preimages
+        let sibling_paths: Vec<MembershipPath<Fr>> = stored_preimages
             .iter()
             .map(|x| db_locked.get_sibling_path(&x.block_number?, x.leaf_index?))
             .collect::<Option<Vec<_>>>()
