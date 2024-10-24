@@ -197,7 +197,7 @@ pub fn base_circuit_helper_generator<const I: usize, const C: usize, const N: us
         let (mut transfer_circuit, transfer_inputs) = transfer_circuit_helper_generator::<C, N>(
             mint_values,
             old_sib_paths,
-            [prev_commitment_tree.root.0; N],
+            [prev_commitment_tree.root(); N],
             ark_std::array::from_fn(|i| i as u64),
         );
         transfer_circuit.finalize_for_arithmetization().unwrap();
@@ -242,9 +242,9 @@ pub fn base_circuit_helper_generator<const I: usize, const C: usize, const N: us
             if i == 0 && j == 0 {
                 let this_poseidon = Poseidon::<Fr>::new();
                 let low_nullifier_hash = this_poseidon.hash_unchecked(vec![
-                    low_null.node.value,
+                    low_null.node.value(),
                     Fr::from(low_null.tree_index as u64),
-                    low_null.node.next_value,
+                    low_null.node.next_value(),
                 ]);
 
                 init_nullifier_root = nullifier_tree
@@ -269,7 +269,7 @@ pub fn base_circuit_helper_generator<const I: usize, const C: usize, const N: us
             swap_field: false,
             nullifiers,
             commitments: transfer_inputs.1,
-            commitment_tree_root: [prev_commitment_tree.root.0; N],
+            commitment_tree_root: [prev_commitment_tree.root(); N],
             path_comm_tree_root_to_global_tree_root: [[Fr::zero(); 8]; N], // filled later
             path_comm_tree_index: [Fr::zero(); N],                         // filled later
             low_nullifier: low_nullifiers,
@@ -286,7 +286,7 @@ pub fn base_circuit_helper_generator<const I: usize, const C: usize, const N: us
         };
 
         client_inputs.push(client_input);
-        global_comm_roots.push(field_switching(&prev_commitment_tree.root.0));
+        global_comm_roots.push(field_switching(&prev_commitment_tree.root()));
     }
     ark_std::println!("Created {} Transfer Proofs", I);
     // all have the same vk
@@ -329,10 +329,10 @@ pub fn base_circuit_helper_generator<const I: usize, const C: usize, const N: us
 
     let (mut base_circuit, pi_star) = base_rollup_circuit::<VestaConfig, PallasConfig, I, C, N>(
         client_inputs.try_into().unwrap(),
-        vk_tree.root.0,
+        vk_tree.root(),
         init_nullifier_root,
-        initial_nullifier_tree.leaf_count.into(),
-        global_comm_tree.root.0,
+        (initial_nullifier_tree.leaf_count() as u64).into(),
+        global_comm_tree.root(),
         g_polys.try_into().unwrap(),
         vesta_commit_key.clone(),
     )

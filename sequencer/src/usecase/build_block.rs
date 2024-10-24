@@ -133,9 +133,9 @@ where
     let local_commitment_tree: Tree<V::ScalarField, 8> = Tree::from_leaves(commitments.clone());
     global_state_trees
         .get_global_commitment_tree()
-        .append_leaf(field_switching(&local_commitment_tree.root.0));
+        .append_leaf(field_switching(&local_commitment_tree.root()));
 
-    ark_std::println!("commitment tree root: {:?}", local_commitment_tree.root.0);
+    ark_std::println!("commitment tree root: {:?}", local_commitment_tree.root());
     let client_inputs: Vec<_> = transactions
         .into_iter()
         .enumerate()
@@ -190,10 +190,10 @@ where
 
     let res = Prover::rollup_proof(
         client_inputs.try_into().unwrap(),
-        global_state_trees.get_vk_tree().root.0,
-        global_state_trees.get_global_nullifier_tree().root,
-        F::from(global_state_trees.get_global_nullifier_tree().leaf_count),
-        global_state_trees.get_global_commitment_tree().root.0,
+        global_state_trees.get_vk_tree().root(),
+        global_state_trees.get_global_nullifier_tree().root(),
+        F::from(global_state_trees.get_global_nullifier_tree().leaf_count() as u64),
+        global_state_trees.get_global_commitment_tree().root(),
         [Default::default(), Default::default()],
         commit_keys,
         proving_keys,
@@ -205,7 +205,7 @@ where
         block_number: 0,
         commitments,
         nullifiers,
-        commitment_root: local_commitment_tree.root.0,
+        commitment_root: local_commitment_tree.root(),
     })
 
     // Given transaction list, produce a block

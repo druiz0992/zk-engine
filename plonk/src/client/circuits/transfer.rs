@@ -282,7 +282,7 @@ mod test {
             token_nonces.try_into().unwrap(),
             old_comm_paths,
             ark_std::array::from_fn(|i| Fq::from(i as u32)),
-            [comm_tree.root.0; N],
+            [comm_tree.root(); N],
             new_values,
             ark_std::array::from_fn(|i| Fq::from(i as u32)), // = old leaf indicies,
             token_id,

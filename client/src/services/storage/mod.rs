@@ -127,7 +127,7 @@ pub mod in_mem_storage {
             if !self.commitment_tree_db.contains_key(block_number) {
                 return None;
             }
-            self.commitment_tree_db.get(block_number).map(|t| t.root.0)
+            self.commitment_tree_db.get(block_number).map(|t| t.root())
         }
     }
 

@@ -16,12 +16,13 @@ pub trait PoseidonParams {
     const N_ROUND_FULL: usize;
     const N_ROUNDS_PARTIAL: [usize; MAX_INPUT_LEN];
 
+    #[allow(clippy::type_complexity)]
     fn load_constants() -> (Vec<Constants<Self::Field>>, Vec<Mds<Self::Field>>);
     // useful for memory constrained environment (i.e. circuit)
     fn load_subset_constants(t: usize) -> (Constants<Self::Field>, Mds<Self::Field>);
 }
 
-fn load_from_str<F: PrimeField>(
+fn load_from_str<F>(
     c_str: Vec<Vec<&str>>,
     m_str: Vec<Vec<Vec<&str>>>,
 ) -> (Vec<Vec<F>>, Vec<Vec<Vec<F>>>)
@@ -57,7 +58,7 @@ where
     (constants, mds_matrix)
 }
 
-fn load_subset_from_str<F: PrimeField>(
+fn load_subset_from_str<F>(
     t: usize,
     c_str: &[Vec<&str>],
     m_str: &[Vec<Vec<&str>>],

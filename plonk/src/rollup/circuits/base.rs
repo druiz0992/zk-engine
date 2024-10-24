@@ -102,7 +102,7 @@ where
     let initial_low_nullifier_value =
         circuit.create_variable(field_switching(&client_inputs[0].nullifiers[0]))?;
     let initial_low_nullifier_next_index =
-        circuit.create_variable((client_inputs[0].low_nullifier[0].next_index as u64).into())?;
+        circuit.create_variable(client_inputs[0].low_nullifier[0].next_index().into())?;
     let initial_low_nullifier_next_value =
         circuit.create_variable(field_switching(&client_inputs[0].nullifiers[0]))?;
     let mut prev_nullifier_low_nullifier = [
@@ -222,11 +222,11 @@ where
             // low_null.value (Max condition)
             // Extract low nullifier value, next value and next index
             let low_nullifer_next_value_var =
-                circuit.create_variable(input.low_nullifier[i].next_value)?;
-            let low_nullifier_next_index_var = circuit.create_variable(C1::BaseField::from(
-                input.low_nullifier[i].next_index as u64,
-            ))?;
-            let low_nullifier_value_var = circuit.create_variable(input.low_nullifier[i].value)?;
+                circuit.create_variable(input.low_nullifier[i].next_value())?;
+            let low_nullifier_next_index_var = circuit
+                .create_variable(C1::BaseField::from(input.low_nullifier[i].next_index()))?;
+            let low_nullifier_value_var =
+                circuit.create_variable(input.low_nullifier[i].value())?;
 
             // Check if the next value and next index are zero
             let low_nullifier_next_value_is_zero = circuit.is_zero(low_nullifer_next_value_var)?;
@@ -733,10 +733,10 @@ pub mod base_test {
         let (mut base_rollup_circuit, _) =
             base_rollup_circuit::<VestaConfig, PallasConfig, I, C, 1>(
                 client_inputs.try_into().unwrap(),
-                vk_tree.root.0,
-                nullifier_tree.root,
-                nullifier_tree.leaf_count.into(),
-                global_comm_tree.root.0,
+                vk_tree.root(),
+                nullifier_tree.root(),
+                nullifier_tree.leaf_count().into(),
+                global_comm_tree.root(),
                 g_polys.try_into().unwrap(),
                 vesta_commit_key,
             )
@@ -828,7 +828,7 @@ pub mod base_test {
             let (mut transfer_circuit, transfer_inputs) = transfer_circuit_helper_generator::<C, N>(
                 mint_values,
                 old_sib_paths,
-                [prev_commitment_tree.root.0; N],
+                [prev_commitment_tree.root(); N],
                 ark_std::array::from_fn(|i| i as u64),
             );
 
@@ -883,9 +883,9 @@ pub mod base_test {
                 if i == 0 && j == 0 {
                     let this_poseidon = Poseidon::<Fr>::new();
                     let low_nullifier_hash = this_poseidon.hash_unchecked(vec![
-                        low_null.node.value,
+                        low_null.node.value(),
                         Fr::from(low_null.tree_index as u64),
-                        low_null.node.next_value,
+                        low_null.node.next_value(),
                     ]);
 
                     init_nullifier_root = nullifier_tree
@@ -910,7 +910,7 @@ pub mod base_test {
                 swap_field: false,
                 nullifiers,
                 commitments: transfer_inputs.1,
-                commitment_tree_root: [prev_commitment_tree.root.0; N],
+                commitment_tree_root: [prev_commitment_tree.root(); N],
                 path_comm_tree_root_to_global_tree_root: [[Fr::zero(); 8]; N], // filled later
                 path_comm_tree_index: [Fr::zero(); N],                         // filled later
                 low_nullifier: low_nullifiers,
@@ -927,7 +927,7 @@ pub mod base_test {
             };
 
             client_inputs.push(client_input);
-            global_comm_roots.push(field_switching(&prev_commitment_tree.root.0));
+            global_comm_roots.push(field_switching(&prev_commitment_tree.root()));
         }
 
         /* ----------------------------------------------------------------------------------
@@ -969,11 +969,11 @@ pub mod base_test {
         let (mut base_rollup_circuit, pi_star) =
             base_rollup_circuit::<VestaConfig, PallasConfig, I, C, N>(
                 client_inputs.try_into().unwrap(),
-                vk_tree.root.0,
+                vk_tree.root(),
                 // initial_nullifier_tree.root,
                 init_nullifier_root,
-                initial_nullifier_tree.leaf_count.into(),
-                global_comm_tree.root.0,
+                (initial_nullifier_tree.leaf_count() as u64).into(),
+                global_comm_tree.root(),
                 g_polys.try_into().unwrap(),
                 vesta_commit_key.clone(),
             )
@@ -1107,7 +1107,7 @@ pub mod base_test {
                     token_ids[j],
                     old_sib_path,
                     old_nonces[i],
-                    comm_tree.root.0,
+                    comm_tree.root(),
                     i as u64,
                     j as u64,
                     root_keys[i],
@@ -1152,9 +1152,9 @@ pub mod base_test {
             if i == 0 {
                 let this_poseidon = Poseidon::<Fr>::new();
                 let low_nullifier_hash = this_poseidon.hash_unchecked(vec![
-                    low_null.node.value,
+                    low_null.node.value(),
                     Fr::from(low_null.tree_index as u64),
-                    low_null.node.next_value,
+                    low_null.node.next_value(),
                 ]);
 
                 init_nullifier_root =
@@ -1177,7 +1177,7 @@ pub mod base_test {
                 swap_field: true,
                 nullifiers: [nullifier],
                 commitments,
-                commitment_tree_root: [comm_tree.root.0],
+                commitment_tree_root: [comm_tree.root()],
                 path_comm_tree_root_to_global_tree_root: [[Fr::zero(); 8]; 1], // filled later
                 path_comm_tree_index: [Fr::zero()],                            // filled later
                 low_nullifier: [low_null.node],
@@ -1209,7 +1209,7 @@ pub mod base_test {
             vks,
             vec![],
             vec![],
-            [field_switching(&comm_tree.root.0)].to_vec(),
+            [field_switching(&comm_tree.root())].to_vec(),
         );
 
         for (_, ci) in client_inputs.iter_mut().enumerate() {
@@ -1239,11 +1239,11 @@ pub mod base_test {
         let (mut base_rollup_circuit, _pi_star) =
             base_rollup_circuit::<VestaConfig, PallasConfig, I, 2, 1>(
                 client_inputs.try_into().unwrap(),
-                vk_tree.root.0,
+                vk_tree.root(),
                 // initial_nullifier_tree.root,
                 init_nullifier_root,
                 Fr::from(0 as u32),
-                global_comm_tree.root.0,
+                global_comm_tree.root(),
                 g_polys.try_into().unwrap(),
                 vesta_commit_key.clone(),
             )

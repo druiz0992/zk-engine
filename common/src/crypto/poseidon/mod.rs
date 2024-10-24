@@ -31,7 +31,7 @@ impl<P: PoseidonParams> Poseidon<P> {
         let constants = Constants { c, m };
         Poseidon { constants }
     }
-    pub fn ark(&self, state: &mut Vec<P::Field>, c: &[P::Field], it: usize) {
+    pub fn ark(&self, state: &mut [P::Field], c: &[P::Field], it: usize) {
         for i in 0..state.len() {
             state[i].add_assign(&c[it + i]);
         }
@@ -53,7 +53,7 @@ impl<P: PoseidonParams> Poseidon<P> {
         }
     }
 
-    pub fn mix(&self, state: &Vec<P::Field>, m: &[Vec<P::Field>]) -> Vec<P::Field> {
+    pub fn mix(&self, state: &[P::Field], m: &[Vec<P::Field>]) -> Vec<P::Field> {
         let mut new_state: Vec<P::Field> = Vec::new();
         for i in 0..state.len() {
             new_state.push(P::Field::zero());
