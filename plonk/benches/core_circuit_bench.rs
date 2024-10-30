@@ -1,9 +1,10 @@
 use ark_ec::{short_weierstrass::SWCurveConfig, CurveGroup};
 use ark_std::UniformRand;
 use common::crypto::poseidon::Poseidon;
+use common::keypair::PublicKey;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use curves::{
-    pallas::{Affine, Fq, Fr, PallasConfig},
+    pallas::{Fq, Fr, PallasConfig},
     vesta::VestaConfig,
 };
 use jf_plonk::{
@@ -11,40 +12,54 @@ use jf_plonk::{
     transcript::StandardTranscript,
 };
 use jf_relation::{Arithmetization, Circuit};
-use jf_utils::{field_switching, fq_to_fr_with_mask, test_rng};
-use plonk_prover::client::circuits::{mint::mint_circuit, transfer::transfer_circuit};
+use jf_utils::{fq_to_fr_with_mask, test_rng};
+use plonk_prover::client::circuits::{
+    circuit_inputs::CircuitInputs, mint::mint_circuit, transfer::transfer_circuit,
+};
 use std::str::FromStr;
+use trees::MembershipPath;
 
 pub fn benchmark_mint(c: &mut Criterion) {
+    const N: usize = 0;
+    const D: usize = 0;
     c.bench_function("Mint Circuit - 1 Output: Witness Generation", |b| {
+        const C: usize = 1;
         b.iter(|| {
             let value = Fq::from_str("1").unwrap();
             let token_id = Fq::from_str("2").unwrap();
             let token_nonce = Fq::from_str("3").unwrap();
             let token_owner = (PallasConfig::GENERATOR * Fr::from_str("4").unwrap()).into_affine();
-            let mut circuit = mint_circuit::<PallasConfig, VestaConfig, 1>(
-                [value],
-                [token_id],
-                [token_nonce],
-                [token_owner],
-            )
-            .unwrap();
+
+            let mut circuit_inputs_builder = CircuitInputs::<PallasConfig, C, N, D>::new();
+            let circuit_inputs = circuit_inputs_builder
+                .add_token_values(vec![value; C])
+                .add_token_ids(vec![token_id; C])
+                .add_token_salts(vec![token_nonce; C])
+                .add_recipients(vec![PublicKey::from_affine(token_owner); C])
+                .build()
+                .unwrap();
+            let mut circuit = mint_circuit::<PallasConfig, VestaConfig, C>(circuit_inputs).unwrap();
             circuit.finalize_for_arithmetization().unwrap();
         })
     });
     c.bench_function("Mint Circuit - 1 Output: Proof Generation", |b| {
+        const C: usize = 1;
         let value = Fq::from_str("1").unwrap();
         let token_id = Fq::from_str("2").unwrap();
         let token_nonce = Fq::from_str("3").unwrap();
         let token_owner =
             (PallasConfig::GENERATOR * Fr::from_str("4").unwrap()).into_affine();
-        let mut circuit = mint_circuit::<PallasConfig, VestaConfig, 1>(
-            [value],
-            [token_id],
-            [token_nonce],
-            [token_owner],
-        )
+
+        let mut circuit_inputs_builder = CircuitInputs::<PallasConfig, C, N, D>::new();
+        let circuit_inputs = circuit_inputs_builder
+            .add_token_values(vec![value; C])
+            .add_token_ids(vec![token_id; C])
+            .add_token_salts(vec![token_nonce; C])
+            .add_recipients(vec![PublicKey::from_affine(token_owner); C])
+            .build()
             .unwrap();
+
+        let mut circuit = mint_circuit::<PallasConfig, VestaConfig, C>(circuit_inputs).unwrap();
         circuit.finalize_for_arithmetization().unwrap();
 
         let srs_size = circuit.srs_size().unwrap();
@@ -64,34 +79,45 @@ pub fn benchmark_mint(c: &mut Criterion) {
         })
     });
     c.bench_function("Mint Circuit - 2 Output: Witness Generation", |b| {
+        const C: usize = 2;
         b.iter(|| {
             let value = Fq::from_str("1").unwrap();
             let token_id = Fq::from_str("2").unwrap();
             let token_nonce = Fq::from_str("3").unwrap();
             let token_owner = (PallasConfig::GENERATOR * Fr::from_str("4").unwrap()).into_affine();
-            let mut circuit = mint_circuit::<PallasConfig, VestaConfig, 2>(
-                [value, value],
-                [token_id, token_id],
-                [token_nonce, token_nonce],
-                [token_owner, token_owner],
-            )
-            .unwrap();
+
+            let mut circuit_inputs_builder = CircuitInputs::<PallasConfig, C, N, D>::new();
+            let circuit_inputs = circuit_inputs_builder
+                .add_token_values(vec![value; C])
+                .add_token_ids(vec![token_id; C])
+                .add_token_salts(vec![token_nonce; C])
+                .add_recipients(vec![PublicKey::from_affine(token_owner); C])
+                .build()
+                .unwrap();
+
+            let mut circuit = mint_circuit::<PallasConfig, VestaConfig, C>(circuit_inputs).unwrap();
             circuit.finalize_for_arithmetization().unwrap();
         })
     });
     c.bench_function("Mint Circuit - 2 Output: Proof Generation", |b| {
+        const C: usize = 2;
         let value = Fq::from_str("1").unwrap();
         let token_id = Fq::from_str("2").unwrap();
         let token_nonce = Fq::from_str("3").unwrap();
         let token_owner =
             (PallasConfig::GENERATOR * Fr::from_str("4").unwrap()).into_affine();
-        let mut circuit = mint_circuit::<PallasConfig,VestaConfig,  2>(
-            [value, value],
-            [token_id, token_id],
-            [token_nonce, token_nonce],
-            [token_owner, token_owner],
-        )
+
+
+        let mut circuit_inputs_builder = CircuitInputs::<PallasConfig, C, N, D>::new();
+        let circuit_inputs = circuit_inputs_builder
+            .add_token_values(vec![value; C])
+            .add_token_ids(vec![token_id; C])
+            .add_token_salts(vec![token_nonce; C])
+            .add_recipients(vec![PublicKey::from_affine(token_owner); C])
+            .build()
             .unwrap();
+
+        let mut circuit = mint_circuit::<PallasConfig, VestaConfig, C>(circuit_inputs).unwrap();
         circuit.finalize_for_arithmetization().unwrap();
         let srs_size = circuit.srs_size().unwrap();
         let srs =
@@ -110,9 +136,12 @@ pub fn benchmark_mint(c: &mut Criterion) {
 }
 
 pub fn benchmark_transfer(c: &mut Criterion) {
+    const C: usize = 1;
+    const N: usize = 1;
+    const D: usize = 1;
+
     let root_key = Fq::rand(&mut test_rng());
     let private_key_domain = Fq::from_str("1").unwrap();
-    let nullifier_key_domain = Fq::from_str("2").unwrap();
     let private_key = Poseidon::<Fq>::new()
         .hash(vec![root_key, private_key_domain])
         .unwrap();
@@ -133,15 +162,14 @@ pub fn benchmark_transfer(c: &mut Criterion) {
         ])
         .unwrap();
 
-    let old_commitment_sibling_path: [Fq; 48] = (0..48)
-        .map(|_| Fq::rand(&mut test_rng()))
-        .collect::<Vec<_>>()
-        .try_into()
-        .unwrap();
+    let mut old_commitment_sibling_path = MembershipPath::new();
+    (0..D).for_each(|_| old_commitment_sibling_path.append(Fq::rand(&mut test_rng())));
 
-    let root = old_commitment_sibling_path.into_iter().enumerate().fold(
-        old_commitment_hash,
-        |a, (i, b)| {
+    let root = old_commitment_sibling_path
+        .clone()
+        .into_iter()
+        .enumerate()
+        .fold(old_commitment_hash, |a, (i, b)| {
             let poseidon: Poseidon<Fq> = Poseidon::new();
             let bit_dir = old_commitment_leaf_index >> i & 1;
             if bit_dir == 0 {
@@ -149,32 +177,30 @@ pub fn benchmark_transfer(c: &mut Criterion) {
             } else {
                 poseidon.hash(vec![b, a]).unwrap()
             }
-        },
-    );
+        });
 
-    let recipient_public_key = Affine::rand(&mut test_rng());
-    let ephemeral_key = Fq::rand(&mut test_rng());
+    //let t = old_commitment_sibling_path.clone();
 
     c.bench_function(
         "Transfer Circuit - 1 Input, 1 Output: Witness Generation",
         |b| {
             b.iter(|| {
-                let mut circuit = transfer_circuit::<PallasConfig, VestaConfig, 1, 1, 48>(
-                    black_box([value]),
-                    black_box([token_nonce]),
-                    black_box([old_commitment_sibling_path]),
-                    black_box([Fq::from(old_commitment_leaf_index)]),
-                    black_box([root]),
-                    black_box([value]),
-                    black_box([Fq::from(old_commitment_leaf_index)]),
-                    black_box(token_id),
-                    black_box(recipient_public_key),
-                    black_box(root_key),
-                    black_box(ephemeral_key),
-                    black_box(private_key_domain),
-                    black_box(nullifier_key_domain),
-                )
-                .unwrap();
+                let circuit_inputs = CircuitInputs::new()
+                    .add_old_token_values(black_box(vec![value]))
+                    .add_old_token_salts(black_box(vec![token_nonce]))
+                    .add_membership_path(black_box(vec![old_commitment_sibling_path.clone()]))
+                    .add_membership_path_index(black_box(vec![Fq::from(old_commitment_leaf_index)]))
+                    .add_commitment_tree_root(black_box(vec![root]))
+                    .add_token_values(black_box(vec![value]))
+                    .add_token_salts(black_box(vec![Fq::from(old_commitment_leaf_index)]))
+                    .add_token_ids(black_box(vec![token_id]))
+                    .add_recipients(black_box(vec![PublicKey::from_affine(token_owner)]))
+                    .add_root_key(black_box(root_key))
+                    .add_ephemeral_key(black_box(Fq::rand(&mut test_rng())))
+                    .build()
+                    .unwrap();
+                let mut circuit =
+                    transfer_circuit::<PallasConfig, VestaConfig, C, N, D>(circuit_inputs).unwrap();
 
                 let public_inputs = circuit.public_input().unwrap();
                 assert!(circuit.check_circuit_satisfiability(&public_inputs).is_ok());
@@ -184,22 +210,22 @@ pub fn benchmark_transfer(c: &mut Criterion) {
         },
     );
 
-    let mut circuit = transfer_circuit::<PallasConfig, VestaConfig, 1, 1, 48>(
-        black_box([value]),
-        black_box([token_nonce]),
-        black_box([old_commitment_sibling_path]),
-        black_box([Fq::from(old_commitment_leaf_index)]),
-        black_box([root]),
-        black_box([value]),
-        black_box([Fq::from(old_commitment_leaf_index)]),
-        black_box(token_id),
-        black_box(recipient_public_key),
-        black_box(root_key),
-        black_box(ephemeral_key),
-        black_box(private_key_domain),
-        black_box(nullifier_key_domain),
-    )
-    .unwrap();
+    let circuit_inputs = CircuitInputs::new()
+        .add_old_token_values(black_box(vec![value]))
+        .add_old_token_salts(black_box(vec![token_nonce]))
+        //.add_membership_path(black_box(vec![old_commitment_sibling_path.clone()]))
+        .add_membership_path_index(black_box(vec![Fq::from(old_commitment_leaf_index)]))
+        .add_commitment_tree_root(black_box(vec![root]))
+        .add_token_values(black_box(vec![value]))
+        .add_token_salts(black_box(vec![Fq::from(old_commitment_leaf_index)]))
+        .add_token_ids(black_box(vec![token_id]))
+        .add_recipients(black_box(vec![PublicKey::from_affine(token_owner)]))
+        .add_root_key(black_box(root_key))
+        .add_ephemeral_key(black_box(Fq::rand(&mut test_rng())))
+        .build()
+        .unwrap();
+    let mut circuit =
+        transfer_circuit::<PallasConfig, VestaConfig, C, N, D>(circuit_inputs).unwrap();
 
     let public_inputs = circuit.public_input().unwrap();
     assert!(circuit.check_circuit_satisfiability(&public_inputs).is_ok());

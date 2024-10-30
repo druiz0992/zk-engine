@@ -2,6 +2,7 @@ use ark_ec::{pairing::Pairing, short_weierstrass::SWCurveConfig, CurveGroup};
 use ark_ff::{One, Zero};
 use ark_std::UniformRand;
 use common::crypto::poseidon::Poseidon;
+use common::keypair::PublicKey;
 use criterion::{criterion_group, criterion_main, Criterion};
 use curves::{
     pallas::{Fq, Fr, PallasConfig},
@@ -13,6 +14,9 @@ use jf_plonk::{
 use jf_primitives::pcs::StructuredReferenceString;
 use jf_relation::{Arithmetization, Circuit};
 use jf_utils::{field_switching, fq_to_fr_with_mask, test_rng};
+use plonk_prover::client::circuits::{
+    circuit_inputs::CircuitInputs, client_circuit::ClientCircuit,
+};
 use plonk_prover::utils::bench_utils::{transfer_circuit_helper_generator, tree_generator};
 use plonk_prover::{
     client::circuits::mint::mint_circuit,
@@ -26,6 +30,9 @@ use trees::{
 };
 
 pub fn benchmark_mints<const I: usize, const C: usize>(c: &mut Criterion) {
+    const D: usize = 0;
+    const N: usize = 0;
+
     // Below taken from test_base_rollup_helper_mint
     let mut rng = test_rng();
     let mut client_inputs = vec![];
@@ -36,19 +43,25 @@ pub fn benchmark_mints<const I: usize, const C: usize>(c: &mut Criterion) {
                                                // let mut mint_ipa_pk= ProvingKey { sigmas: Default::default()};
     ark_std::println!("Creating {} Mint Circuits", I);
     for i in 0..I {
-        let value = ark_std::array::from_fn(|j| Fq::from((j + i) as u32));
+        let value = ark_std::array::from_fn::<_, C, _>(|j| Fq::from((j + i) as u32));
         let token_id = [Fq::from(12 as u64); C];
         let token_nonce = [Fq::from(13 as u64); C];
         let secret_key = Fq::from_str("4").unwrap();
         let secret_key_fr = field_switching::<Fq, Fr>(&secret_key);
         let token_owner = (PallasConfig::GENERATOR * secret_key_fr).into_affine();
-        let mut mint_circuit = mint_circuit::<PallasConfig, VestaConfig, C>(
-            value,
-            token_id,
-            token_nonce,
-            [token_owner; C],
-        )
-        .unwrap();
+
+        let mut circuit_inputs_builder = CircuitInputs::<PallasConfig, C, N, D>::new();
+        let circuit_inputs = circuit_inputs_builder
+            .add_token_values(value.to_vec())
+            .add_token_ids(token_id.to_vec())
+            .add_token_salts(token_nonce.to_vec())
+            .add_recipients(vec![PublicKey::from_affine(token_owner); C])
+            .build()
+            .unwrap();
+
+        let mut mint_circuit =
+            mint_circuit::<PallasConfig, VestaConfig, C>(circuit_inputs).unwrap();
+
         mint_circuit.finalize_for_arithmetization().unwrap();
         if i == 0 {
             mint_ipa_srs = <PlonkIpaSnark<VestaConfig> as UniversalSNARK<VestaConfig>>::universal_setup_for_testing(
@@ -153,7 +166,10 @@ pub fn benchmark_mints<const I: usize, const C: usize>(c: &mut Criterion) {
     let (base_ipa_pk, _) =
         PlonkIpaSnark::<PallasConfig>::preprocess(&base_ipa_srs, &base_circuit).unwrap();
     c.bench_function("Base with I Mints - Output: Proof Generation", |b| {
+        let mut n = 0;
         b.iter(|| {
+            ark_std::println!("Iteration {n}");
+            n += 1;
             let _ = PlonkIpaSnark::<PallasConfig>::prove::<
                 _,
                 _,
@@ -164,7 +180,9 @@ pub fn benchmark_mints<const I: usize, const C: usize>(c: &mut Criterion) {
     });
 }
 
-pub fn benchmark_transfers<const I: usize, const N: usize, const C: usize>(c: &mut Criterion) {
+pub fn benchmark_transfers<const I: usize, const C: usize, const N: usize, const D: usize>(
+    c: &mut Criterion,
+) {
     // Below taken from test_base_rollup_helper_transfer
     let poseidon = Poseidon::<Fq>::new();
     let root_key = Fq::rand(&mut test_rng());
@@ -204,8 +222,8 @@ pub fn benchmark_transfers<const I: usize, const N: usize, const C: usize>(c: &m
                 ])
             })
             .collect::<Vec<_>>();
-        let prev_commitment_tree = Tree::<Fq, 8>::from_leaves(mint_commitments.clone());
-        let mut old_sib_paths: [[Fq; 8]; N] = [[Fq::zero(); 8]; N];
+        let prev_commitment_tree = Tree::<Fq, D>::from_leaves(mint_commitments.clone());
+        let mut old_sib_paths: [[Fq; D]; N] = [[Fq::zero(); D]; N];
         for j in 0..N {
             old_sib_paths[j] = prev_commitment_tree
                 .membership_witness(j)
@@ -213,7 +231,7 @@ pub fn benchmark_transfers<const I: usize, const N: usize, const C: usize>(c: &m
                 .try_into()
                 .unwrap();
         }
-        let (mut transfer_circuit, transfer_inputs) = transfer_circuit_helper_generator::<C, N>(
+        let (mut transfer_circuit, transfer_inputs) = transfer_circuit_helper_generator::<C, N, D>(
             mint_values,
             old_sib_paths,
             [prev_commitment_tree.root(); N],
@@ -390,7 +408,10 @@ pub fn benchmark_transfers<const I: usize, const N: usize, const C: usize>(c: &m
     let (base_ipa_pk, _) =
         PlonkIpaSnark::<PallasConfig>::preprocess(&base_ipa_srs, &base_circuit).unwrap();
     c.bench_function("Base with I Transfers - Output: Proof Generation", |b| {
+        let mut n = 0;
         b.iter(|| {
+            ark_std::println!("Iteration {n}");
+            n += 1;
             let _ = PlonkIpaSnark::<PallasConfig>::prove::<
                 _,
                 _,
@@ -401,5 +422,6 @@ pub fn benchmark_transfers<const I: usize, const N: usize, const C: usize>(c: &m
     });
 }
 
-criterion_group! {name = benches; config = Criterion::default().significance_level(0.1).sample_size(10);targets = benchmark_mints::<2, 2>, benchmark_transfers::<2, 2, 1>}
+//criterion_group! {name = benches; config = Criterion::default().significance_level(0.1).sample_size(10);targets = benchmark_mints::<2, 2>, benchmark_transfers::<2, 1, 2, 8>}
+criterion_group! {name = benches; config = Criterion::default().significance_level(0.1).sample_size(10);targets =benchmark_transfers::<2, 1, 2, 8>}
 criterion_main!(benches);

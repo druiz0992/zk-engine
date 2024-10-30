@@ -10,10 +10,12 @@ use plonk_prover::{
     rollup::circuits::merge::merge_circuit, utils::bench_utils::bounce_circuit_helper_generator,
 };
 
-pub fn benchmark_merge<const I: usize, const N: usize, const C: usize>(c: &mut Criterion) {
+pub fn benchmark_merge<const I: usize, const N: usize, const C: usize, const D: usize>(
+    c: &mut Criterion,
+) {
     // Below taken from merge_test_helper
     let mut rng = test_rng();
-    let stored_bounce = bounce_circuit_helper_generator::<I, C, N>();
+    let stored_bounce = bounce_circuit_helper_generator::<I, C, N, D>();
     let stored_bounce_2 = stored_bounce.clone();
     let (global_public_inputs, subtree_pi_1, passthrough_instance_1, instance_1) =
         stored_bounce.pub_inputs;
@@ -58,5 +60,5 @@ pub fn benchmark_merge<const I: usize, const N: usize, const C: usize>(c: &mut C
     });
 }
 
-criterion_group! {name = benches; config = Criterion::default().significance_level(0.1).sample_size(10);targets = benchmark_merge::<2, 2, 2>,}
+criterion_group! {name = benches; config = Criterion::default().significance_level(0.1).sample_size(10);targets = benchmark_merge::<2, 2, 2, 8>,}
 criterion_main!(benches);

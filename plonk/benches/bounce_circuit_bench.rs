@@ -10,10 +10,12 @@ use plonk_prover::{
     rollup::circuits::bounce::bounce_circuit, utils::bench_utils::base_circuit_helper_generator,
 };
 
-pub fn benchmark_bounce<const I: usize, const N: usize, const C: usize>(c: &mut Criterion) {
+pub fn benchmark_bounce<const I: usize, const N: usize, const C: usize, const D: usize>(
+    c: &mut Criterion,
+) {
     // Below taken from bounce_test_helper
     let mut rng = test_rng();
-    let stored_proof_base = base_circuit_helper_generator::<I, C, N>();
+    let stored_proof_base = base_circuit_helper_generator::<I, C, N, D>();
     let (global_public_inputs, subtree_public_inputs, passthrough_instance, _) =
         stored_proof_base.pub_inputs;
     let (mut bounce_circuit, _) = bounce_circuit::<PallasConfig, VestaConfig>(
@@ -48,5 +50,5 @@ pub fn benchmark_bounce<const I: usize, const N: usize, const C: usize>(c: &mut 
     });
 }
 
-criterion_group! {name = benches; config = Criterion::default().significance_level(0.1).sample_size(10);targets = benchmark_bounce::<2, 2, 2>,}
+criterion_group! {name = benches; config = Criterion::default().significance_level(0.1).sample_size(10);targets = benchmark_bounce::<2, 2, 2, 8>,}
 criterion_main!(benches);
