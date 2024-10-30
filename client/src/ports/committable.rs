@@ -1,4 +1,4 @@
-use ark_ec::{short_weierstrass::SWCurveConfig, AffineRepr};
+use ark_ec::short_weierstrass::SWCurveConfig;
 use ark_ff::PrimeField;
 use common::{
     crypto::{
@@ -30,12 +30,11 @@ where
 
     fn commitment_hash(&self) -> Result<Commitment<F>, Self::Error> {
         let poseidon = Poseidon::<F>::new();
-        match self.public_key.as_affine().xy() {
-            Some((x, y)) => {
-                let hash = poseidon.hash(vec![self.value, self.token_id, self.salt, *x, *y])?;
-                Ok(Commitment(hash))
-            }
-            None => Err(CryptoError::HashError("Error".to_string())),
+        if let Some(elements) = self.to_vec() {
+            let hash = poseidon.hash(elements)?;
+            Ok(Commitment(hash))
+        } else {
+            Err(CryptoError::HashError("Error".to_string()))
         }
     }
 }

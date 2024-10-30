@@ -2,12 +2,10 @@ use std::sync::Arc;
 
 use crate::{
     adapters::rest_api::rest_api_entry::run_api,
-    domain::{CircuitType, Fr},
+    domain::CircuitType,
     ports::prover::Prover,
     services::{prover::in_memory_prover::InMemProver, storage::in_mem_storage::InMemStorage},
 };
-use ark_ec::short_weierstrass::Affine;
-use ark_std::UniformRand;
 use curves::{
     pallas::{Fq, PallasConfig},
     vesta::VestaConfig,
@@ -28,7 +26,7 @@ fn main() {
     let pks = generate_client_pks_and_vks::<PallasConfig, VestaConfig, VestaConfig>().unwrap();
     pks.into_iter()
         .zip([CircuitType::Mint, CircuitType::Transfer].into_iter())
-        .for_each(|(pk, circuit_type)| prover.store_pk(circuit_type, pk));
+        .for_each(|(pk, circuit_type)| prover.store_pk(circuit_type, pk.0));
 
     ark_std::println!("keys generated");
     let thread_safe_prover = Arc::new(tokio::sync::Mutex::new(prover));

@@ -4,8 +4,8 @@ pub struct MembershipPath<F> {
 }
 
 impl<F> MembershipPath<F> {
-    pub fn new(el: F) -> Self {
-        MembershipPath { path: vec![el] }
+    pub fn new() -> Self {
+        MembershipPath { path: vec![] }
     }
 
     pub fn append(&mut self, el: F) {
@@ -14,6 +14,23 @@ impl<F> MembershipPath<F> {
 
     pub fn as_vec(self) -> Vec<F> {
         self.path
+    }
+
+    pub fn path_len(&self) -> usize {
+        self.path.len()
+    }
+
+    pub fn from_array<const N: usize, const L: usize>(
+        array: [[F; N]; L],
+    ) -> Vec<MembershipPath<F>> {
+        array
+            .into_iter()
+            .map(|path| {
+                let mut mp = MembershipPath::new();
+                path.into_iter().for_each(|el| mp.append(el));
+                mp
+            })
+            .collect()
     }
 }
 
@@ -55,34 +72,33 @@ where
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
     fn test_new() {
-        let path: MembershipPath<i32> = MembershipPath::new(1);
-        assert_eq!(path.path.len(), 1);
-        assert_eq!(path.path[0], 1);
+        let path: MembershipPath<i32> = MembershipPath::new();
+        assert_eq!(path.path.len(), 0);
     }
 
     #[test]
     fn test_append() {
-        let mut path: MembershipPath<i32> = MembershipPath::new(1);
+        let mut path: MembershipPath<i32> = MembershipPath::new();
         path.append(2);
         path.append(3);
 
-        assert_eq!(path.path.len(), 3);
-        assert_eq!(path.path[1], 2);
-        assert_eq!(path.path[2], 3);
+        assert_eq!(path.path.len(), 2);
+        assert_eq!(path.path[0], 2);
+        assert_eq!(path.path[1], 3);
     }
 
     #[test]
     fn test_into_iter() {
-        let mut path: MembershipPath<i32> = MembershipPath::new(1);
+        let mut path: MembershipPath<i32> = MembershipPath::new();
         path.append(2);
         path.append(3);
 
         let mut iter = path.into_iter();
-        assert_eq!(iter.next(), Some(1));
         assert_eq!(iter.next(), Some(2));
         assert_eq!(iter.next(), Some(3));
         assert_eq!(iter.next(), None);
@@ -90,7 +106,8 @@ mod tests {
 
     #[test]
     fn test_iter() {
-        let path: MembershipPath<i32> = MembershipPath::new(1);
+        let mut path: MembershipPath<i32> = MembershipPath::new();
+        path.append(1i32);
         let path_ref = &path;
 
         let mut iter = path_ref.into_iter();
@@ -100,10 +117,22 @@ mod tests {
 
     #[test]
     fn test_clone() {
-        let path: MembershipPath<i32> = MembershipPath::new(1);
+        let mut path: MembershipPath<i32> = MembershipPath::new();
+        path.append(1);
         let cloned_path = path.clone();
 
         assert_eq!(cloned_path.path.len(), 1);
         assert_eq!(cloned_path.path[0], 1);
+    }
+
+    #[test]
+    fn test_from_array() {
+        let array: [[i32; 3]; 2] = [[1, 2, 3], [4, 5, 6]];
+
+        let paths = MembershipPath::from_array(array);
+
+        assert_eq!(paths.len(), 2);
+        assert_eq!(paths[0].clone().as_vec(), vec![1, 2, 3]);
+        assert_eq!(paths[1].clone().as_vec(), vec![4, 5, 6]);
     }
 }

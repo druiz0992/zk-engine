@@ -34,12 +34,12 @@ pub mod rest_api_entry {
             committable::Committable,
             keys::FullKey,
             prover::Prover,
-            storage::{KeyDB, PreimageDB, StoredPreimageInfo, TreeDB},
+            storage::{KeyDB, PreimageDB, StoredPreimageInfo, StoredPreimageInfoVector, TreeDB},
         },
         services::{
-            derive_keys::{generate_keys, UserKeys},
             prover::in_memory_prover::InMemProver,
             storage::in_mem_storage::InMemStorage,
+            user_keys::{generate_keys, UserKeys},
         },
         usecase::{mint::mint_tokens, transfer::transfer_tokens},
     };
@@ -107,7 +107,7 @@ pub mod rest_api_entry {
         pub g_polys: DensePolynomial<P::ScalarField>,
     }
 
-    pub async fn create_mint(
+    async fn create_mint(
         State(db): State<AppState>,
         Json(mint_details): Json<Preimage<PallasConfig>>,
     ) -> Result<Json<Transaction<VestaConfig>>, AppError> {
@@ -166,10 +166,7 @@ pub mod rest_api_entry {
         Ok(Json(transaction))
     }
 
-    pub async fn handle_block(
-        State(db): State<AppState>,
-        Json(block): Json<Block<curves::vesta::Fr>>,
-    ) -> StatusCode {
+    async fn handle_block(State(db): State<AppState>, Json(block): Json<Block<Fr>>) -> StatusCode {
         let mut db = db.state_db.lock().await;
         db.update_preimages(block.clone());
 
@@ -177,7 +174,7 @@ pub mod rest_api_entry {
         StatusCode::CREATED
     }
 
-    pub async fn create_keys(
+    async fn create_keys(
         State(db): State<AppState>,
         Json(mnemonic_str): Json<MnemonicInput>,
     ) -> Result<Json<UserKeys<PallasConfig>>, AppError> {
@@ -192,11 +189,11 @@ pub mod rest_api_entry {
         Ok(Json(keys))
     }
 
-    pub async fn get_preimages(
+    async fn get_preimages(
         State(db): State<AppState>,
     ) -> Result<Json<Vec<PreimageResponse<PallasConfig>>>, AppError> {
         let db_locked = db.state_db.lock().await;
-        let preimages: Vec<StoredPreimageInfo<PallasConfig>> = db_locked.get_all_preimages();
+        let preimages: StoredPreimageInfoVector<PallasConfig> = db_locked.get_all_preimages();
         let keys = preimages
             .iter()
             .map(|x| x.preimage.commitment_hash())
@@ -215,9 +212,9 @@ pub mod rest_api_entry {
 
     // pub async fn get_trees(
     //     State(db): State<WriteDatabase>,
-    // ) -> Result<Json<Vec<StoredPreimageInfo<PallasConfig>>>, AppError> {
+    // ) -> Result<Json<StoredPreimageInfoVector<PallasConfig>>, AppError> {
     //     let db_locked = db.lock().await;
-    //     let trees: Vec<StoredPreimageInfo<PallasConfig>> = db_locked.get_all_trees();
+    //     let trees: StoredPreimageInfoVector<PallasConfig> = db_locked.get_all_trees();
     //     Ok(Json(trees))
     // }
     //
@@ -229,12 +226,12 @@ pub mod rest_api_entry {
     //     Ok(Json(keys))
     // }
 
-    pub async fn create_transfer(
+    async fn create_transfer(
         State(db): State<AppState>,
         Json(transfer_details): Json<TransferInput<PallasConfig>>,
     ) -> Result<Json<Transaction<VestaConfig>>, AppError> {
         let db_locked = db.state_db.lock().await;
-        let stored_preimages: Vec<StoredPreimageInfo<PallasConfig>> = transfer_details
+        let stored_preimages: StoredPreimageInfoVector<PallasConfig> = transfer_details
             .commitments_to_use
             .iter()
             .map(|key| db_locked.get_preimage(*key))

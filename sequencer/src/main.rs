@@ -4,7 +4,7 @@ pub mod ports;
 pub mod services;
 pub mod usecase;
 
-use common::crypto::poseidon::{self, Poseidon};
+use common::crypto::poseidon::Poseidon;
 use curves::{pallas::PallasConfig, vesta::VestaConfig};
 use jf_plonk::{
     nightfall::PlonkIpaSnark,
@@ -37,8 +37,8 @@ fn main() {
         .into_iter()
         .zip([CircuitType::Mint, CircuitType::Transfer].into_iter())
         .map(|(pk, circuit_type)| {
-            prover.store_vk(circuit_type, pk.vk.clone());
-            pk.vk
+            prover.store_vk(circuit_type, pk.1.clone());
+            pk.1
         })
         .collect::<Vec<_>>();
 

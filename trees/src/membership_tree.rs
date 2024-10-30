@@ -49,7 +49,8 @@ pub trait MembershipTree<const H: usize>: AppendTree<H> {
         }
 
         let mut curr_position = Position::new(leaf_index, 0);
-        let mut witness_path = MembershipPath::new(self.sibling_node(curr_position));
+        let mut witness_path = MembershipPath::new();
+        witness_path.append(self.sibling_node(curr_position));
 
         for _i in 1..H {
             // Move up one level in the tree

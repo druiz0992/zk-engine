@@ -9,7 +9,6 @@ pub mod utils {
 
     use ark_ec::{pairing::Pairing, short_weierstrass::SWCurveConfig, CurveGroup};
 
-    use ark_ff::PrimeField;
     use ark_poly::univariate::DensePolynomial;
     use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
     use curves::{pallas::PallasConfig, vesta::VestaConfig};

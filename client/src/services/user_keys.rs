@@ -1,29 +1,22 @@
 use ark_ec::{
     short_weierstrass::{Affine, SWCurveConfig},
-    CurveConfig, CurveGroup,
+    CurveConfig,
 };
-use ark_ff::{Field, PrimeField};
+use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::str::FromStr;
 use bip32::{Mnemonic, XPrv};
-use common::crypto::poseidon::{constants::PoseidonParams, Poseidon};
+use common::crypto::poseidon::constants::PoseidonParams;
+use common::derived_keys::DerivedKeys;
 use derivative::Derivative;
-use jf_utils::{field_switching, fq_to_fr_with_mask};
+use jf_utils::field_switching;
 use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
+use std::convert::From;
 
 use crate::{
     domain::{ark_de, ark_se},
     ports::keys::{FullKey, OwnershipKey, SpendingKey},
 };
-
-/// Prefix for hashes for zkp private ket and nullifier
-/// PRIVATE_KEY_PREFIX = keccak256('zkpPrivateKey'), need to update for Pasta
-const PRIVATE_KEY_PREFIX: &str =
-    "2708019456231621178814538244712057499818649907582893776052749473028258908910";
-/// PRIVATE_KEY_PREFIX = keccak256('nullifierKey'), need to update for Pasta
-const NULLIFIER_PREFIX: &str =
-    "7805187439118198468809896822299973897593108379494079213870562208229492109015";
 
 #[derive(
     Serialize, Deserialize, Derivative, CanonicalSerialize, CanonicalDeserialize, Default, Debug,
@@ -69,26 +62,52 @@ where
     <P as CurveConfig>::BaseField:
         PoseidonParams<Field = <P as CurveConfig>::BaseField> + PrimeField,
 {
-    let poseidon = Poseidon::<P::BaseField>::new();
     let seed = mnemonic.to_seed("");
     let root_key_big_int = BigUint::from_bytes_le(&XPrv::new(&seed)?.to_bytes()[1..]);
     let root_key_fr = P::ScalarField::from(root_key_big_int);
     let root_key = field_switching(&root_key_fr);
-    let pk_prefix = P::BaseField::from_str(PRIVATE_KEY_PREFIX).map_err(|_| bip32::Error::Crypto)?;
-    let nullifier_prefix =
-        P::BaseField::from_str(NULLIFIER_PREFIX).map_err(|_| bip32::Error::Crypto)?;
-    let private_key = poseidon.hash_unchecked(vec![root_key, pk_prefix]);
-    let private_key_bn: BigUint = private_key.into();
-    let mut private_key_bytes = private_key_bn.to_bytes_le();
-    private_key_bytes.truncate(31);
-    let private_key_trunc = P::ScalarField::from_le_bytes_mod_order(&private_key_bytes);
-    let nullifier_key = poseidon.hash_unchecked(vec![root_key, nullifier_prefix]);
-    let public_key = (P::GENERATOR * private_key_trunc).into_affine();
+    let derived_keys = DerivedKeys::new(root_key).map_err(|_| bip32::Error::Crypto)?;
 
     Ok(UserKeys {
         root_key,
-        private_key: private_key_trunc,
-        nullifier_key,
-        public_key,
+        private_key: derived_keys.private_key,
+        nullifier_key: derived_keys.nullifier_key,
+        public_key: derived_keys.public_key,
     })
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use bip32::Mnemonic;
+
+    use curves::pallas::PallasConfig;
+
+    #[test]
+    fn test_generate_valid_keys() {
+        let mnemonic_str = "pact gun essay three dash seat page silent slogan hole huge harvest awesome fault cute alter boss thank click menu service quarter gaze salmon";
+        let mnemonic = Mnemonic::new(mnemonic_str, bip32::Language::English).unwrap();
+        generate_keys::<PallasConfig>(mnemonic).expect("Should be able to generate new keys");
+    }
+
+    #[test]
+    fn test_serialization() {
+        let mnemonic_str = "pact gun essay three dash seat page silent slogan hole huge harvest awesome fault cute alter boss thank click menu service quarter gaze salmon";
+        let mnemonic = Mnemonic::new(mnemonic_str, bip32::Language::English).unwrap();
+        let keys =
+            generate_keys::<PallasConfig>(mnemonic).expect("Should be able to generate new keys");
+
+        let serialized = serde_json::to_string(&keys).expect("Failed to serialize UserKeys");
+
+        // Deserialize back to UserKeys
+        let deserialized: UserKeys<PallasConfig> =
+            serde_json::from_str(&serialized).expect("Failed to deserialize UserKeys");
+
+        // Assert that the original and deserialized instances are equal
+        assert_eq!(keys.root_key, deserialized.root_key);
+        assert_eq!(keys.private_key, deserialized.private_key);
+        assert_eq!(keys.nullifier_key, deserialized.nullifier_key);
+        assert_eq!(keys.public_key, deserialized.public_key);
+    }
 }

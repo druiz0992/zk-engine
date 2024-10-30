@@ -1,18 +1,10 @@
 mod gate;
-mod poseidon_constants;
 use ark_ff::{PrimeField, Zero};
 use common::crypto::poseidon::constants::PoseidonParams;
 use jf_relation::{errors::CircuitError, Circuit, PlonkCircuit, Variable};
 
 use self::gate::{FullRoundGate, PartialRoundGate};
 
-pub const MAX_INPUT_LEN: usize = 16;
-
-// pub trait PoseidonParams: PrimeField {
-//     const N_ROUND_FULL: usize;
-//     const N_ROUNDS_PARTIAL: [usize; MAX_INPUT_LEN];
-// }
-//
 pub trait PoseidonGadget<T, P> {
     fn ark(&mut self, state: T, constants: &[P], it: usize) -> Result<T, CircuitError>;
     fn sbox(

@@ -5,7 +5,6 @@ pub mod in_memory_prover {
         CurveConfig, CurveGroup,
     };
     use ark_poly::univariate::DensePolynomial;
-    use ark_std::str::FromStr;
     use jf_plonk::{
         nightfall::{
             ipa_structs::{Proof, ProvingKey, VerifyingKey},
@@ -24,10 +23,8 @@ pub mod in_memory_prover {
     };
     use std::{collections::HashMap, time::Instant};
 
-    use crate::{
-        domain::{CircuitInputs, CircuitType},
-        ports::prover::Prover,
-    };
+    use crate::{domain::CircuitType, ports::prover::Prover};
+    use plonk_prover::client::circuits::circuit_inputs::CircuitInputs;
 
     pub struct InMemProver<V: Pairing>
     where
@@ -55,9 +52,7 @@ pub mod in_memory_prover {
         <V::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = V::BaseField>,
     {
         fn default() -> Self {
-            Self {
-                key_storage: HashMap::new(),
-            }
+            InMemProver::new()
         }
     }
 
@@ -89,46 +84,10 @@ pub mod in_memory_prover {
             P: SWCurveConfig<BaseField = V::ScalarField>,
             <P as CurveConfig>::BaseField: KemDemParams<Field = V::ScalarField>,
         {
-            /// Prefix for hashes for zkp private ket and nullifier
-            /// PRIVATE_KEY_PREFIX = keccak256('zkpPrivateKey'), need to update for Pasta
-            const PRIVATE_KEY_PREFIX: &str =
-                "2708019456231621178814538244712057499818649907582893776052749473028258908910";
-            /// PRIVATE_KEY_PREFIX = keccak256('nullifierKey'), need to update for Pasta
-            const NULLIFIER_PREFIX: &str =
-                "7805187439118198468809896822299973897593108379494079213870562208229492109015";
-
-            let pk_prefix = P::BaseField::from_str(PRIVATE_KEY_PREFIX)
-                .map_err(|_| bip32::Error::Crypto)
-                .unwrap();
-            let nullifier_prefix = P::BaseField::from_str(NULLIFIER_PREFIX)
-                .map_err(|_| bip32::Error::Crypto)
-                .unwrap();
-
+            // Convert the Vec to an array, checking for exactly 8 elements
             let mut circuit = match circuit_type {
-                CircuitType::Mint => mint_circuit::<P, V, 1>(
-                    [circuit_inputs.token_values[0]],
-                    [circuit_inputs.token_ids[0]],
-                    [circuit_inputs.token_salts[0]],
-                    [circuit_inputs.recipients[0].as_affine()],
-                )?,
-                CircuitType::Transfer => transfer_circuit::<P, V, 1, 1, 8>(
-                    [circuit_inputs.old_token_values[0]],
-                    [circuit_inputs.old_token_salts[0]],
-                    [circuit_inputs.membership_path[0]
-                        .clone()
-                        .try_into()
-                        .unwrap()],
-                    [circuit_inputs.membership_path_index[0]],
-                    [circuit_inputs.commitment_tree_root[0]],
-                    [circuit_inputs.token_values[0]],
-                    [circuit_inputs.token_salts[0]],
-                    circuit_inputs.token_ids[0],
-                    circuit_inputs.recipients[0].as_affine(),
-                    circuit_inputs.root_key,
-                    circuit_inputs.ephemeral_key,
-                    pk_prefix,
-                    nullifier_prefix,
-                )?,
+                CircuitType::Mint => mint_circuit::<P, V, 1>(circuit_inputs)?,
+                CircuitType::Transfer => transfer_circuit::<P, V, 1, 1, 8>(circuit_inputs)?,
                 _ => panic!("Wrong circuit type"),
             };
             circuit.finalize_for_arithmetization()?;
@@ -147,7 +106,7 @@ pub mod in_memory_prover {
             };
             ark_std::println!("Preprocess done: {:?}", now.elapsed());
 
-            let public_inputs = circuit.public_input()?;
+            let _public_inputs = circuit.public_input()?;
             let now = Instant::now();
 
             let (proof, g_poly, _) = PlonkIpaSnark::<V>::prove_for_partial::<
@@ -183,5 +142,82 @@ pub mod in_memory_prover {
         fn get_pk(&self, circuit_type: CircuitType) -> Option<&ProvingKey<V>> {
             self.key_storage.get(&circuit_type.to_string())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{InMemProver, Prover};
+    use plonk_prover::client::circuits::transfer::TransferCircuit;
+
+    use crate::domain::CircuitType;
+    use curves::pallas::PallasConfig;
+    use curves::vesta::VestaConfig;
+    use plonk_prover::utils::key_gen::{generate_client_pks_and_vks, generate_dummy_mint_inputs};
+
+    #[test]
+    fn test_new_initialization() {
+        let prover: InMemProver<VestaConfig> = InMemProver::new();
+        assert!(
+            prover.key_storage.is_empty(),
+            "Key storage should be empty on initialization"
+        );
+    }
+
+    #[test]
+    fn test_default_initialization() {
+        let prover: InMemProver<VestaConfig> = InMemProver::default();
+        assert!(
+            prover.key_storage.is_empty(),
+            "Key storage should be empty on initialization"
+        );
+    }
+
+    #[test]
+    fn test_store_pk() {
+        let mut prover: InMemProver<VestaConfig> = InMemProver::default();
+        let pks = generate_client_pks_and_vks::<PallasConfig, VestaConfig, VestaConfig>().unwrap();
+        prover.store_pk(CircuitType::Mint, pks[0].0.clone());
+        prover.store_pk(CircuitType::Transfer, pks[1].0.clone());
+
+        let mint_pk = prover.get_pk(CircuitType::Mint).unwrap();
+        assert_eq!(mint_pk, &pks[0].0.clone());
+
+        let transfer_pk = prover.get_pk(CircuitType::Transfer).unwrap();
+        assert_eq!(transfer_pk, &pks[1].0.clone());
+    }
+
+    #[test]
+    fn test_prove_and_verify_mint() {
+        let pks = generate_client_pks_and_vks::<PallasConfig, VestaConfig, VestaConfig>().unwrap();
+        let dummy_inputs = generate_dummy_mint_inputs::<PallasConfig, VestaConfig, VestaConfig>();
+
+        let result = <InMemProver<VestaConfig> as Prover<_, _>>::prove(
+            CircuitType::Mint,
+            dummy_inputs,
+            None,
+        );
+        assert!(
+            result.is_ok(),
+            "Proof generation should succeed for valid inputs"
+        );
+
+        let (proof, public_inputs, _, _) = result.unwrap();
+        let vk = pks[0].1.clone();
+        let is_valid = <InMemProver<VestaConfig> as Prover<_, _>>::verify(vk, public_inputs, proof);
+
+        assert!(is_valid, "Verification should succeed for a valid proof");
+    }
+
+    #[test]
+    fn test_prove_and_verify_transfer() {
+        let transfer_circuit: TransferCircuit<PallasConfig, VestaConfig, VestaConfig> =
+            TransferCircuit::new().unwrap();
+        let result = <InMemProver<VestaConfig> as Prover<_, _>>::prove(
+            CircuitType::Transfer,
+            transfer_circuit.get_inputs(),
+            Some(&transfer_circuit.get_proving_key()),
+        );
+        assert!(result.is_err(), "Proof generation should fail");
     }
 }

@@ -8,12 +8,16 @@ use crate::{
         utils::StoredProof,
     },
 };
-use ark_ec::{pairing::Pairing, short_weierstrass::SWCurveConfig, CurveGroup};
+use ark_ec::{
+    pairing::Pairing,
+    short_weierstrass::{Affine, SWCurveConfig},
+    CurveGroup,
+};
 use ark_ff::Zero;
 use ark_std::UniformRand;
 use common::crypto::poseidon::Poseidon;
 use curves::{
-    pallas::{Affine, Fq, Fr, PallasConfig},
+    pallas::{Fq, Fr, PallasConfig},
     vesta::VestaConfig,
 };
 use jf_plonk::{
@@ -87,18 +91,21 @@ pub fn tree_generator(
     (vk_tree, commitment_tree, nullifier_tree, global_root_tree)
 }
 
-pub fn transfer_circuit_helper_generator<const C: usize, const N: usize>(
+use crate::client::circuits::circuit_inputs::CircuitInputs;
+use common::keypair::PublicKey;
+use trees::MembershipPath;
+
+pub fn transfer_circuit_helper_generator<const C: usize, const N: usize, const D: usize>(
     value: [Fq; N],
-    old_sib_path: [[Fq; 8]; N],
+    old_sib_path: [[Fq; D]; N],
     root: [Fq; N],
     old_leaf_index: [u64; N],
 ) -> (PlonkCircuit<Fq>, ([Fq; N], [Fq; C], [Fq; 2], [Fq; 3])) {
+    let old_sib_path = MembershipPath::from_array(old_sib_path);
+
     let recipient_public_key = Affine::rand(&mut test_rng());
-    let ephemeral_key = Fq::rand(&mut test_rng());
     let token_id = Fq::from_str("2").unwrap();
     let root_key = Fq::rand(&mut test_rng());
-    let private_key_domain = Fq::from_str("1").unwrap();
-    let nullifier_key_domain = Fq::from_str("2").unwrap();
 
     let token_nonce = Fq::from(3u32);
     let indices = old_leaf_index
@@ -114,27 +121,27 @@ pub fn transfer_circuit_helper_generator<const C: usize, const N: usize>(
         new_values[0] = total_value;
     }
 
-    let circuit = transfer_circuit::<PallasConfig, VestaConfig, N, C, 8>(
-        value,
-        [token_nonce; N],
-        old_sib_path.try_into().unwrap(),
-        indices.clone().try_into().unwrap(),
-        root,
-        new_values,
-        indices[0..C].try_into().unwrap(),
-        token_id,
-        recipient_public_key,
-        root_key,
-        ephemeral_key,
-        private_key_domain,
-        nullifier_key_domain,
-    )
-    .unwrap();
+    let circuit_inputs = CircuitInputs::<PallasConfig, C, N, D>::new()
+        .add_old_token_values(value.to_vec())
+        .add_old_token_salts(vec![token_nonce; N])
+        .add_membership_path(old_sib_path)
+        .add_membership_path_index(indices.clone())
+        .add_commitment_tree_root(root.to_vec())
+        .add_token_values(new_values.to_vec())
+        .add_token_salts(indices[0..C].to_vec())
+        .add_token_ids(vec![token_id; 1])
+        .add_recipients(vec![PublicKey::from_affine(recipient_public_key)])
+        .add_root_key(root_key)
+        .add_ephemeral_key(Fq::rand(&mut test_rng()))
+        .build()
+        .unwrap();
+
+    let circuit = transfer_circuit::<PallasConfig, VestaConfig, C, N, D>(circuit_inputs).unwrap();
 
     let public_inputs = circuit.public_input().unwrap();
-    let len = public_inputs.len();
     assert!(circuit.check_circuit_satisfiability(&public_inputs).is_ok());
 
+    let len = public_inputs.len();
     let client_input = (
         public_inputs[N + 1..=2 * N].try_into().unwrap(), // nullifiers
         public_inputs[2 * N + 1..=2 * N + C].try_into().unwrap(), // new commitments
@@ -144,8 +151,12 @@ pub fn transfer_circuit_helper_generator<const C: usize, const N: usize>(
     (circuit, client_input)
 }
 
-pub fn base_circuit_helper_generator<const I: usize, const C: usize, const N: usize>(
-) -> StoredProof<PallasConfig, VestaConfig> {
+pub fn base_circuit_helper_generator<
+    const I: usize,
+    const C: usize,
+    const N: usize,
+    const D: usize,
+>() -> StoredProof<PallasConfig, VestaConfig> {
     // Below taken from test_base_rollup_helper_transfer
     let poseidon = Poseidon::<Fq>::new();
     let root_key = Fq::rand(&mut test_rng());
@@ -186,7 +197,7 @@ pub fn base_circuit_helper_generator<const I: usize, const C: usize, const N: us
             })
             .collect::<Vec<_>>();
         let prev_commitment_tree = Tree::<Fq, 8>::from_leaves(mint_commitments.clone());
-        let mut old_sib_paths: [[Fq; 8]; N] = [[Fq::zero(); 8]; N];
+        let mut old_sib_paths: [[Fq; D]; N] = [[Fq::zero(); D]; N];
         for j in 0..N {
             old_sib_paths[j] = prev_commitment_tree
                 .membership_witness(j)
@@ -194,7 +205,7 @@ pub fn base_circuit_helper_generator<const I: usize, const C: usize, const N: us
                 .try_into()
                 .unwrap();
         }
-        let (mut transfer_circuit, transfer_inputs) = transfer_circuit_helper_generator::<C, N>(
+        let (mut transfer_circuit, transfer_inputs) = transfer_circuit_helper_generator::<C, N, D>(
             mint_values,
             old_sib_paths,
             [prev_commitment_tree.root(); N],
@@ -384,12 +395,16 @@ pub fn base_circuit_helper_generator<const I: usize, const C: usize, const N: us
     }
 }
 
-pub fn bounce_circuit_helper_generator<const I: usize, const N: usize, const C: usize>(
-) -> StoredProof<VestaConfig, PallasConfig> {
+pub fn bounce_circuit_helper_generator<
+    const I: usize,
+    const N: usize,
+    const C: usize,
+    const D: usize,
+>() -> StoredProof<VestaConfig, PallasConfig> {
     // Below taken from bounce_test_helper
     let mut rng = test_rng();
     ark_std::println!("Creating Bounce Circuit");
-    let stored_proof_base = base_circuit_helper_generator::<I, C, N>();
+    let stored_proof_base = base_circuit_helper_generator::<I, C, N, D>();
     let (global_public_inputs, subtree_public_inputs, passthrough_instance, _) =
         stored_proof_base.pub_inputs;
     let (mut bounce_circuit, public_outputs) = bounce_circuit::<PallasConfig, VestaConfig>(
@@ -461,11 +476,15 @@ pub fn bounce_circuit_helper_generator<const I: usize, const N: usize, const C: 
     }
 }
 
-pub fn merge_circuit_helper_generator<const I: usize, const N: usize, const C: usize>(
-) -> StoredProof<PallasConfig, VestaConfig> {
+pub fn merge_circuit_helper_generator<
+    const I: usize,
+    const N: usize,
+    const C: usize,
+    const D: usize,
+>() -> StoredProof<PallasConfig, VestaConfig> {
     // Below taken from merge_test_helper
     let mut rng = test_rng();
-    let stored_bounce = bounce_circuit_helper_generator::<I, C, N>();
+    let stored_bounce = bounce_circuit_helper_generator::<I, C, N, D>();
     let stored_bounce_2 = stored_bounce.clone();
     let (global_public_inputs, subtree_pi_1, passthrough_instance_1, instance_1) =
         stored_bounce.pub_inputs;

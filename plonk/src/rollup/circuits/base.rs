@@ -83,7 +83,7 @@ where
     let global_commitment_root_var = circuit.create_public_variable(global_commitment_root)?;
     let global_vk_root_var = circuit.create_public_variable(global_vk_root)?;
     // This is the mutated nullifier root that is validated against with each input
-    let mut nullifier_new_root = circuit.create_public_variable(global_nullifier_root)?;
+    let nullifier_new_root = circuit.create_public_variable(global_nullifier_root)?;
     // This is the mutated leaf_count that doubles as the insertion point
     let mut leaf_count = circuit.create_public_variable(global_nullifier_leaf_count)?;
     // This will hold the instances per PCS
@@ -637,6 +637,10 @@ pub mod base_test {
     use crate::rollup::circuits::utils::StoredProof;
 
     use super::{base_rollup_circuit, ClientInput};
+    use crate::client::circuits::circuit_inputs::CircuitInputs;
+    use common::derived_keys::{self, DerivedKeys};
+    use common::keypair::{PrivateKey, PublicKey};
+    use trees::MembershipPath;
     #[test]
     fn test_base_circuit() {
         test_base_rollup_helper_mint::<2, 2>();
@@ -778,17 +782,9 @@ pub mod base_test {
     pub fn test_base_rollup_helper_transfer<const I: usize, const N: usize, const C: usize>(
     ) -> StoredProof<PallasConfig, VestaConfig> {
         // Prepare transfer preamble (i.e. create fake mints)
-        let poseidon = Poseidon::<Fq>::new();
         let root_key = Fq::rand(&mut test_rng());
-        let private_key_domain = Fq::from_str("1").unwrap();
-        let private_key: Fq = Poseidon::<Fq>::new()
-            .hash(vec![root_key, private_key_domain])
-            .unwrap();
-        let private_key_bn: BigUint = private_key.into();
-        let mut private_key_bytes = private_key_bn.to_bytes_le();
-        private_key_bytes.truncate(31);
-
-        let private_key_fr = Fr::from_le_bytes_mod_order(&private_key_bytes);
+        let derived_keys = DerivedKeys::<PallasConfig>::new(root_key).unwrap();
+        let poseidon = Poseidon::<Fq>::new();
 
         let mut rng = test_rng();
         let mut client_inputs = vec![];
@@ -796,11 +792,11 @@ pub mod base_test {
         let mut nullifier_tree = IndexedMerkleTree::<Fr, 32>::new();
         let mut init_nullifier_root = Fr::zero();
         let mut g_polys = vec![];
+        let token_owner = derived_keys.public_key;
 
         for i in 0..I {
             let token_id = Fq::from_str("2").unwrap();
             let token_nonce = Fq::from(3u32);
-            let token_owner = (PallasConfig::GENERATOR * private_key_fr).into_affine();
 
             let mint_values: [Fq; N] =
                 ark_std::array::from_fn(|index| Fq::from((index + i * N) as u32));
@@ -1312,12 +1308,11 @@ pub mod base_test {
         root: [Fq; N],
         old_leaf_index: [u64; N],
     ) -> (PlonkCircuit<Fq>, ([Fq; N], [Fq; C], [Fq; 2], [Fq; 3])) {
+        let old_sib_path = MembershipPath::from_array(old_sib_path);
+
         let recipient_public_key = Affine::rand(&mut test_rng());
-        let ephemeral_key = Fq::rand(&mut test_rng());
         let token_id = Fq::from_str("2").unwrap();
         let root_key = Fq::rand(&mut test_rng());
-        let private_key_domain = Fq::from_str("1").unwrap();
-        let nullifier_key_domain = Fq::from_str("2").unwrap();
 
         let token_nonce = Fq::from(3u32);
         let indices = old_leaf_index
@@ -1333,27 +1328,28 @@ pub mod base_test {
             new_values[0] = total_value;
         }
 
-        let circuit = transfer_circuit::<PallasConfig, VestaConfig, N, C, 8>(
-            value,
-            [token_nonce; N],
-            old_sib_path.try_into().unwrap(),
-            indices.clone().try_into().unwrap(),
-            root,
-            new_values,
-            indices[0..C].try_into().unwrap(),
-            token_id,
-            recipient_public_key,
-            root_key,
-            ephemeral_key,
-            private_key_domain,
-            nullifier_key_domain,
-        )
-        .unwrap();
+        let circuit_inputs = CircuitInputs::new()
+            .add_old_token_values(value.to_vec())
+            .add_old_token_salts(vec![token_nonce; N])
+            .add_membership_path(old_sib_path)
+            .add_membership_path_index(indices.clone())
+            .add_commitment_tree_root(root.to_vec())
+            .add_token_values(new_values.to_vec())
+            .add_token_salts(indices[0..C].to_vec())
+            .add_token_ids(vec![token_id; C])
+            .add_recipients(vec![PublicKey::from_affine(recipient_public_key)])
+            .add_root_key(root_key)
+            .add_ephemeral_key(Fq::rand(&mut test_rng()))
+            .build()
+            .unwrap();
+
+        let circuit =
+            transfer_circuit::<PallasConfig, VestaConfig, C, N, 8>(circuit_inputs).unwrap();
 
         let public_inputs = circuit.public_input().unwrap();
-        let len = public_inputs.len();
         assert!(circuit.check_circuit_satisfiability(&public_inputs).is_ok());
 
+        let len = public_inputs.len();
         let client_input = (
             public_inputs[N + 1..=2 * N].try_into().unwrap(), // nullifiers
             public_inputs[2 * N + 1..=2 * N + C].try_into().unwrap(), // new commitments
@@ -1411,18 +1407,23 @@ pub mod base_test {
     }
 
     fn mint_circuit_helper_generator<const C: usize>(value: [Fq; C]) -> PlonkCircuit<Fq> {
-        let token_id = [Fq::from(12 as u64); C];
-        let token_nonce = [Fq::from(13 as u64); C];
-        let secret_key = Fq::from_str("4").unwrap();
-        let secret_key_fr = field_switching::<Fq, Fr>(&secret_key);
-        let token_owner = (PallasConfig::GENERATOR * secret_key_fr).into_affine();
-        let circuit = mint_circuit::<PallasConfig, VestaConfig, C>(
-            value,
-            token_id,
-            token_nonce,
-            [token_owner; C],
-        )
-        .unwrap();
+        let token_id = [Fq::from(12 as u64); C].to_vec();
+        let token_nonce = [Fq::from(13 as u64); C].to_vec();
+        let value = value.to_vec();
+        let pk = PrivateKey::from_scalar(Fr::from(1u64));
+        let token_owner = [PublicKey::from_private_key(&pk); C].to_vec();
+
+        let mut circuit_inputs_builder = CircuitInputs::<PallasConfig, C, 0, 0>::new();
+
+        let circuit_inputs = circuit_inputs_builder
+            .add_token_values(value)
+            .add_token_ids(token_id)
+            .add_token_salts(token_nonce)
+            .add_recipients(token_owner)
+            .build()
+            .unwrap();
+
+        let circuit = mint_circuit::<PallasConfig, VestaConfig, C>(circuit_inputs).unwrap();
 
         assert!(circuit
             .check_circuit_satisfiability(&circuit.public_input().unwrap())

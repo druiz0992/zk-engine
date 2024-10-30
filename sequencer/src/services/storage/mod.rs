@@ -49,11 +49,11 @@ pub mod in_mem_sequencer_storage {
     }
 
     impl BlockStorage<curves::vesta::Fr> for InMemStorage {
-        fn get_block(&self, blocknumber: u64) -> Option<Block<curves::vesta::Fr>> {
+        fn get_block(&self, _blocknumber: u64) -> Option<Block<curves::vesta::Fr>> {
             todo!()
         }
 
-        fn insert_block(&mut self, block: Block<curves::vesta::Fr>) {
+        fn insert_block(&mut self, _block: Block<curves::vesta::Fr>) {
             todo!()
         }
 

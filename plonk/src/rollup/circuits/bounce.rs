@@ -114,7 +114,7 @@ pub mod bounce_test {
         structs::AccInstance, utils::StoredProof,
     };
     use ark_ec::pairing::Pairing;
-    use ark_ff::{One, Zero};
+    use ark_ff::Zero;
     use curves::{
         pallas::PallasConfig,
         vesta::{Fq, VestaConfig},

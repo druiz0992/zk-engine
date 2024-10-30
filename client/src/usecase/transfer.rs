@@ -4,14 +4,15 @@ use ark_ec::{
     pairing::Pairing,
     short_weierstrass::{Affine, Projective, SWCurveConfig},
 };
-use common::{crypto::poseidon::constants::PoseidonParams, structs::Transaction};
+use common::structs::Transaction;
 use jf_plonk::nightfall::ipa_structs::ProvingKey;
 use jf_primitives::rescue::RescueParameter;
 use jf_relation::gadgets::ecc::SWToTEConParam;
 use plonk_prover::{client::structs::ClientPubInputs, primitives::circuits::kem_dem::KemDemParams};
 use trees::MembershipPath;
 
-use crate::domain::{CircuitInputs, CircuitType::Transfer, PublicKey};
+use crate::domain::{CircuitType::Transfer, PublicKey};
+use plonk_prover::client::circuits::circuit_inputs::CircuitInputs;
 
 pub fn transfer_tokens<P, V, VSW, Proof>(
     // Token information
@@ -67,9 +68,10 @@ where
         .add_root_key(root_key)
         .add_ephemeral_key(ephemeral_key)
         .add_token_salts(membership_path_index) //only the first salt needs to be the index
-        .build();
+        .build()
+        .map_err(|e| "Error building circuit inputs")?;
 
-    let (proof, pub_inputs, g_polys, pk) =
+    let (proof, pub_inputs, g_polys, _pk) =
         Proof::prove::<P>(Transfer, circuit_inputs, proving_key).unwrap();
 
     let client_pub_inputs: ClientPubInputs<_, 1, 1> = pub_inputs.try_into()?;

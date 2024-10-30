@@ -4,13 +4,14 @@ use ark_ec::{
     pairing::Pairing,
     short_weierstrass::{Affine, Projective, SWCurveConfig},
 };
-use common::{crypto::poseidon::constants::PoseidonParams, structs::Transaction};
+use common::structs::Transaction;
 use jf_plonk::nightfall::ipa_structs::ProvingKey;
 use jf_primitives::rescue::RescueParameter;
 use jf_relation::gadgets::ecc::SWToTEConParam;
 use plonk_prover::{client::structs::ClientPubInputs, primitives::circuits::kem_dem::KemDemParams};
 
-use crate::domain::{CircuitInputs, CircuitType::Mint, PublicKey};
+use crate::domain::{CircuitType::Mint, PublicKey};
+use plonk_prover::client::circuits::circuit_inputs::CircuitInputs;
 
 pub fn mint_tokens<P, V, VSW, Proof>(
     token_values: Vec<V::ScalarField>,
@@ -36,9 +37,10 @@ where
         .add_token_salts(salts)
         .add_token_values(token_values)
         .add_recipients(owners)
-        .build();
+        .build()
+        .map_err(|e| "Error building circuit inputs")?;
 
-    let (proof, pub_inputs, g_polys, pk) =
+    let (proof, pub_inputs, g_polys, _pk) =
         Proof::prove::<P>(Mint, circuit_inputs, proving_key).unwrap();
 
     let client_pub_inputs: ClientPubInputs<_, 0, 1> = pub_inputs.try_into()?;

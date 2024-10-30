@@ -45,7 +45,7 @@ pub mod in_mem_sequencer_prover {
             jf_plonk::nightfall::ipa_structs::Proof<PallasConfig>,
             jf_relation::errors::CircuitError,
         > {
-            let (mut circuit, pi_star) = base_rollup_circuit::<VestaConfig, PallasConfig, 2, 1, 1>(
+            let (mut circuit, _pi_star) = base_rollup_circuit::<VestaConfig, PallasConfig, 2, 1, 1>(
                 client_inputs,
                 global_vk_root,
                 global_nullifier_root,
@@ -68,7 +68,7 @@ pub mod in_mem_sequencer_prover {
             )?;
                 ark_std::println!("SRS size {} done: {:?}", circuit.srs_size()?, now.elapsed());
                 let now = Instant::now();
-                let (pk, vk) = PlonkIpaSnark::<PallasConfig>::preprocess(&srs, &circuit)?;
+                let (pk, _vk) = PlonkIpaSnark::<PallasConfig>::preprocess(&srs, &circuit)?;
                 ark_std::println!("Preprocess done: {:?}", now.elapsed());
                 pk
             };
@@ -79,7 +79,7 @@ pub mod in_mem_sequencer_prover {
                 .check_circuit_satisfiability(&circuit.public_input().unwrap())
                 .is_ok());
 
-            let (proof, g_poly, _) =
+            let (proof, _g_poly, _) =
                 PlonkIpaSnark::<PallasConfig>::prove_for_partial::<_, _, RescueTranscript<Fq>>(
                     &mut rng, &circuit, &pk, None,
                 )?;

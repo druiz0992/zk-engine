@@ -16,15 +16,21 @@ ark-poly="0.4.2"
 ark-serialize= "0.4.2"
 
 # Jellyfish Deps
-jf-plonk = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master", features = ["test-srs"]}
-jf-relation = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
-jf-utils = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
-jf-primitives = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
-curves = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "master"}
+jf-plonk = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test", features = ["test-srs"]}
+jf-relation = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test"}
+jf-utils = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test"}
+jf-primitives = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test"}
+curves = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test"}
+#jf-plonk = {path = "../../jellyfish/plonk", features = ["test-srs"]}
+#jf-relation = {path = "../../jellyfish/relation"}
+#jf-utils = {path = "../../jellyfish/utilities"}
+#jf-primitives = {path = "../../jellyfish/primitives"}
+#curves = {path = "../../jellyfish/curves"}
 
 # poseidon-ark = {git = "https://github.com/arnaucube/poseidon-ark.git", branch = "main"}
 common = {path = "../common"}
 trees = {path = "../trees"}
+macros = {path = "../macros"}
 
 rayon = "1.8.0"
 serde = "1.0.192"
@@ -34,6 +40,7 @@ num-traits = "0.2.17"
 itertools = "0.12.0"
 rand_chacha = "0.3.1"
 rand = "0.8.5"
+derivative = "2.2.0"
 
 [dev-dependencies]
 criterion = "0.5.1"

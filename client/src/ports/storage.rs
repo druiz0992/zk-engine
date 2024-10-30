@@ -33,6 +33,8 @@ pub struct StoredPreimageInfo<E: SWCurveConfig> {
     pub spent: bool,
 }
 
+pub type StoredPreimageInfoVector<E> = Vec<StoredPreimageInfo<E>>;
+
 pub trait PreimageDB {
     type E: SWCurveConfig;
 
@@ -40,8 +42,8 @@ pub trait PreimageDB {
         &self,
         value: <Self::E as CurveConfig>::BaseField,
     ) -> Option<StoredPreimageInfo<Self::E>>;
-    fn get_spendable(&self) -> Option<Vec<StoredPreimageInfo<Self::E>>>;
-    fn get_all_preimages(&self) -> Vec<StoredPreimageInfo<Self::E>>;
+    fn get_spendable(&self) -> Option<StoredPreimageInfoVector<Self::E>>;
+    fn get_all_preimages(&self) -> StoredPreimageInfoVector<Self::E>;
     fn get_preimage(
         &self,
         key: <Self::E as CurveConfig>::BaseField,

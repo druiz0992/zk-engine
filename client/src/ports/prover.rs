@@ -5,13 +5,13 @@ use ark_ec::{
 };
 use ark_ff::PrimeField;
 use ark_poly::univariate::DensePolynomial;
-use common::crypto::poseidon::constants::PoseidonParams;
 use jf_plonk::nightfall::ipa_structs::{Proof, ProvingKey, VerifyingKey};
 use jf_primitives::rescue::RescueParameter;
 use jf_relation::{errors::CircuitError, gadgets::ecc::SWToTEConParam};
 use plonk_prover::primitives::circuits::kem_dem::KemDemParams;
 
-use crate::domain::{CircuitInputs, CircuitType};
+use crate::domain::CircuitType;
+use plonk_prover::client::circuits::circuit_inputs::CircuitInputs;
 
 pub trait Prover<V, VSW>
 where

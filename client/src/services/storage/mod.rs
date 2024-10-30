@@ -11,8 +11,8 @@ pub mod in_mem_storage {
     };
 
     use crate::{
-        ports::storage::{KeyDB, PreimageDB, StoredPreimageInfo, TreeDB},
-        services::derive_keys::UserKeys,
+        ports::storage::{KeyDB, PreimageDB, StoredPreimageInfo, StoredPreimageInfoVector, TreeDB},
+        services::user_keys::UserKeys,
     };
 
     pub struct InMemStorage<VSW, F>
@@ -46,11 +46,11 @@ pub mod in_mem_storage {
     {
         type E = VSW;
 
-        fn get_value(&self, value: VSW::BaseField) -> Option<StoredPreimageInfo<VSW>> {
+        fn get_value(&self, _value: VSW::BaseField) -> Option<StoredPreimageInfo<VSW>> {
             todo!()
         }
 
-        fn get_spendable(&self) -> Option<Vec<StoredPreimageInfo<VSW>>> {
+        fn get_spendable(&self) -> Option<StoredPreimageInfoVector<VSW>> {
             todo!()
         }
 
@@ -68,11 +68,11 @@ pub mod in_mem_storage {
                 return None;
             }
             // Insert returns None if there wasnt a key.
-            let insert = self.preimage_db.insert(key.to_string(), preimage);
+            let _insert = self.preimage_db.insert(key.to_string(), preimage);
             Some(())
         }
 
-        fn get_all_preimages(&self) -> Vec<StoredPreimageInfo<VSW>> {
+        fn get_all_preimages(&self) -> StoredPreimageInfoVector<VSW> {
             let mut v = Vec::new();
             self.preimage_db.values().for_each(|&x| v.push(x.clone()));
             v
