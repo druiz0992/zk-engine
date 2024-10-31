@@ -2,6 +2,7 @@ use ark_ec::{pairing::Pairing, short_weierstrass::SWCurveConfig, CurveGroup};
 use ark_ff::{One, Zero};
 use ark_std::UniformRand;
 use common::crypto::poseidon::Poseidon;
+use common::derived_keys::DerivedKeys;
 use common::keypair::PublicKey;
 use criterion::{criterion_group, criterion_main, Criterion};
 use curves::{
@@ -186,12 +187,8 @@ pub fn benchmark_transfers<const I: usize, const C: usize, const N: usize, const
     // Below taken from test_base_rollup_helper_transfer
     let poseidon = Poseidon::<Fq>::new();
     let root_key = Fq::rand(&mut test_rng());
-    let private_key_domain = Fq::from_str("1").unwrap();
-    let private_key: Fq = Poseidon::<Fq>::new()
-        .hash(vec![root_key, private_key_domain])
-        .unwrap();
-
-    let private_key_fr: Fr = fq_to_fr_with_mask(&private_key);
+    let derived_keys = DerivedKeys::<PallasConfig>::new(root_key).unwrap();
+    let token_owner = derived_keys.public_key;
 
     let mut rng = test_rng();
     let mut client_inputs = vec![];
@@ -206,10 +203,9 @@ pub fn benchmark_transfers<const I: usize, const C: usize, const N: usize, const
     for i in 0..I {
         let token_id = Fq::from_str("2").unwrap();
         let token_nonce = Fq::from(3u32);
-        let token_owner = (PallasConfig::GENERATOR * private_key_fr).into_affine();
 
         let mint_values: [Fq; N] =
-            ark_std::array::from_fn(|index| Fq::from((index + i * N) as u32));
+            ark_std::array::from_fn(|index| Fq::from((index + i * N + 1) as u32));
         let mint_commitments = mint_values
             .into_iter()
             .map(|v| {
@@ -223,7 +219,8 @@ pub fn benchmark_transfers<const I: usize, const C: usize, const N: usize, const
             })
             .collect::<Vec<_>>();
         let prev_commitment_tree = Tree::<Fq, D>::from_leaves(mint_commitments.clone());
-        let mut old_sib_paths: [[Fq; D]; N] = [[Fq::zero(); D]; N];
+        let mut old_sib_paths: [[Fq; 8]; N] = [[Fq::zero(); 8]; N];
+
         for j in 0..N {
             old_sib_paths[j] = prev_commitment_tree
                 .membership_witness(j)
@@ -422,6 +419,5 @@ pub fn benchmark_transfers<const I: usize, const C: usize, const N: usize, const
     });
 }
 
-//criterion_group! {name = benches; config = Criterion::default().significance_level(0.1).sample_size(10);targets = benchmark_mints::<2, 2>, benchmark_transfers::<2, 1, 2, 8>}
-criterion_group! {name = benches; config = Criterion::default().significance_level(0.1).sample_size(10);targets =benchmark_transfers::<2, 1, 2, 8>}
+criterion_group! {name = benches; config = Criterion::default().significance_level(0.1).sample_size(10);targets = benchmark_mints::<2, 2>, benchmark_transfers::<2, 1, 2, 8>}
 criterion_main!(benches);

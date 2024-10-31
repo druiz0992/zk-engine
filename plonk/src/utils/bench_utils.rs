@@ -16,6 +16,7 @@ use ark_ec::{
 use ark_ff::Zero;
 use ark_std::UniformRand;
 use common::crypto::poseidon::Poseidon;
+use common::derived_keys::DerivedKeys;
 use curves::{
     pallas::{Fq, Fr, PallasConfig},
     vesta::VestaConfig,
@@ -97,15 +98,16 @@ use trees::MembershipPath;
 
 pub fn transfer_circuit_helper_generator<const C: usize, const N: usize, const D: usize>(
     value: [Fq; N],
-    old_sib_path: [[Fq; D]; N],
+    old_sib_path: [[Fq; 8]; N],
     root: [Fq; N],
     old_leaf_index: [u64; N],
 ) -> (PlonkCircuit<Fq>, ([Fq; N], [Fq; C], [Fq; 2], [Fq; 3])) {
     let old_sib_path = MembershipPath::from_array(old_sib_path);
 
-    let recipient_public_key = Affine::rand(&mut test_rng());
     let token_id = Fq::from_str("2").unwrap();
     let root_key = Fq::rand(&mut test_rng());
+    let derived_keys = DerivedKeys::new(root_key).unwrap();
+    let token_owner = derived_keys.public_key;
 
     let token_nonce = Fq::from(3u32);
     let indices = old_leaf_index
@@ -130,7 +132,7 @@ pub fn transfer_circuit_helper_generator<const C: usize, const N: usize, const D
         .add_token_values(new_values.to_vec())
         .add_token_salts(indices[0..C].to_vec())
         .add_token_ids(vec![token_id; 1])
-        .add_recipients(vec![PublicKey::from_affine(recipient_public_key)])
+        .add_recipients(vec![PublicKey::from_affine(token_owner)])
         .add_root_key(root_key)
         .add_ephemeral_key(Fq::rand(&mut test_rng()))
         .build()
@@ -160,12 +162,8 @@ pub fn base_circuit_helper_generator<
     // Below taken from test_base_rollup_helper_transfer
     let poseidon = Poseidon::<Fq>::new();
     let root_key = Fq::rand(&mut test_rng());
-    let private_key_domain = Fq::from_str("1").unwrap();
-    let private_key: Fq = Poseidon::<Fq>::new()
-        .hash(vec![root_key, private_key_domain])
-        .unwrap();
-
-    let private_key_fr: Fr = fq_to_fr_with_mask(&private_key);
+    let derived_keys = DerivedKeys::<PallasConfig>::new(root_key).unwrap();
+    let token_owner = derived_keys.public_key;
 
     let mut rng = test_rng();
     let mut client_inputs = vec![];
@@ -180,7 +178,6 @@ pub fn base_circuit_helper_generator<
     for i in 0..I {
         let token_id = Fq::from_str("2").unwrap();
         let token_nonce = Fq::from(3u32);
-        let token_owner = (PallasConfig::GENERATOR * private_key_fr).into_affine();
 
         let mint_values: [Fq; N] =
             ark_std::array::from_fn(|index| Fq::from((index + i * N) as u32));
@@ -197,7 +194,7 @@ pub fn base_circuit_helper_generator<
             })
             .collect::<Vec<_>>();
         let prev_commitment_tree = Tree::<Fq, 8>::from_leaves(mint_commitments.clone());
-        let mut old_sib_paths: [[Fq; D]; N] = [[Fq::zero(); D]; N];
+        let mut old_sib_paths: [[Fq; 8]; N] = [[Fq::zero(); 8]; N];
         for j in 0..N {
             old_sib_paths[j] = prev_commitment_tree
                 .membership_witness(j)

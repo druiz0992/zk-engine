@@ -309,10 +309,11 @@ where
         )?;
         circuit.enforce_equal(calc_commitment_root_var, commitment_root_var)?;
 
-        let nullifier_hash_var = PoseidonGadget::<PoseidonStateVar<3>, V::ScalarField>::hash(
-            &mut circuit,
-            &[nullifier_key_var, old_commitment_hash_var],
-        )?;
+        let nullifier_hash_var =
+            PoseidonGadget::<PoseidonStateVar<POSEIDON_STATE_VAR_LEN3>, V::ScalarField>::hash(
+                &mut circuit,
+                &[nullifier_key_var, old_commitment_hash_var],
+            )?;
         circuit.set_variable_public(nullifier_hash_var)?;
     }
 
