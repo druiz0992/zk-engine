@@ -14,10 +14,8 @@ use jf_plonk::{
 };
 use jf_primitives::pcs::StructuredReferenceString;
 use jf_relation::{Arithmetization, Circuit};
-use jf_utils::{field_switching, fq_to_fr_with_mask, test_rng};
-use plonk_prover::client::circuits::{
-    circuit_inputs::CircuitInputs, client_circuit::ClientCircuit,
-};
+use jf_utils::{field_switching, test_rng};
+use plonk_prover::client::circuits::circuit_inputs::CircuitInputs;
 use plonk_prover::utils::bench_utils::{transfer_circuit_helper_generator, tree_generator};
 use plonk_prover::{
     client::circuits::mint::mint_circuit,
@@ -30,7 +28,9 @@ use trees::{
     tree::AppendTree,
 };
 
-pub fn benchmark_mints<const I: usize, const C: usize>(c: &mut Criterion) {
+pub fn benchmark_mints<const I: usize, const C: usize, const N: usize, const D: usize>(
+    c: &mut Criterion,
+) {
     const D: usize = 0;
     const N: usize = 0;
 
@@ -57,11 +57,10 @@ pub fn benchmark_mints<const I: usize, const C: usize>(c: &mut Criterion) {
             .add_token_ids(token_id.to_vec())
             .add_token_salts(token_nonce.to_vec())
             .add_recipients(vec![PublicKey::from_affine(token_owner); C])
-            .build()
-            .unwrap();
+            .build();
 
         let mut mint_circuit =
-            mint_circuit::<PallasConfig, VestaConfig, C>(circuit_inputs).unwrap();
+            mint_circuit::<PallasConfig, VestaConfig, C, N, D>(circuit_inputs).unwrap();
 
         mint_circuit.finalize_for_arithmetization().unwrap();
         if i == 0 {
@@ -419,5 +418,5 @@ pub fn benchmark_transfers<const I: usize, const C: usize, const N: usize, const
     });
 }
 
-criterion_group! {name = benches; config = Criterion::default().significance_level(0.1).sample_size(10);targets = benchmark_mints::<2, 2>, benchmark_transfers::<2, 1, 2, 8>}
+criterion_group! {name = benches; config = Criterion::default().significance_level(0.1).sample_size(10);targets = benchmark_mints::<2, 2,1,8>, benchmark_transfers::<2, 1, 2, 8>}
 criterion_main!(benches);

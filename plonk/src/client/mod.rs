@@ -10,8 +10,12 @@ pub mod circuits;
 pub mod structs;
 
 pub trait ClientPlonkCircuit<P, V, const C: usize, const N: usize, const D: usize> {
-    fn generate_keys(&self) -> Result<(ProvingKey<V>, VerifyingKey<V>), CircuitError>
+    fn generate_keys(
+        &self,
+        circuit_inputs: CircuitInputs<P, C, N, D>,
+    ) -> Result<(ProvingKey<V>, VerifyingKey<V>), CircuitError>
     where
+        P: SWCurveConfig,
         V: Pairing,
         <<V as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig;
 

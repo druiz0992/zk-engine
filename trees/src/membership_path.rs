@@ -34,6 +34,12 @@ impl<F> MembershipPath<F> {
     }
 }
 
+impl<F> Default for MembershipPath<F> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<F> IntoIterator for MembershipPath<F> {
     type Item = F;
     type IntoIter = std::vec::IntoIter<F>;

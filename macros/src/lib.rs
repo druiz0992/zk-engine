@@ -1,8 +1,7 @@
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
-    parse_str, punctuated::Punctuated, Fields, GenericParam, Generics, ItemFn, ItemImpl,
-    ItemStruct, WhereClause, WherePredicate,
+    parse_str, punctuated::Punctuated, Generics, ItemFn, ItemImpl, ItemStruct, WherePredicate,
 };
 
 #[proc_macro_attribute]

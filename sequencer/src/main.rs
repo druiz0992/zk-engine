@@ -29,13 +29,17 @@ use crate::{
 fn main() {
     let mut db: InMemStorage = InMemStorage::new();
     let mut prover: InMemProver = InMemProver::new();
+    const C: usize = 1;
+    const N: usize = 1;
+    const D: usize = 8;
 
     // Setup Preamble
     ark_std::println!("Generating Keys");
-    let pks = generate_client_pks_and_vks::<PallasConfig, VestaConfig, VestaConfig>().unwrap();
+    let pks =
+        generate_client_pks_and_vks::<PallasConfig, VestaConfig, VestaConfig, C, N, D>().unwrap();
     let vks = pks
         .into_iter()
-        .zip([CircuitType::Mint, CircuitType::Transfer].into_iter())
+        .zip([CircuitType::Mint, CircuitType::Transfer])
         .map(|(pk, circuit_type)| {
             prover.store_vk(circuit_type, pk.1.clone());
             pk.1

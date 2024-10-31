@@ -31,17 +31,19 @@ where
     >,
     Proof: Prover<V, VSW>,
 {
-    let mut circuit_inputs_builder = CircuitInputs::<P>::new();
+    const C: usize = 1;
+    const N: usize = 0;
+    const D: usize = 0;
+    let mut circuit_inputs_builder = CircuitInputs::<P, C, N, D>::new();
     let circuit_inputs = circuit_inputs_builder
         .add_token_ids(token_ids)
         .add_token_salts(salts)
         .add_token_values(token_values)
         .add_recipients(owners)
-        .build()
-        .map_err(|e| "Error building circuit inputs")?;
+        .build();
 
     let (proof, pub_inputs, g_polys, _pk) =
-        Proof::prove::<P>(Mint, circuit_inputs, proving_key).unwrap();
+        Proof::prove::<P, C, N, D>(Mint, circuit_inputs, proving_key).unwrap();
 
     let client_pub_inputs: ClientPubInputs<_, 0, 1> = pub_inputs.try_into()?;
 

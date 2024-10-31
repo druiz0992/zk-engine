@@ -67,9 +67,9 @@ pub mod in_memory_prover {
             ScalarField = <V as Pairing>::ScalarField,
         >,
     {
-        fn prove<P>(
+        fn prove<P, const C: usize, const N: usize, const D: usize>(
             circuit_type: CircuitType,
-            circuit_inputs: CircuitInputs<P>,
+            circuit_inputs: CircuitInputs<P, C, N, D>,
             proving_key: Option<&ProvingKey<V>>,
         ) -> Result<
             (
@@ -86,23 +86,23 @@ pub mod in_memory_prover {
         {
             // Convert the Vec to an array, checking for exactly 8 elements
             let mut circuit = match circuit_type {
-                CircuitType::Mint => mint_circuit::<P, V, 1>(circuit_inputs)?,
-                CircuitType::Transfer => transfer_circuit::<P, V, 1, 1, 8>(circuit_inputs)?,
+                CircuitType::Mint => mint_circuit::<P, V, C, N, D>(circuit_inputs)?,
+                CircuitType::Transfer => transfer_circuit::<P, V, C, N, D>(circuit_inputs)?,
                 _ => panic!("Wrong circuit type"),
             };
             circuit.finalize_for_arithmetization()?;
             let mut rng = &mut jf_utils::test_rng();
             ark_std::println!("Constraint count: {}", circuit.num_gates());
             let now = Instant::now();
-            let pk = if proving_key.is_none() {
+            let pk = if let Some(pkey) = proving_key {
+                pkey.clone()
+            } else {
                 let srs = <PlonkIpaSnark<V> as UniversalSNARK<V>>::universal_setup_for_testing(
                     circuit.srs_size()?,
                     &mut rng,
                 )?;
                 let (pk, _) = PlonkIpaSnark::<V>::preprocess(&srs, &circuit)?;
                 pk
-            } else {
-                proving_key.unwrap().clone()
             };
             ark_std::println!("Preprocess done: {:?}", now.elapsed());
 
@@ -134,9 +134,9 @@ pub mod in_memory_prover {
         }
 
         fn store_pk(&mut self, circuit_type: CircuitType, pk: ProvingKey<V>) {
-            if self.key_storage.get(&circuit_type.to_string()).is_none() {
-                self.key_storage.insert(circuit_type.to_string(), pk);
-            }
+            self.key_storage
+                .entry(circuit_type.to_string())
+                .or_insert(pk);
         }
 
         fn get_pk(&self, circuit_type: CircuitType) -> Option<&ProvingKey<V>> {
@@ -148,7 +148,9 @@ pub mod in_memory_prover {
 #[cfg(test)]
 mod tests {
     use crate::{InMemProver, Prover};
-    use plonk_prover::client::circuits::transfer::TransferCircuit;
+    use plonk_prover::client::circuits::transfer::{
+        build_default_transfer_inputs, TransferCircuit,
+    };
 
     use crate::domain::CircuitType;
     use curves::pallas::PallasConfig;
@@ -175,8 +177,12 @@ mod tests {
 
     #[test]
     fn test_store_pk() {
+        const C: usize = 1;
+        const N: usize = 1;
+        const D: usize = 8;
         let mut prover: InMemProver<VestaConfig> = InMemProver::default();
-        let pks = generate_client_pks_and_vks::<PallasConfig, VestaConfig, VestaConfig>().unwrap();
+        let pks = generate_client_pks_and_vks::<PallasConfig, VestaConfig, VestaConfig, C, N, D>()
+            .unwrap();
         prover.store_pk(CircuitType::Mint, pks[0].0.clone());
         prover.store_pk(CircuitType::Transfer, pks[1].0.clone());
 
@@ -189,8 +195,13 @@ mod tests {
 
     #[test]
     fn test_prove_and_verify_mint() {
-        let pks = generate_client_pks_and_vks::<PallasConfig, VestaConfig, VestaConfig>().unwrap();
-        let dummy_inputs = generate_dummy_mint_inputs::<PallasConfig, VestaConfig, VestaConfig>();
+        const C: usize = 1;
+        const N: usize = 1;
+        const D: usize = 8;
+        let pks = generate_client_pks_and_vks::<PallasConfig, VestaConfig, VestaConfig, C, N, D>()
+            .unwrap();
+        let dummy_inputs =
+            generate_dummy_mint_inputs::<PallasConfig, VestaConfig, VestaConfig, C, N, D>();
 
         let result = <InMemProver<VestaConfig> as Prover<_, _>>::prove(
             CircuitType::Mint,
@@ -211,11 +222,16 @@ mod tests {
 
     #[test]
     fn test_prove_and_verify_transfer() {
-        let transfer_circuit: TransferCircuit<PallasConfig, VestaConfig, VestaConfig> =
-            TransferCircuit::new().unwrap();
+        const C: usize = 2;
+        const N: usize = 2;
+        const D: usize = 8;
+        let transfer_circuit =
+            TransferCircuit::<VestaConfig>::new::<PallasConfig, _, C, N, D>().unwrap();
+        let circuit_inputs =
+            build_default_transfer_inputs::<PallasConfig, VestaConfig, _, C, N, D>().unwrap();
         let result = <InMemProver<VestaConfig> as Prover<_, _>>::prove(
             CircuitType::Transfer,
-            transfer_circuit.get_inputs(),
+            circuit_inputs,
             Some(&transfer_circuit.get_proving_key()),
         );
         assert!(result.is_err(), "Proof generation should fail");

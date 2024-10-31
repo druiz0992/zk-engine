@@ -22,10 +22,11 @@ where
         ScalarField = <V as Pairing>::ScalarField,
     >,
 {
+    #[allow(clippy::type_complexity)]
     // Returns Proofs and Public Inputs
-    fn prove<P>(
+    fn prove<P, const C: usize, const N: usize, const D: usize>(
         circuit_type: CircuitType,
-        circuit_inputs: CircuitInputs<P>,
+        circuit_inputs: CircuitInputs<P, C, N, D>,
         proving_key: Option<&ProvingKey<V>>,
     ) -> Result<
         (

@@ -8,11 +8,7 @@ use crate::{
         utils::StoredProof,
     },
 };
-use ark_ec::{
-    pairing::Pairing,
-    short_weierstrass::{Affine, SWCurveConfig},
-    CurveGroup,
-};
+use ark_ec::pairing::Pairing;
 use ark_ff::Zero;
 use ark_std::UniformRand;
 use common::crypto::poseidon::Poseidon;
@@ -30,7 +26,7 @@ use jf_primitives::pcs::StructuredReferenceString;
 use jf_relation::{
     gadgets::ecc::short_weierstrass::SWPoint, Arithmetization, Circuit, PlonkCircuit,
 };
-use jf_utils::{field_switching, fq_to_fr_with_mask, test_rng};
+use jf_utils::{field_switching, test_rng};
 use std::str::FromStr;
 use trees::{
     membership_tree::{MembershipTree, Tree},
@@ -96,6 +92,7 @@ use crate::client::circuits::circuit_inputs::CircuitInputs;
 use common::keypair::PublicKey;
 use trees::MembershipPath;
 
+#[allow(clippy::type_complexity)]
 pub fn transfer_circuit_helper_generator<const C: usize, const N: usize, const D: usize>(
     value: [Fq; N],
     old_sib_path: [[Fq; 8]; N],
@@ -115,10 +112,10 @@ pub fn transfer_circuit_helper_generator<const C: usize, const N: usize, const D
         .map(|i| Fq::from(*i))
         .collect::<Vec<_>>();
     let total_value = value.iter().fold(Fq::zero(), |acc, x| acc + x);
-    let mut new_values = [Fq::from(0 as u32); C];
+    let mut new_values = [Fq::from(0_u32); C];
     if C > 1 {
-        new_values[0] = total_value - Fq::from(1 as u32);
-        new_values[1] = Fq::from(1 as u32);
+        new_values[0] = total_value - Fq::from(1_u32);
+        new_values[1] = Fq::from(1_u32);
     } else {
         new_values[0] = total_value;
     }
@@ -135,8 +132,7 @@ pub fn transfer_circuit_helper_generator<const C: usize, const N: usize, const D
         .add_recipients(vec![PublicKey::from_affine(token_owner)])
         .add_root_key(root_key)
         .add_ephemeral_key(Fq::rand(&mut test_rng()))
-        .build()
-        .unwrap();
+        .build();
 
     let circuit = transfer_circuit::<PallasConfig, VestaConfig, C, N, D>(circuit_inputs).unwrap();
 
@@ -195,6 +191,7 @@ pub fn base_circuit_helper_generator<
             .collect::<Vec<_>>();
         let prev_commitment_tree = Tree::<Fq, 8>::from_leaves(mint_commitments.clone());
         let mut old_sib_paths: [[Fq; 8]; N] = [[Fq::zero(); 8]; N];
+        #[allow(clippy::needless_range_loop)]
         for j in 0..N {
             old_sib_paths[j] = prev_commitment_tree
                 .membership_witness(j)
@@ -239,7 +236,7 @@ pub fn base_circuit_helper_generator<
         let mut low_paths: [[Fr; 32]; N] = [[Fr::zero(); 32]; N];
         for (j, null) in lifted_nullifiers.iter().enumerate() {
             let low_null = nullifier_tree.find_predecessor(*null);
-            low_nullifiers[j] = low_null.node.clone();
+            low_nullifiers[j] = low_null.node;
             low_paths[j] = nullifier_tree
                 .non_membership_witness(*null)
                 .unwrap()
@@ -339,7 +336,7 @@ pub fn base_circuit_helper_generator<
         client_inputs.try_into().unwrap(),
         vk_tree.root(),
         init_nullifier_root,
-        (initial_nullifier_tree.leaf_count() as u64).into(),
+        initial_nullifier_tree.leaf_count().into(),
         global_comm_tree.root(),
         g_polys.try_into().unwrap(),
         vesta_commit_key.clone(),

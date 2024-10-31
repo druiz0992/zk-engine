@@ -41,10 +41,7 @@ pub mod in_mem_sequencer_storage {
         fn get_all_transactions(&self) -> Vec<Transaction<VestaConfig>> {
             let past_txs = self.past_txs.clone();
             let mempool_txs = self.mempool.clone();
-            past_txs
-                .into_iter()
-                .chain(mempool_txs.into_iter())
-                .collect()
+            past_txs.into_iter().chain(mempool_txs).collect()
         }
     }
 

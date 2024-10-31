@@ -2,7 +2,6 @@ use ark_ec::short_weierstrass::SWCurveConfig;
 use ark_ff::Zero;
 use common::keypair::PublicKey;
 use derivative::Derivative;
-use jf_relation::errors::CircuitError;
 use trees::MembershipPath;
 
 #[derive(Derivative, Default, Debug)]
@@ -90,9 +89,8 @@ where
             ephemeral_key: E::BaseField::zero(),
         }
     }
-    pub fn build(&self) -> Result<Self, CircuitError> {
-        self.check_params()?;
-        Ok(Self {
+    pub fn build(&self) -> Self {
+        Self {
             token_values: self.token_values.clone(),
             token_salts: self.token_salts.clone(),
             token_ids: self.token_ids.clone(),
@@ -105,7 +103,7 @@ where
             recipients: self.recipients.clone(),
             root_key: self.root_key,
             ephemeral_key: self.ephemeral_key,
-        })
+        }
     }
     pub fn add_token_values(&mut self, token_value: Vec<E::BaseField>) -> &mut Self {
         self.token_values = token_value;
@@ -160,44 +158,5 @@ where
     pub fn add_root_key(&mut self, root_key: E::BaseField) -> &mut Self {
         self.root_key = root_key;
         self
-    }
-
-    fn check_params(&self) -> Result<(), CircuitError> {
-        fn check_length(
-            field_name: &str,
-            actual_len: usize,
-            expected_len: usize,
-        ) -> Result<(), CircuitError> {
-            if actual_len != expected_len {
-                Err(CircuitError::ParameterError(format!(
-                    "Incorrect length for {field_name}. Expected {expected_len}, Obtained {actual_len}"
-                )))
-            } else {
-                Ok(())
-            }
-        }
-
-        // Check all fields with their respective expected lengths
-        check_length("token_values", self.token_values.len(), C)?;
-        check_length("token_salts", self.token_salts.len(), C)?;
-        //check_length("token_ids", self.token_ids.len(), C)?;
-        check_length("old_token_values", self.old_token_values.len(), N)?;
-        check_length("old_token_salts", self.old_token_salts.len(), N)?;
-        //check_length("old_token_ids", self.old_token_ids.len(), N)?;
-        check_length("commitment_tree_root", self.commitment_tree_root.len(), N)?;
-        check_length("membership_path_index", self.membership_path_index.len(), N)?;
-        check_length("membership_path", self.membership_path.len(), N)?;
-
-        if !self
-            .membership_path
-            .iter()
-            .all(|inner_vec| inner_vec.path_len() == D)
-        {
-            return Err(CircuitError::ParameterError(format!(
-                "Incorrect length for membership_path elements. Expected {D}",
-            )));
-        }
-
-        Ok(())
     }
 }

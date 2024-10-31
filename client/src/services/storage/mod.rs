@@ -38,6 +38,15 @@ pub mod in_mem_storage {
             }
         }
     }
+    impl<VSW, F> Default for InMemStorage<VSW, F>
+    where
+        VSW: SWCurveConfig<BaseField = F>,
+        F: PrimeField,
+    {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
 
     impl<VSW, F> PreimageDB for InMemStorage<VSW, F>
     where
@@ -74,7 +83,7 @@ pub mod in_mem_storage {
 
         fn get_all_preimages(&self) -> StoredPreimageInfoVector<VSW> {
             let mut v = Vec::new();
-            self.preimage_db.values().for_each(|&x| v.push(x.clone()));
+            self.preimage_db.values().for_each(|&x| v.push(x));
             v
         }
 

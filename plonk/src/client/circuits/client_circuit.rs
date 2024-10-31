@@ -45,7 +45,4 @@ impl<P, V, VSW, const C: usize, const N: usize, const D: usize> ClientCircuit<P,
             verifying_key,
         }
     }
-    pub fn set_inputs(&mut self, circuit_inputs: CircuitInputs<P, C, N, D>) {
-        self.circuit_inputs = circuit_inputs;
-    }
 }

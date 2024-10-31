@@ -1,7 +1,7 @@
 use ark_ec::{
     pairing::Pairing,
     short_weierstrass::{Affine, Projective, SWCurveConfig},
-    CurveConfig,
+    CurveConfig, CurveGroup,
 };
 use ark_ff::PrimeField;
 use jf_plonk::{
@@ -20,7 +20,7 @@ use jf_relation::{
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 
-use super::{circuit_inputs::CircuitInputs, client_circuit::ClientCircuit};
+use super::circuit_inputs::CircuitInputs;
 use crate::{
     client::ClientPlonkCircuit,
     primitives::circuits::{
@@ -55,55 +55,61 @@ const POSEIDON_STATE_VAR_LEN: usize = 6;
 const EPHEMERAL_KEY_LEN: usize = 2;
 const CIPHERTEXT_LEN: usize = 3;
 
-#[client_circuit]
-pub struct MintCircuit<P, V, VSW, const C: usize>(ClientCircuit<P, V, VSW, C, N, D>);
+pub struct MintCircuit<V>
+where
+    V: Pairing,
+    <V::G1 as CurveGroup>::Config: SWCurveConfig,
+{
+    pub proving_key: ProvingKey<V>,
+    pub verifying_key: VerifyingKey<V>,
+}
 
-#[client_circuit]
-impl<P, V, VSW, const C: usize> MintCircuit<P, V, VSW, C> {
-    pub fn new() -> Result<Self, CircuitError> {
-        let circuit_inputs = build_default_inputs::<P, V, VSW, C>()?;
-        let keys = generate_keys::<P, V, VSW, C>(circuit_inputs.clone())?;
+impl<V> MintCircuit<V>
+where
+    V: Pairing,
+    <V::G1 as CurveGroup>::Config: SWCurveConfig,
+{
+    #[client_circuit]
+    pub fn new<P, VSW, const C: usize>() -> Result<Self, CircuitError> {
+        let circuit_inputs = build_default_inputs::<P, V, VSW, C, N, D>()?;
+        let keys = generate_keys::<P, V, VSW, C, N, D>(circuit_inputs.clone())?;
 
-        Ok(MintCircuit(ClientCircuit::new(
-            circuit_inputs,
-            keys.0,
-            keys.1,
-        )))
-    }
-
-    pub fn set_inputs(&mut self, circuit_inputs: CircuitInputs<P, C, N, D>) {
-        self.0.set_inputs(circuit_inputs);
-    }
-
-    pub fn get_inputs(&self) -> CircuitInputs<P, C, N, D> {
-        self.0.circuit_inputs.clone()
+        Ok(MintCircuit {
+            proving_key: keys.0,
+            verifying_key: keys.1,
+        })
     }
 
     pub fn get_proving_key(&self) -> ProvingKey<V> {
-        self.0.proving_key.clone()
+        self.proving_key.clone()
     }
 
     pub fn get_verifying_key(&self) -> VerifyingKey<V> {
-        self.0.verifying_key.clone()
+        self.verifying_key.clone()
     }
 }
 
 #[client_circuit]
-impl<P, V, VSW, const C: usize> ClientPlonkCircuit<P, V, C, 0, 0> for MintCircuit<P, V, VSW, C> {
-    fn generate_keys(&self) -> Result<(ProvingKey<V>, VerifyingKey<V>), CircuitError> {
-        generate_keys::<P, V, VSW, C>(self.0.circuit_inputs.clone())
+impl<P, V, VSW, const C: usize, const N: usize, const D: usize> ClientPlonkCircuit<P, V, C, N, D>
+    for MintCircuit<V>
+{
+    fn generate_keys(
+        &self,
+        circuit_inputs: CircuitInputs<P, C, N, D>,
+    ) -> Result<(ProvingKey<V>, VerifyingKey<V>), CircuitError> {
+        generate_keys::<P, V, VSW, C, N, D>(circuit_inputs)
     }
 
     fn to_plonk_circuit(
         &self,
         circuit_inputs: CircuitInputs<P, C, N, D>,
     ) -> Result<PlonkCircuit<V::ScalarField>, CircuitError> {
-        mint_circuit::<P, V, C>(circuit_inputs)
+        mint_circuit::<P, V, C, N, D>(circuit_inputs)
     }
 }
 
 #[client_circuit]
-fn build_default_inputs<P, V, VSW, const C: usize>(
+fn build_default_inputs<P, V, VSW, const C: usize, const N: usize, const D: usize>(
 ) -> Result<CircuitInputs<P, C, N, D>, CircuitError> {
     let one = P::ScalarField::from(ONE);
     let zero = V::ScalarField::from(ZERO);
@@ -115,7 +121,9 @@ fn build_default_inputs<P, V, VSW, const C: usize>(
         .add_token_ids(vec![zero; C])
         .add_token_salts(vec![zero; C])
         .add_recipients(vec![PublicKey::from_private_key(&pk); C])
-        .build()
+        .build();
+    check_params::<P, V, C, N, D>(&circuit_inputs_builder)?;
+    Ok(circuit_inputs_builder)
 }
 /*
 value: [V::ScalarField; C],
@@ -124,7 +132,7 @@ token_nonce: [V::ScalarField; C],
 token_owner: [Affine<P>; C],
 */
 // C is the number of output commitments
-pub fn mint_circuit<P, V, const C: usize>(
+pub fn mint_circuit<P, V, const C: usize, const N: usize, const D: usize>(
     circuit_inputs: CircuitInputs<P, C, N, D>,
 ) -> Result<PlonkCircuit<V::ScalarField>, CircuitError>
 where
@@ -132,18 +140,7 @@ where
     V: Pairing<ScalarField = P::BaseField>,
     <P as CurveConfig>::BaseField: PrimeField + PoseidonParams<Field = V::ScalarField>,
 {
-    if circuit_inputs.recipients.len() != C {
-        return Err(CircuitError::ParameterError(format!(
-            "Incorrect length for recipients. Expected {C}, Obtained {}",
-            circuit_inputs.recipients.len()
-        )));
-    }
-    if circuit_inputs.token_ids.len() != C {
-        return Err(CircuitError::ParameterError(format!(
-            "Incorrect length for token_ids. Expected {C}, Obtained {}",
-            circuit_inputs.token_ids.len()
-        )));
-    }
+    check_params::<P, V, C, N, D>(&circuit_inputs)?;
 
     // Calculate output hash of the commitment
     let mut circuit = PlonkCircuit::new_turbo_plonk();
@@ -156,7 +153,7 @@ where
     circuit.create_public_variable(nullifier)?;
 
     for i in 0..C {
-        let commitment_preimage_var = vec![
+        let commitment_preimage_var = [
             circuit_inputs.token_values[i],
             circuit_inputs.token_ids[i],
             circuit_inputs.token_salts[i],
@@ -185,10 +182,10 @@ where
 }
 
 #[client_circuit]
-pub fn generate_keys<P, V, VSW, const C: usize>(
+pub fn generate_keys<P, V, VSW, const C: usize, const N: usize, const D: usize>(
     circuit_inputs: CircuitInputs<P, C, N, D>,
 ) -> Result<(ProvingKey<V>, VerifyingKey<V>), CircuitError> {
-    let mut circuit = mint_circuit::<P, V, C>(circuit_inputs)?;
+    let mut circuit = mint_circuit::<P, V, C, N, D>(circuit_inputs)?;
     circuit.finalize_for_arithmetization()?;
 
     let srs_size = circuit.srs_size()?;
@@ -200,6 +197,36 @@ pub fn generate_keys<P, V, VSW, const C: usize>(
     Ok((pk, vk))
 }
 
+fn check_params<P, V, const C: usize, const N: usize, const D: usize>(
+    circuit_inputs: &CircuitInputs<P, C, N, D>,
+) -> Result<(), CircuitError>
+where
+    P: SWCurveConfig,
+    <P as CurveConfig>::BaseField: PrimeField + PoseidonParams<Field = V::ScalarField>,
+    V: Pairing<ScalarField = P::BaseField>,
+{
+    fn check_length(
+        field_name: &str,
+        actual_len: usize,
+        expected_len: usize,
+    ) -> Result<(), CircuitError> {
+        if actual_len != expected_len {
+            Err(CircuitError::ParameterError(format!(
+                "Incorrect length for {field_name}. Expected {expected_len}, Obtained {actual_len}"
+            )))
+        } else {
+            Ok(())
+        }
+    }
+
+    // Check all fields with their respective expected lengths
+    check_length("token_values", circuit_inputs.token_values.len(), C)?;
+    check_length("token_salts", circuit_inputs.token_salts.len(), C)?;
+    check_length("token_ids", circuit_inputs.token_ids.len(), C)?;
+    check_length("recipients", circuit_inputs.recipients.len(), C)?;
+
+    Ok(())
+}
 #[cfg(test)]
 mod test {
     use super::*;
@@ -210,15 +237,13 @@ mod test {
 
     #[test]
     fn test_new_mint_circuit() {
-        MintCircuit::<PallasConfig, VestaConfig, _, 1>::new()
+        MintCircuit::<VestaConfig>::new::<PallasConfig, _, 1>()
             .expect("New mint circuit should be created");
     }
 
     #[test]
     fn test_default_inputs() {
-        let mint_circuit = MintCircuit::<PallasConfig, VestaConfig, _, 1>::new()
-            .expect("New mint circuit should be created");
-        let inputs = mint_circuit.get_inputs();
+        let inputs = build_default_inputs::<PallasConfig, VestaConfig, _, 1, 0, 0>().unwrap();
 
         assert_eq!(inputs.token_values.len(), 1);
         assert_eq!(inputs.token_values[0], Fq::from(0u64));
@@ -237,50 +262,20 @@ mod test {
     }
 
     #[test]
-    fn test_set_inputs() {
-        let mut mint_circuit = MintCircuit::<PallasConfig, VestaConfig, _, 1>::new()
-            .expect("New mint circuit should be created");
-        let mut inputs = mint_circuit.get_inputs();
-
-        inputs.token_values[0] = Fq::from(10u64);
-        inputs.token_ids[0] = Fq::from(10u64);
-        inputs.token_salts[0] = Fq::from(10u64);
-
-        mint_circuit.set_inputs(inputs);
-
-        let test_inputs = mint_circuit.get_inputs();
-
-        assert_eq!(test_inputs.token_values.len(), 1);
-        assert_eq!(test_inputs.token_values[0], Fq::from(10u64));
-
-        assert_eq!(test_inputs.token_ids.len(), 1);
-        assert_eq!(test_inputs.token_ids[0], Fq::from(10u64));
-
-        assert_eq!(test_inputs.token_salts.len(), 1);
-        assert_eq!(test_inputs.token_salts[0], Fq::from(10u64));
-
-        let pk = PrivateKey::<PallasConfig>::from_scalar(Fr::from(1u64));
-        let public_key = PublicKey::from_private_key(&pk);
-
-        assert_eq!(test_inputs.recipients.len(), 1);
-        assert_eq!(test_inputs.recipients[0], public_key);
-    }
-
-    #[test]
     fn test_generate_keys() {
-        let mut mint_circuit = MintCircuit::<PallasConfig, VestaConfig, _, 1>::new()
+        let mint_circuit = MintCircuit::<VestaConfig>::new::<PallasConfig, _, 1>()
             .expect("New mint circuit should be created");
-        let mut inputs = mint_circuit.get_inputs();
+
         let pk = mint_circuit.get_proving_key();
         let vk = mint_circuit.get_verifying_key();
 
+        let mut inputs = build_default_inputs::<PallasConfig, VestaConfig, _, 1, 0, 0>().unwrap();
         inputs.token_values[0] = Fq::from(10u64);
         inputs.token_ids[0] = Fq::from(10u64);
         inputs.token_salts[0] = Fq::from(10u64);
 
-        mint_circuit.set_inputs(inputs);
         let (test_pk, test_vk) = mint_circuit
-            .generate_keys()
+            .generate_keys(inputs)
             .expect("Should be able to generate new circuit keys");
 
         assert_eq!(vk, test_vk);
@@ -289,9 +284,9 @@ mod test {
 
     #[test]
     fn mint_test_default_inputs() -> Result<(), CircuitError> {
-        let mint_circuit = MintCircuit::<PallasConfig, VestaConfig, _, 1>::new()
+        let mint_circuit = MintCircuit::<VestaConfig>::new::<PallasConfig, _, 1>()
             .expect("New mint circuit should be created");
-        let inputs = mint_circuit.get_inputs();
+        let inputs = build_default_inputs::<PallasConfig, VestaConfig, _, 1, 0, 0>().unwrap();
 
         let plonk_mint_circuit = mint_circuit
             .to_plonk_circuit(inputs.clone())
@@ -339,9 +334,9 @@ mod test {
             .add_token_ids(vec![Fq::from(token_id)])
             .add_token_salts(vec![Fq::from(token_nonce)])
             .add_recipients(vec![token_owner])
-            .build()?;
+            .build();
 
-        let mint_circuit = MintCircuit::<PallasConfig, VestaConfig, _, 1>::new()
+        let mint_circuit = MintCircuit::<VestaConfig>::new::<PallasConfig, _, 1>()
             .expect("New mint circuit should be created");
 
         let plonk_mint_circuit = mint_circuit

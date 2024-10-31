@@ -1,7 +1,7 @@
 use ark_ec::{
     pairing::Pairing,
     short_weierstrass::{Affine, Projective, SWCurveConfig},
-    CurveConfig,
+    CurveConfig, CurveGroup,
 };
 use ark_ff::PrimeField;
 
@@ -17,7 +17,6 @@ use jf_relation::{errors::CircuitError, Circuit, PlonkCircuit};
 use jf_relation::{gadgets::ecc::SWToTEConParam, Arithmetization};
 
 use super::circuit_inputs::CircuitInputs;
-use super::client_circuit::ClientCircuit;
 use crate::client::ClientPlonkCircuit;
 use crate::primitives::circuits::{
     kem_dem::{KemDemGadget, KemDemParams, PlainTextVars},
@@ -55,80 +54,62 @@ const POSEIDON_STATE_VAR_LEN3: usize = 3;
 const POSEIDON_STATE_VAR_LEN6: usize = 6;
 const PLAINTEXT_VAR_LEN: usize = 3;
 
-#[client_circuit]
-pub struct TransferCircuit<P, V, VSW, const C: usize, const N: usize, const D: usize>(
-    ClientCircuit<P, V, VSW, C, N, D>,
-);
-
-#[client_circuit]
-impl<P, V, VSW, const C: usize, const N: usize, const D: usize>
-    TransferCircuit<P, V, VSW, C, N, D>
+pub struct TransferCircuit<V>
+where
+    V: Pairing,
+    <V::G1 as CurveGroup>::Config: SWCurveConfig,
 {
-    pub fn new() -> Result<Self, CircuitError> {
-        let circuit_inputs = build_default_inputs::<P, V, VSW, C, N, D>()?;
+    pub proving_key: ProvingKey<V>,
+    pub verifying_key: VerifyingKey<V>,
+}
+
+impl<V> TransferCircuit<V>
+where
+    V: Pairing,
+    <V::G1 as CurveGroup>::Config: SWCurveConfig,
+{
+    #[client_circuit]
+    pub fn new<P, VSW, const C: usize, const N: usize, const D: usize>(
+    ) -> Result<Self, CircuitError> {
+        let circuit_inputs = build_default_transfer_inputs::<P, V, VSW, C, N, D>()?;
         let keys = generate_keys::<P, V, VSW, C, N, D>(circuit_inputs.clone())?;
 
-        Ok(TransferCircuit(ClientCircuit::new(
-            circuit_inputs,
-            keys.0,
-            keys.1,
-        )))
-    }
-
-    pub fn set_inputs(&mut self, circuit_inputs: CircuitInputs<P, C, N, D>) {
-        self.0.set_inputs(circuit_inputs);
-    }
-
-    pub fn get_inputs(&self) -> CircuitInputs<P, C, N, D> {
-        self.0.circuit_inputs.clone()
+        Ok(TransferCircuit {
+            proving_key: keys.0,
+            verifying_key: keys.1,
+        })
     }
 
     pub fn get_proving_key(&self) -> ProvingKey<V> {
-        self.0.proving_key.clone()
+        self.proving_key.clone()
     }
 
     pub fn get_verifying_key(&self) -> VerifyingKey<V> {
-        self.0.verifying_key.clone()
+        self.verifying_key.clone()
     }
 }
 
 #[client_circuit]
 impl<P, V, VSW, const C: usize, const N: usize, const D: usize> ClientPlonkCircuit<P, V, C, N, D>
-    for TransferCircuit<P, V, VSW, C, N, D>
+    for TransferCircuit<V>
 {
-    fn generate_keys(&self) -> Result<(ProvingKey<V>, VerifyingKey<V>), CircuitError> {
-        generate_keys::<P, V, VSW, C, N, D>(self.0.circuit_inputs.clone())
+    fn generate_keys(
+        &self,
+        circuit_inputs: CircuitInputs<P, C, N, D>,
+    ) -> Result<(ProvingKey<V>, VerifyingKey<V>), CircuitError> {
+        generate_keys::<P, V, VSW, C, N, D>(circuit_inputs)
     }
 
     fn to_plonk_circuit(
         &self,
         circuit_inputs: CircuitInputs<P, C, N, D>,
-    ) -> Result<PlonkCircuit<V::ScalarField>, CircuitError>
-    where
-        V: Pairing<ScalarField = P::BaseField>,
-        P: SWCurveConfig,
-        <P as CurveConfig>::BaseField: PrimeField + PoseidonParams<Field = V::ScalarField>,
-    {
+    ) -> Result<PlonkCircuit<V::ScalarField>, CircuitError> {
         transfer_circuit::<P, V, C, N, D>(circuit_inputs)
     }
 }
 
 #[client_circuit]
-pub fn generate_keys<P, V, VSW, const C: usize, const N: usize, const D: usize>(
-    circuit_inputs: CircuitInputs<P, C, N, D>,
-) -> Result<(ProvingKey<V>, VerifyingKey<V>), CircuitError> {
-    let mut rng = ChaChaRng::from_entropy();
-    let mut circuit = transfer_circuit::<P, V, C, N, D>(circuit_inputs)?;
-    circuit.finalize_for_arithmetization()?;
-    let srs_size = circuit.srs_size()?;
-    let srs =
-        <PlonkIpaSnark<V> as UniversalSNARK<V>>::universal_setup_for_testing(srs_size, &mut rng)?;
-    let (pk, vk) = PlonkIpaSnark::<V>::preprocess(&srs, &circuit)?;
-    Ok((pk, vk))
-}
-
-#[client_circuit]
-fn build_default_inputs<P, V, VSW, const C: usize, const N: usize, const D: usize>(
+pub fn build_default_transfer_inputs<P, V, VSW, const C: usize, const N: usize, const D: usize>(
 ) -> Result<CircuitInputs<P, C, N, D>, CircuitError> {
     let one = V::ScalarField::from(ONE);
     let zero = V::ScalarField::from(ZERO);
@@ -183,7 +164,9 @@ fn build_default_inputs<P, V, VSW, const C: usize, const N: usize, const D: usiz
         .add_recipients(vec![PublicKey::from_affine(token_owner)])
         .add_ephemeral_key(ephemeral_key)
         .add_root_key(root)
-        .build()?;
+        .build();
+
+    check_params::<P, V, C, N, D>(&circuit_inputs)?;
 
     Ok(circuit_inputs)
 }
@@ -198,18 +181,7 @@ where
     V: Pairing<ScalarField = P::BaseField>,
     <P as CurveConfig>::BaseField: PrimeField + KemDemParams<Field = V::ScalarField>,
 {
-    if circuit_inputs.recipients.len() != 1 {
-        return Err(CircuitError::ParameterError(format!(
-            "Incorrect length for recipients. Expected: 1, Obtained {}",
-            circuit_inputs.recipients.len()
-        )));
-    }
-    if circuit_inputs.token_ids.len() != 1 {
-        return Err(CircuitError::ParameterError(format!(
-            "Incorrect length for token_ids. Expected: 1 , Obtained {}",
-            circuit_inputs.token_ids.len()
-        )));
-    }
+    check_params::<P, V, C, N, D>(&circuit_inputs)?;
     let mut circuit = PlonkCircuit::new_turbo_plonk();
 
     // Swap_field = false
@@ -347,6 +319,8 @@ where
     // The recipients of these commitments are the same as the sender
     // TODO set to one (and => C < 3 always) as no reason to send yourself multiple change commitments
     // TODO don't provide the change commit value, calc it in circuit
+
+    #[allow(clippy::needless_range_loop)]
     for i in 1..C {
         let commitment_nonce_var = circuit.create_variable(circuit_inputs.token_salts[i])?;
         let commitment_hash_var =
@@ -391,6 +365,73 @@ where
     Ok(circuit)
 }
 
+#[client_circuit]
+pub fn generate_keys<P, V, VSW, const C: usize, const N: usize, const D: usize>(
+    circuit_inputs: CircuitInputs<P, C, N, D>,
+) -> Result<(ProvingKey<V>, VerifyingKey<V>), CircuitError> {
+    let mut rng = ChaChaRng::from_entropy();
+    let mut circuit = transfer_circuit::<P, V, C, N, D>(circuit_inputs)?;
+    circuit.finalize_for_arithmetization()?;
+    let srs_size: usize = circuit.srs_size()?;
+    let srs =
+        <PlonkIpaSnark<V> as UniversalSNARK<V>>::universal_setup_for_testing(srs_size, &mut rng)?;
+    let (pk, vk) = PlonkIpaSnark::<V>::preprocess(&srs, &circuit)?;
+    Ok((pk, vk))
+}
+
+fn check_params<P, V, const C: usize, const N: usize, const D: usize>(
+    circuit_inputs: &CircuitInputs<P, C, N, D>,
+) -> Result<(), CircuitError>
+where
+    P: SWCurveConfig,
+    <P as CurveConfig>::BaseField: PrimeField + PoseidonParams<Field = V::ScalarField>,
+    V: Pairing<ScalarField = P::BaseField>,
+{
+    fn check_length(
+        field_name: &str,
+        actual_len: usize,
+        expected_len: usize,
+    ) -> Result<(), CircuitError> {
+        if actual_len != expected_len {
+            Err(CircuitError::ParameterError(format!(
+                "Incorrect length for {field_name}. Expected {expected_len}, Obtained {actual_len}"
+            )))
+        } else {
+            Ok(())
+        }
+    }
+
+    // Check all fields with their respective expected lengths
+    check_length("token_values", circuit_inputs.token_values.len(), C)?;
+    check_length("token_salts", circuit_inputs.token_salts.len(), C)?;
+    check_length("token_ids", circuit_inputs.token_ids.len(), 1)?;
+    check_length("old_token_values", circuit_inputs.old_token_values.len(), N)?;
+    check_length("old_token_salts", circuit_inputs.old_token_salts.len(), N)?;
+    check_length(
+        "commitment_tree_root",
+        circuit_inputs.commitment_tree_root.len(),
+        N,
+    )?;
+    check_length(
+        "membership_path_index",
+        circuit_inputs.membership_path_index.len(),
+        N,
+    )?;
+    check_length("membership_path", circuit_inputs.membership_path.len(), N)?;
+    check_length("recipients", circuit_inputs.recipients.len(), 1)?;
+
+    if !circuit_inputs
+        .membership_path
+        .iter()
+        .all(|inner_vec| inner_vec.path_len() == D)
+    {
+        return Err(CircuitError::ParameterError(format!(
+            "Incorrect length for membership_path elements. Expected {D}",
+        )));
+    }
+
+    Ok(())
+}
 #[cfg(test)]
 mod test {
     use super::CircuitInputs;
@@ -479,7 +520,7 @@ mod test {
             .add_recipients(vec![PublicKey::from_affine(token_owner)])
             .add_root_key(root_key)
             .add_ephemeral_key(Fq::rand(&mut test_rng()))
-            .build()?;
+            .build();
 
         let circuit =
             super::transfer_circuit::<PallasConfig, VestaConfig, C, N, D>(circuit_inputs)?;

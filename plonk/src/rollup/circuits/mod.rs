@@ -93,7 +93,7 @@ pub mod utils {
         ),
     }
 
-    pub fn serial_to_file<E: Pairing, I: Pairing>(
+    pub fn serial_to_file<E, I>(
         proof: Proof<E>,
         pub_inputs: (
             GlobalPublicInputs<curves::pallas::Fr>,

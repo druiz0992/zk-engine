@@ -30,6 +30,12 @@ pub mod in_mem_sequencer_prover {
         }
     }
 
+    impl Default for InMemProver {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     impl SequencerProver<VestaConfig, PallasConfig, PallasConfig> for InMemProver {
         fn rollup_proof(
             client_inputs: [plonk_prover::rollup::circuits::base::ClientInput<VestaConfig, 1, 1>;
@@ -59,8 +65,8 @@ pub mod in_mem_sequencer_prover {
             let mut rng = &mut jf_utils::test_rng();
             ark_std::println!("Constraint count: {}", circuit.num_gates());
             let now = Instant::now();
-            let pk = if proving_keys.is_some() {
-                proving_keys.unwrap().base_proving_key
+            let pk = if let Some(pkey) = proving_keys {
+                pkey.base_proving_key
             } else {
                 let srs = <PlonkIpaSnark<PallasConfig> as UniversalSNARK<PallasConfig>>::universal_setup_for_testing(
                 circuit.srs_size()?,

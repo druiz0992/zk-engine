@@ -78,9 +78,9 @@ impl<EmbedCurve: SWCurveConfig> Preimage<EmbedCurve> {
     where
         EmbedCurve: SWCurveConfig<BaseField = F>,
     {
-        match self.public_key.as_affine().xy() {
-            Some((x, y)) => Some(vec![self.value, self.token_id, self.salt, *x, *y]),
-            None => None,
-        }
+        self.public_key
+            .as_affine()
+            .xy()
+            .map(|(x, y)| vec![self.value, self.token_id, self.salt, *x, *y])
     }
 }

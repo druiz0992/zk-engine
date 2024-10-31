@@ -1,6 +1,7 @@
 use ark_ec::{short_weierstrass::SWCurveConfig, CurveGroup};
 use ark_std::UniformRand;
 use common::crypto::poseidon::Poseidon;
+use common::derived_keys::DerivedKeys;
 use common::keypair::PublicKey;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use curves::{
@@ -12,7 +13,7 @@ use jf_plonk::{
     transcript::StandardTranscript,
 };
 use jf_relation::{Arithmetization, Circuit};
-use jf_utils::{fq_to_fr_with_mask, test_rng};
+use jf_utils::test_rng;
 use plonk_prover::client::circuits::{
     circuit_inputs::CircuitInputs, mint::mint_circuit, transfer::transfer_circuit,
 };
@@ -36,9 +37,9 @@ pub fn benchmark_mint(c: &mut Criterion) {
                 .add_token_ids(vec![token_id; C])
                 .add_token_salts(vec![token_nonce; C])
                 .add_recipients(vec![PublicKey::from_affine(token_owner); C])
-                .build()
-                .unwrap();
-            let mut circuit = mint_circuit::<PallasConfig, VestaConfig, C>(circuit_inputs).unwrap();
+                .build();
+            let mut circuit =
+                mint_circuit::<PallasConfig, VestaConfig, C, N, D>(circuit_inputs).unwrap();
             circuit.finalize_for_arithmetization().unwrap();
         })
     });
@@ -56,10 +57,9 @@ pub fn benchmark_mint(c: &mut Criterion) {
             .add_token_ids(vec![token_id; C])
             .add_token_salts(vec![token_nonce; C])
             .add_recipients(vec![PublicKey::from_affine(token_owner); C])
-            .build()
-            .unwrap();
+            .build();
 
-        let mut circuit = mint_circuit::<PallasConfig, VestaConfig, C>(circuit_inputs).unwrap();
+        let mut circuit = mint_circuit::<PallasConfig, VestaConfig, C, N, D>(circuit_inputs).unwrap();
         circuit.finalize_for_arithmetization().unwrap();
 
         let srs_size = circuit.srs_size().unwrap();
@@ -92,10 +92,10 @@ pub fn benchmark_mint(c: &mut Criterion) {
                 .add_token_ids(vec![token_id; C])
                 .add_token_salts(vec![token_nonce; C])
                 .add_recipients(vec![PublicKey::from_affine(token_owner); C])
-                .build()
-                .unwrap();
+                .build();
 
-            let mut circuit = mint_circuit::<PallasConfig, VestaConfig, C>(circuit_inputs).unwrap();
+            let mut circuit =
+                mint_circuit::<PallasConfig, VestaConfig, C, N, D>(circuit_inputs).unwrap();
             circuit.finalize_for_arithmetization().unwrap();
         })
     });
@@ -114,10 +114,9 @@ pub fn benchmark_mint(c: &mut Criterion) {
             .add_token_ids(vec![token_id; C])
             .add_token_salts(vec![token_nonce; C])
             .add_recipients(vec![PublicKey::from_affine(token_owner); C])
-            .build()
-            .unwrap();
+            .build();
 
-        let mut circuit = mint_circuit::<PallasConfig, VestaConfig, C>(circuit_inputs).unwrap();
+        let mut circuit = mint_circuit::<PallasConfig, VestaConfig, C, N, D>(circuit_inputs).unwrap();
         circuit.finalize_for_arithmetization().unwrap();
         let srs_size = circuit.srs_size().unwrap();
         let srs =
@@ -141,17 +140,13 @@ pub fn benchmark_transfer(c: &mut Criterion) {
     const D: usize = 1;
 
     let root_key = Fq::rand(&mut test_rng());
-    let private_key_domain = Fq::from_str("1").unwrap();
-    let private_key = Poseidon::<Fq>::new()
-        .hash(vec![root_key, private_key_domain])
-        .unwrap();
-    let private_key_fr: Fr = fq_to_fr_with_mask(&private_key); // must mask to truncate
+    let derived_keys = DerivedKeys::<PallasConfig>::new(root_key).unwrap();
+    let token_owner = derived_keys.public_key;
     let old_commitment_leaf_index = 0u64; //u32::rand(&mut test_rng());
 
     let value = Fq::from_str("1").unwrap();
     let token_id = Fq::from_str("2").unwrap();
     let token_nonce = Fq::from(3u32);
-    let token_owner = (PallasConfig::GENERATOR * private_key_fr).into_affine();
     let old_commitment_hash = Poseidon::<Fq>::new()
         .hash(vec![
             value,
@@ -197,8 +192,7 @@ pub fn benchmark_transfer(c: &mut Criterion) {
                     .add_recipients(black_box(vec![PublicKey::from_affine(token_owner)]))
                     .add_root_key(black_box(root_key))
                     .add_ephemeral_key(black_box(Fq::rand(&mut test_rng())))
-                    .build()
-                    .unwrap();
+                    .build();
                 let mut circuit =
                     transfer_circuit::<PallasConfig, VestaConfig, C, N, D>(circuit_inputs).unwrap();
 
@@ -213,7 +207,7 @@ pub fn benchmark_transfer(c: &mut Criterion) {
     let circuit_inputs = CircuitInputs::new()
         .add_old_token_values(black_box(vec![value]))
         .add_old_token_salts(black_box(vec![token_nonce]))
-        //.add_membership_path(black_box(vec![old_commitment_sibling_path.clone()]))
+        .add_membership_path(black_box(vec![old_commitment_sibling_path.clone()]))
         .add_membership_path_index(black_box(vec![Fq::from(old_commitment_leaf_index)]))
         .add_commitment_tree_root(black_box(vec![root]))
         .add_token_values(black_box(vec![value]))
@@ -222,8 +216,7 @@ pub fn benchmark_transfer(c: &mut Criterion) {
         .add_recipients(black_box(vec![PublicKey::from_affine(token_owner)]))
         .add_root_key(black_box(root_key))
         .add_ephemeral_key(black_box(Fq::rand(&mut test_rng())))
-        .build()
-        .unwrap();
+        .build();
     let mut circuit =
         transfer_circuit::<PallasConfig, VestaConfig, C, N, D>(circuit_inputs).unwrap();
 

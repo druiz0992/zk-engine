@@ -155,7 +155,7 @@ where
     }
 }
 
-impl<E, F> Into<PCSInstance<UnivariateIpaPCS<E>>> for AccInstance<E>
+impl<E, F> From<AccInstance<E>> for PCSInstance<UnivariateIpaPCS<E>>
 where
     E: Pairing<BaseField = F, G1Affine = Affine<<<E as Pairing>::G1 as CurveGroup>::Config>>,
     <<E as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = E::BaseField>,
@@ -163,11 +163,11 @@ where
 
     F: PrimeField,
 {
-    fn into(self) -> PCSInstance<UnivariateIpaPCS<E>> {
+    fn from(val: AccInstance<E>) -> Self {
         PCSInstance::new(
-            Commitment(self.comm.into()),
-            field_switching(&self.eval),
-            field_switching(&self.eval_point),
+            Commitment(val.comm.into()),
+            field_switching(&val.eval),
+            field_switching(&val.eval_point),
         )
     }
 }

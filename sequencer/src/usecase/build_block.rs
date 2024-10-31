@@ -192,7 +192,7 @@ where
         client_inputs.try_into().unwrap(),
         global_state_trees.get_vk_tree().root(),
         global_state_trees.get_global_nullifier_tree().root(),
-        F::from(global_state_trees.get_global_nullifier_tree().leaf_count() as u64),
+        F::from(global_state_trees.get_global_nullifier_tree().leaf_count()),
         global_state_trees.get_global_commitment_tree().root(),
         [Default::default(), Default::default()],
         commit_keys,

@@ -26,7 +26,8 @@ use crate::{
     primitives::circuits::kem_dem::KemDemParams,
 };
 
-pub fn generate_client_pks_and_vks<P, V, VSW>(
+#[allow(clippy::type_complexity)]
+pub fn generate_client_pks_and_vks<P, V, VSW, const C: usize, const D: usize, const N: usize>(
 ) -> Result<Vec<(ProvingKey<V>, VerifyingKey<V>)>, CircuitError>
 where
     V: Pairing<G1Affine = Affine<VSW>, G1 = Projective<VSW>, ScalarField = P::BaseField>,
@@ -40,12 +41,13 @@ where
     P: SWCurveConfig,
     <P as CurveConfig>::BaseField: PrimeField + PoseidonParams<Field = V::ScalarField>,
 {
-    let mink_vk = dummy_mint::<P, V, VSW, 1>()?;
-    let transfer_vk = dummy_transfer::<P, V, VSW, 2>()?;
+    let mink_vk = dummy_mint::<P, V, VSW, C, N, D>()?;
+    let transfer_vk = dummy_transfer::<P, V, VSW, C, N, D>()?;
     Ok(vec![mink_vk, transfer_vk])
 }
 
-pub fn generate_dummy_mint_inputs<P, V, VSW>() -> CircuitInputs<P, 1, 0, 0>
+pub fn generate_dummy_mint_inputs<P, V, VSW, const C: usize, const N: usize, const D: usize>(
+) -> CircuitInputs<P, C, N, D>
 where
     V: Pairing<G1Affine = Affine<VSW>, G1 = Projective<VSW>, ScalarField = P::BaseField>,
     <V as Pairing>::BaseField: RescueParameter + SWToTEConParam,
@@ -64,18 +66,17 @@ where
     let pk = PrivateKey::from_scalar(P::ScalarField::from(1u64));
     let public_key = vec![PublicKey::from_private_key(&pk)];
 
-    let mut circuit_inputs_builder = CircuitInputs::<P, 1, 0, 0>::new();
+    let mut circuit_inputs_builder = CircuitInputs::<P, C, N, D>::new();
     let circuit_inputs = circuit_inputs_builder
         .add_token_values(value)
         .add_token_ids(token_id)
         .add_token_salts(token_salt)
         .add_recipients(public_key)
-        .build()
-        .unwrap();
+        .build();
 
     circuit_inputs
 }
-pub fn dummy_mint<P, V, VSW, const OUT: usize>(
+pub fn dummy_mint<P, V, VSW, const C: usize, const N: usize, const D: usize>(
 ) -> Result<(ProvingKey<V>, VerifyingKey<V>), CircuitError>
 where
     V: Pairing<G1Affine = Affine<VSW>, G1 = Projective<VSW>, ScalarField = P::BaseField>,
@@ -90,8 +91,8 @@ where
     P: SWCurveConfig,
     <P as CurveConfig>::BaseField: PrimeField + PoseidonParams<Field = V::ScalarField>,
 {
-    let circuit_inputs = generate_dummy_mint_inputs::<P, V, VSW>();
-    let mut circuit = mint_circuit::<P, V, 1>(circuit_inputs)?;
+    let circuit_inputs = generate_dummy_mint_inputs::<P, V, VSW, C, N, D>();
+    let mut circuit = mint_circuit::<P, V, C, N, D>(circuit_inputs)?;
     circuit.finalize_for_arithmetization().unwrap();
 
     let srs_size = circuit.srs_size().unwrap();
@@ -169,12 +170,11 @@ where
         .add_membership_path_index(vec![V::ScalarField::from(old_commitment_leaf_index)])
         .add_token_salts(vec![V::ScalarField::from(old_commitment_leaf_index)]) //only the first salt needs to be the index
         .add_recipients(public_key)
-        .build()
-        .unwrap();
+        .build();
     circuit_inputs
 }
 
-fn dummy_transfer<P, V, VSW, const WIDTH: usize>(
+fn dummy_transfer<P, V, VSW, const C: usize, const N: usize, const D: usize>(
 ) -> Result<(ProvingKey<V>, VerifyingKey<V>), CircuitError>
 where
     V: Pairing<G1Affine = Affine<VSW>, G1 = Projective<VSW>, ScalarField = P::BaseField>,
@@ -188,7 +188,7 @@ where
     P: SWCurveConfig,
     <P as CurveConfig>::BaseField: PrimeField + PoseidonParams<Field = V::ScalarField>,
 {
-    let transfer_circuit: TransferCircuit<P, V, VSW, 1, 1, 8> = TransferCircuit::new()?;
+    let transfer_circuit = TransferCircuit::<V>::new::<P, _, C, N, D>()?;
     Ok((
         transfer_circuit.get_proving_key(),
         transfer_circuit.get_verifying_key(),

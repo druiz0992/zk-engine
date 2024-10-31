@@ -341,13 +341,11 @@ where
         let swap_var = circuit.create_boolean_variable(input.swap_field)?;
         swap_vars.push(swap_var);
         // TODO: enforce I == 2 inside circuit
-        if input.swap_field {
-            if I != 2 || C != 2 || N != 1 {
-                return Err(CircuitError::ParameterError(
-                    "Length of client inputs, commitments, or nullifiers is incorrect for swap"
-                        .to_string(),
-                ));
-            }
+        if input.swap_field && (I != 2 || C != 2 || N != 1) {
+            return Err(CircuitError::ParameterError(
+                "Length of client inputs, commitments, or nullifiers is incorrect for swap"
+                    .to_string(),
+            ));
         }
         // In a swap, the first output commitment is c
         // Step 5: PV each input proof
@@ -385,18 +383,25 @@ where
         // Ciphertext (x3)
         let mut public_input_var = vec![]; // = [0usize; 1 + 2*N + C + 5];
         public_input_var.push(swap_var.into());
+
+        // Loops are good to make length obvious
+        #[allow(clippy::needless_range_loop)]
         for i in 0..N {
             public_input_var.push(input_commitment_tree_root_vars[i]);
         }
+        #[allow(clippy::needless_range_loop)]
         for i in 0..N {
             public_input_var.push(nullifiers_fq[i]);
         }
+        #[allow(clippy::needless_range_loop)]
         for j in 0..C {
             public_input_var.push(commitments_var[j]);
         }
+        #[allow(clippy::needless_range_loop)]
         for k in 0..2 {
             public_input_var.push(eph_pub_key_vars[k]);
         }
+        #[allow(clippy::needless_range_loop)]
         for l in 0..3 {
             public_input_var.push(ciphertext_vars[l]);
         }
@@ -608,7 +613,7 @@ pub mod base_test {
     use ark_ec::pairing::Pairing;
     use ark_ec::short_weierstrass::SWCurveConfig;
     use ark_ec::CurveGroup;
-    use ark_ff::{One, PrimeField, Zero};
+    use ark_ff::{One, Zero};
     use ark_std::UniformRand;
     use common::crypto::poseidon::Poseidon;
     use curves::pallas::{Affine, Fq, Fr, PallasConfig};
@@ -623,7 +628,6 @@ pub mod base_test {
     use jf_relation::PlonkCircuit;
     use jf_relation::{Arithmetization, Circuit};
     use jf_utils::{field_switching, fq_to_fr_with_mask, test_rng};
-    use num_bigint::BigUint;
     use std::str::FromStr;
     use trees::membership_tree::{MembershipTree, Tree};
     use trees::non_membership_tree::NonMembershipTree;
@@ -638,12 +642,12 @@ pub mod base_test {
 
     use super::{base_rollup_circuit, ClientInput};
     use crate::client::circuits::circuit_inputs::CircuitInputs;
-    use common::derived_keys::{self, DerivedKeys};
+    use common::derived_keys::DerivedKeys;
     use common::keypair::{PrivateKey, PublicKey};
     use trees::MembershipPath;
     #[test]
     fn test_base_circuit() {
-        test_base_rollup_helper_mint::<2, 2>();
+        test_base_rollup_helper_mint::<2, 2, 0, 0>();
         // test_base_rollup_helper_mint::<2, 4>();
         // test_base_rollup_helper_mint::<4, 2>();
         test_base_rollup_helper_transfer::<2, 2, 2>();
@@ -652,13 +656,18 @@ pub mod base_test {
         test_base_rollup_helper_swap();
     }
 
-    fn test_base_rollup_helper_mint<const I: usize, const C: usize>() {
+    fn test_base_rollup_helper_mint<
+        const I: usize,
+        const C: usize,
+        const N: usize,
+        const D: usize,
+    >() {
         let mut rng = test_rng();
         let mut client_inputs = vec![];
         let mut g_polys = vec![];
         for i in 0..I {
             let mut mint_circuit =
-                mint_circuit_helper_generator::<C>(ark_std::array::from_fn(|j| {
+                mint_circuit_helper_generator::<C, N, D>(ark_std::array::from_fn(|j| {
                     Fq::from((j + i) as u32)
                 }));
             mint_circuit.finalize_for_arithmetization().unwrap();
@@ -779,7 +788,7 @@ pub mod base_test {
         ark_std::println!("Base proof verified")
     }
 
-    pub fn test_base_rollup_helper_transfer<const I: usize, const N: usize, const C: usize>(
+    pub fn test_base_rollup_helper_transfer<const I: usize, const C: usize, const N: usize>(
     ) -> StoredProof<PallasConfig, VestaConfig> {
         // Prepare transfer preamble (i.e. create fake mints)
         let root_key = Fq::rand(&mut test_rng());
@@ -1336,12 +1345,11 @@ pub mod base_test {
             .add_commitment_tree_root(root.to_vec())
             .add_token_values(new_values.to_vec())
             .add_token_salts(indices[0..C].to_vec())
-            .add_token_ids(vec![token_id; C])
+            .add_token_ids(vec![token_id; 1])
             .add_recipients(vec![PublicKey::from_affine(recipient_public_key)])
             .add_root_key(root_key)
             .add_ephemeral_key(Fq::rand(&mut test_rng()))
-            .build()
-            .unwrap();
+            .build();
 
         let circuit =
             transfer_circuit::<PallasConfig, VestaConfig, C, N, 8>(circuit_inputs).unwrap();
@@ -1406,24 +1414,25 @@ pub mod base_test {
         (circuit, client_input)
     }
 
-    fn mint_circuit_helper_generator<const C: usize>(value: [Fq; C]) -> PlonkCircuit<Fq> {
+    fn mint_circuit_helper_generator<const C: usize, const N: usize, const D: usize>(
+        value: [Fq; C],
+    ) -> PlonkCircuit<Fq> {
         let token_id = [Fq::from(12 as u64); C].to_vec();
         let token_nonce = [Fq::from(13 as u64); C].to_vec();
         let value = value.to_vec();
         let pk = PrivateKey::from_scalar(Fr::from(1u64));
         let token_owner = [PublicKey::from_private_key(&pk); C].to_vec();
 
-        let mut circuit_inputs_builder = CircuitInputs::<PallasConfig, C, 0, 0>::new();
+        let mut circuit_inputs_builder = CircuitInputs::<PallasConfig, C, N, D>::new();
 
         let circuit_inputs = circuit_inputs_builder
             .add_token_values(value)
             .add_token_ids(token_id)
             .add_token_salts(token_nonce)
             .add_recipients(token_owner)
-            .build()
-            .unwrap();
+            .build();
 
-        let circuit = mint_circuit::<PallasConfig, VestaConfig, C>(circuit_inputs).unwrap();
+        let circuit = mint_circuit::<PallasConfig, VestaConfig, C, N, D>(circuit_inputs).unwrap();
 
         assert!(circuit
             .check_circuit_satisfiability(&circuit.public_input().unwrap())

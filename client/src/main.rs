@@ -19,13 +19,17 @@ pub mod services;
 pub mod usecase;
 
 fn main() {
+    const C: usize = 1;
+    const N: usize = 1;
+    const D: usize = 8;
     let db: InMemStorage<PallasConfig, Fq> = InMemStorage::new();
     let thread_safe_db = std::sync::Arc::new(tokio::sync::Mutex::new(db));
     let mut prover: InMemProver<VestaConfig> = InMemProver::new();
     ark_std::println!("generating keys");
-    let pks = generate_client_pks_and_vks::<PallasConfig, VestaConfig, VestaConfig>().unwrap();
+    let pks =
+        generate_client_pks_and_vks::<PallasConfig, VestaConfig, VestaConfig, C, N, D>().unwrap();
     pks.into_iter()
-        .zip([CircuitType::Mint, CircuitType::Transfer].into_iter())
+        .zip([CircuitType::Mint, CircuitType::Transfer])
         .for_each(|(pk, circuit_type)| prover.store_pk(circuit_type, pk.0));
 
     ark_std::println!("keys generated");

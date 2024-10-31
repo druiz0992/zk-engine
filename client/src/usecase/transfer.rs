@@ -14,6 +14,7 @@ use trees::MembershipPath;
 use crate::domain::{CircuitType::Transfer, PublicKey};
 use plonk_prover::client::circuits::circuit_inputs::CircuitInputs;
 
+#[allow(clippy::too_many_arguments)]
 pub fn transfer_tokens<P, V, VSW, Proof>(
     // Token information
     old_preimages: Vec<Preimage<P>>,
@@ -40,13 +41,17 @@ where
     >,
     Proof: Prover<V, VSW>,
 {
+    const C: usize = 1;
+    const N: usize = 1;
+    const D: usize = 8;
     // Assert all token ids are the same
     let token_id = old_preimages[0].token_id;
     old_preimages.iter().skip(1).for_each(|x| {
         assert_eq!(x.token_id, token_id);
     });
     // Start the builder
-    let mut circuit_inputs_builder = CircuitInputs::<P>::new();
+    let mut circuit_inputs_builder = CircuitInputs::<P, C, N, D>::new();
+    //let mut circuit_inputs_builder = CircuitInputs::<P>::new();
     // Add vector inputs
     let mut old_token_values = Vec::with_capacity(old_preimages.len());
     let mut old_token_salts = Vec::with_capacity(old_preimages.len());
@@ -68,11 +73,10 @@ where
         .add_root_key(root_key)
         .add_ephemeral_key(ephemeral_key)
         .add_token_salts(membership_path_index) //only the first salt needs to be the index
-        .build()
-        .map_err(|e| "Error building circuit inputs")?;
+        .build();
 
     let (proof, pub_inputs, g_polys, _pk) =
-        Proof::prove::<P>(Transfer, circuit_inputs, proving_key).unwrap();
+        Proof::prove::<P, C, N, D>(Transfer, circuit_inputs, proving_key).unwrap();
 
     let client_pub_inputs: ClientPubInputs<_, 1, 1> = pub_inputs.try_into()?;
 
