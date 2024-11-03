@@ -3,9 +3,14 @@ pub struct MembershipPath<F> {
     path: Vec<F>,
 }
 
-impl<F> MembershipPath<F> {
+impl<F: Copy> MembershipPath<F> {
     pub fn new() -> Self {
         MembershipPath { path: vec![] }
+    }
+    pub fn with_elements(element: F, size: usize) -> Self {
+        let mut path = MembershipPath::new();
+        (0..size).for_each(|_| path.append(element));
+        path
     }
 
     pub fn append(&mut self, el: F) {
@@ -34,13 +39,13 @@ impl<F> MembershipPath<F> {
     }
 }
 
-impl<F> Default for MembershipPath<F> {
+impl<F: Copy> Default for MembershipPath<F> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<F> IntoIterator for MembershipPath<F> {
+impl<F: Copy> IntoIterator for MembershipPath<F> {
     type Item = F;
     type IntoIter = std::vec::IntoIter<F>;
 

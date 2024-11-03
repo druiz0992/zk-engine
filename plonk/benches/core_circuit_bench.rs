@@ -39,7 +39,7 @@ pub fn benchmark_mint(c: &mut Criterion) {
                 .add_recipients(vec![PublicKey::from_affine(token_owner); C])
                 .build();
             let mut circuit =
-                mint_circuit::<PallasConfig, VestaConfig, C, N, D>(circuit_inputs).unwrap();
+                mint_circuit::<PallasConfig, VestaConfig, _, C, N, D>(circuit_inputs).unwrap();
             circuit.finalize_for_arithmetization().unwrap();
         })
     });
@@ -59,7 +59,7 @@ pub fn benchmark_mint(c: &mut Criterion) {
             .add_recipients(vec![PublicKey::from_affine(token_owner); C])
             .build();
 
-        let mut circuit = mint_circuit::<PallasConfig, VestaConfig, C, N, D>(circuit_inputs).unwrap();
+        let mut circuit = mint_circuit::<PallasConfig, VestaConfig,_, C, N, D>(circuit_inputs).unwrap();
         circuit.finalize_for_arithmetization().unwrap();
 
         let srs_size = circuit.srs_size().unwrap();
@@ -95,7 +95,7 @@ pub fn benchmark_mint(c: &mut Criterion) {
                 .build();
 
             let mut circuit =
-                mint_circuit::<PallasConfig, VestaConfig, C, N, D>(circuit_inputs).unwrap();
+                mint_circuit::<PallasConfig, VestaConfig, _, C, N, D>(circuit_inputs).unwrap();
             circuit.finalize_for_arithmetization().unwrap();
         })
     });
@@ -116,7 +116,7 @@ pub fn benchmark_mint(c: &mut Criterion) {
             .add_recipients(vec![PublicKey::from_affine(token_owner); C])
             .build();
 
-        let mut circuit = mint_circuit::<PallasConfig, VestaConfig, C, N, D>(circuit_inputs).unwrap();
+        let mut circuit = mint_circuit::<PallasConfig, VestaConfig,_, C, N, D>(circuit_inputs).unwrap();
         circuit.finalize_for_arithmetization().unwrap();
         let srs_size = circuit.srs_size().unwrap();
         let srs =

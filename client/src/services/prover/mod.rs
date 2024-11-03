@@ -14,17 +14,17 @@ pub mod in_memory_prover {
         transcript::RescueTranscript,
     };
     use jf_primitives::rescue::RescueParameter;
-    use jf_relation::{
-        errors::CircuitError, gadgets::ecc::SWToTEConParam, Arithmetization, Circuit,
-    };
-    use plonk_prover::{
-        client::circuits::{mint::mint_circuit, transfer::transfer_circuit},
-        primitives::circuits::kem_dem::KemDemParams,
-    };
+    use jf_relation::{errors::CircuitError, gadgets::ecc::SWToTEConParam, Circuit};
+    use rand::SeedableRng;
+    use rand_chacha::ChaChaRng;
     use std::{collections::HashMap, time::Instant};
 
     use crate::{domain::CircuitType, ports::prover::Prover};
     use plonk_prover::client::circuits::circuit_inputs::CircuitInputs;
+    use plonk_prover::{
+        client::{self, ClientPlonkCircuit},
+        primitives::circuits::kem_dem::KemDemParams,
+    };
 
     pub struct InMemProver<V: Pairing>
     where
@@ -68,7 +68,7 @@ pub mod in_memory_prover {
         >,
     {
         fn prove<P, const C: usize, const N: usize, const D: usize>(
-            circuit_type: CircuitType,
+            circuit: &dyn ClientPlonkCircuit<P, V, VSW, C, N, D>,
             circuit_inputs: CircuitInputs<P, C, N, D>,
             proving_key: Option<&ProvingKey<V>>,
         ) -> Result<
@@ -85,25 +85,20 @@ pub mod in_memory_prover {
             <P as CurveConfig>::BaseField: KemDemParams<Field = V::ScalarField>,
         {
             // Convert the Vec to an array, checking for exactly 8 elements
-            let mut circuit = match circuit_type {
-                CircuitType::Mint => mint_circuit::<P, V, C, N, D>(circuit_inputs)?,
-                CircuitType::Transfer => transfer_circuit::<P, V, C, N, D>(circuit_inputs)?,
-                _ => panic!("Wrong circuit type"),
-            };
-            circuit.finalize_for_arithmetization()?;
-            let mut rng = &mut jf_utils::test_rng();
+            let mut circuit = client::build_plonk_circuit_from_inputs(circuit, circuit_inputs)?;
             ark_std::println!("Constraint count: {}", circuit.num_gates());
             let now = Instant::now();
-            let pk = if let Some(pkey) = proving_key {
-                pkey.clone()
-            } else {
-                let srs = <PlonkIpaSnark<V> as UniversalSNARK<V>>::universal_setup_for_testing(
-                    circuit.srs_size()?,
-                    &mut rng,
-                )?;
-                let (pk, _) = PlonkIpaSnark::<V>::preprocess(&srs, &circuit)?;
-                pk
-            };
+
+            circuit.finalize_for_arithmetization()?;
+            let mut rng = ChaChaRng::from_entropy();
+            let pk = proving_key.map_or_else(
+                || {
+                    let (pk, _) = client::generate_keys_from_plonk::<P, V, VSW>(&mut circuit)?;
+                    Ok::<ProvingKey<V>, CircuitError>(pk)
+                },
+                |pkey| Ok(pkey.clone()),
+            )?;
+
             ark_std::println!("Preprocess done: {:?}", now.elapsed());
 
             let _public_inputs = circuit.public_input()?;
@@ -147,15 +142,18 @@ pub mod in_memory_prover {
 
 #[cfg(test)]
 mod tests {
+
     use crate::{InMemProver, Prover};
-    use plonk_prover::client::circuits::transfer::{
-        build_default_transfer_inputs, TransferCircuit,
-    };
+    use plonk_prover::client::circuits::transfer;
 
     use crate::domain::CircuitType;
     use curves::pallas::PallasConfig;
     use curves::vesta::VestaConfig;
-    use plonk_prover::utils::key_gen::{generate_client_pks_and_vks, generate_dummy_mint_inputs};
+    use plonk_prover::client::{
+        self,
+        circuits::mint::{self, MintCircuit},
+        circuits::transfer::TransferCircuit,
+    };
 
     #[test]
     fn test_new_initialization() {
@@ -181,16 +179,47 @@ mod tests {
         const N: usize = 1;
         const D: usize = 8;
         let mut prover: InMemProver<VestaConfig> = InMemProver::default();
-        let pks = generate_client_pks_and_vks::<PallasConfig, VestaConfig, VestaConfig, C, N, D>()
-            .unwrap();
-        prover.store_pk(CircuitType::Mint, pks[0].0.clone());
-        prover.store_pk(CircuitType::Transfer, pks[1].0.clone());
 
-        let mint_pk = prover.get_pk(CircuitType::Mint).unwrap();
-        assert_eq!(mint_pk, &pks[0].0.clone());
+        let mint_circuit = mint::MintCircuit::new();
+        let mint_inputs =
+            mint::utils::build_random_inputs::<PallasConfig, VestaConfig, _, C, N, D>().expect(
+                &format!(
+                    "Error generating random inputs for mint circuit with C:{C}, N:{N}, D:{D}"
+                ),
+            );
+        let (mint_pk, _) =
+            client::generate_keys_from_inputs::<PallasConfig, VestaConfig, _, C, N, D>(
+                &mint_circuit,
+                mint_inputs.clone(),
+            )
+            .expect(&format!(
+                "Error generating key for mint circuit from random inputs with C:{C}, N:{N}, D:{D}"
+            ));
 
-        let transfer_pk = prover.get_pk(CircuitType::Transfer).unwrap();
-        assert_eq!(transfer_pk, &pks[1].0.clone());
+        let transfer_circuit = TransferCircuit::new();
+        let transfer_inputs =
+            transfer::utils::build_random_inputs::<PallasConfig, VestaConfig, _, C, N, D>().expect(
+                &format!(
+                    "Error generating random inputs for transfer circuit with C:{C}, N:{N}, D:{D}"
+                ),
+            );
+        let (transfer_pk, _) =
+            client::generate_keys_from_inputs::<PallasConfig, VestaConfig, _, C, N, D>(
+                &transfer_circuit,
+                transfer_inputs.clone(),
+            )
+            .expect(&format!(
+            "Error generating key for transfer circuit from random inputs with C:{C}, N:{N}, D:{D}"
+        ));
+
+        prover.store_pk(CircuitType::Mint, mint_pk.clone());
+        prover.store_pk(CircuitType::Transfer, transfer_pk.clone());
+
+        let stored_mint_pk = prover.get_pk(CircuitType::Mint).unwrap();
+        assert_eq!(stored_mint_pk, &mint_pk);
+
+        let stored_transfer_pk = prover.get_pk(CircuitType::Transfer).unwrap();
+        assert_eq!(stored_transfer_pk, &transfer_pk);
     }
 
     #[test]
@@ -198,23 +227,28 @@ mod tests {
         const C: usize = 1;
         const N: usize = 1;
         const D: usize = 8;
-        let pks = generate_client_pks_and_vks::<PallasConfig, VestaConfig, VestaConfig, C, N, D>()
-            .unwrap();
-        let dummy_inputs =
-            generate_dummy_mint_inputs::<PallasConfig, VestaConfig, VestaConfig, C, N, D>();
 
-        let result = <InMemProver<VestaConfig> as Prover<_, _>>::prove(
-            CircuitType::Mint,
-            dummy_inputs,
-            None,
-        );
+        let mint_circuit = MintCircuit::new();
+        let inputs = mint::utils::build_random_inputs::<PallasConfig, VestaConfig, _, C, N, D>()
+            .expect(&format!(
+                "Error generating random inputs for mint circuit with C:{C}, N:{N}, D:{D}"
+            ));
+        let (pk, vk) = client::generate_keys_from_inputs::<PallasConfig, VestaConfig, _, C, N, D>(
+            &mint_circuit,
+            inputs.clone(),
+        )
+        .expect(&format!(
+            "Error generating key for mint circuit from random inputs with C:{C}, N:{N}, D:{D}"
+        ));
+
+        let result =
+            <InMemProver<VestaConfig> as Prover<_, _>>::prove(&mint_circuit, inputs, Some(&pk));
         assert!(
             result.is_ok(),
             "Proof generation should succeed for valid inputs"
         );
 
         let (proof, public_inputs, _, _) = result.unwrap();
-        let vk = pks[0].1.clone();
         let is_valid = <InMemProver<VestaConfig> as Prover<_, _>>::verify(vk, public_inputs, proof);
 
         assert!(is_valid, "Verification should succeed for a valid proof");
@@ -225,15 +259,30 @@ mod tests {
         const C: usize = 2;
         const N: usize = 2;
         const D: usize = 8;
-        let transfer_circuit =
-            TransferCircuit::<VestaConfig>::new::<PallasConfig, _, C, N, D>().unwrap();
-        let circuit_inputs =
-            build_default_transfer_inputs::<PallasConfig, VestaConfig, _, C, N, D>().unwrap();
-        let result = <InMemProver<VestaConfig> as Prover<_, _>>::prove(
-            CircuitType::Transfer,
-            circuit_inputs,
-            Some(&transfer_circuit.get_proving_key()),
+
+        let transfer_circuit = TransferCircuit::new();
+        let inputs = transfer::utils::build_random_inputs::<PallasConfig, VestaConfig, _, C, N, D>(
+        )
+        .expect(&format!(
+            "Error generating random inputs for transfer circuit with C:{C}, N:{N}, D:{D}"
+        ));
+        let (pk, vk) = client::generate_keys_from_inputs::<PallasConfig, VestaConfig, _, C, N, D>(
+            &transfer_circuit,
+            inputs.clone(),
+        )
+        .expect(&format!(
+            "Error generating key for transfer circuit from random inputs with C:{C}, N:{N}, D:{D}"
+        ));
+
+        let result =
+            <InMemProver<VestaConfig> as Prover<_, _>>::prove(&transfer_circuit, inputs, Some(&pk));
+        assert!(
+            result.is_ok(),
+            "Proof generation should succeed for valid inputs"
         );
-        assert!(result.is_err(), "Proof generation should fail");
+        let (proof, public_inputs, _, _) = result.unwrap();
+        let is_valid = <InMemProver<VestaConfig> as Prover<_, _>>::verify(vk, public_inputs, proof);
+
+        assert!(is_valid, "Verification should succeed for a valid proof");
     }
 }

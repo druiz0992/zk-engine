@@ -60,7 +60,7 @@ pub fn benchmark_mints<const I: usize, const C: usize, const N: usize, const D: 
             .build();
 
         let mut mint_circuit =
-            mint_circuit::<PallasConfig, VestaConfig, C, N, D>(circuit_inputs).unwrap();
+            mint_circuit::<PallasConfig, VestaConfig, _, C, N, D>(circuit_inputs).unwrap();
 
         mint_circuit.finalize_for_arithmetization().unwrap();
         if i == 0 {

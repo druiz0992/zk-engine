@@ -1,7 +1,8 @@
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
-    parse_str, punctuated::Punctuated, Generics, ItemFn, ItemImpl, ItemStruct, WherePredicate,
+    parse_str, punctuated::Punctuated, Generics, ItemFn, ItemImpl, ItemStruct, ItemTrait,
+    WherePredicate,
 };
 
 #[proc_macro_attribute]
@@ -61,8 +62,16 @@ pub fn client_circuit(_attr: TokenStream, item: TokenStream) -> TokenStream {
             #fn_item
         };
         return expanded.into();
+    } else if let Ok(mut trait_item) = syn::parse::<ItemTrait>(item.clone()) {
+        // Attach where bounds to the function
+        add_bounds_to_generics(&mut trait_item.generics, &bounds);
+
+        let expanded = quote! {
+            #trait_item
+        };
+        return expanded.into();
     }
 
     // Return an error if the item is not supported
-    panic!("Expected a struct (regular or tuple), impl block, or function.");
+    panic!("Expected a struct, trait,  impl block, or function.");
 }
