@@ -11,8 +11,9 @@ use jf_relation::gadgets::ecc::SWToTEConParam;
 use plonk_prover::{client::structs::ClientPubInputs, primitives::circuits::kem_dem::KemDemParams};
 use trees::MembershipPath;
 
-use crate::domain::{CircuitType::Transfer, PublicKey};
+use crate::domain::PublicKey;
 use plonk_prover::client::circuits::circuit_inputs::CircuitInputs;
+use plonk_prover::client::circuits::transfer::TransferCircuit;
 
 #[allow(clippy::too_many_arguments)]
 pub fn transfer_tokens<P, V, VSW, Proof>(
@@ -75,8 +76,9 @@ where
         .add_token_salts(membership_path_index) //only the first salt needs to be the index
         .build();
 
+    let transfer_circuit = TransferCircuit::new();
     let (proof, pub_inputs, g_polys, _pk) =
-        Proof::prove::<P, C, N, D>(Transfer, circuit_inputs, proving_key).unwrap();
+        Proof::prove::<P, C, N, D>(&transfer_circuit, circuit_inputs, proving_key).unwrap();
 
     let client_pub_inputs: ClientPubInputs<_, 1, 1> = pub_inputs.try_into()?;
 

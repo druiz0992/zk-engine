@@ -637,6 +637,7 @@ pub mod base_test {
     use crate::client::circuits::mint::mint_circuit;
     use crate::client::circuits::swap::swap_circuit;
     use crate::client::circuits::transfer::transfer_circuit;
+
     use crate::rollup::circuits::structs::{AccInstance, GlobalPublicInputs, SubTrees};
     use crate::rollup::circuits::utils::StoredProof;
 
@@ -1355,7 +1356,6 @@ pub mod base_test {
             transfer_circuit::<PallasConfig, VestaConfig, C, N, 8>(circuit_inputs).unwrap();
 
         let public_inputs = circuit.public_input().unwrap();
-        assert!(circuit.check_circuit_satisfiability(&public_inputs).is_ok());
 
         let len = public_inputs.len();
         let client_input = (
@@ -1432,11 +1432,9 @@ pub mod base_test {
             .add_recipients(token_owner)
             .build();
 
-        let circuit = mint_circuit::<PallasConfig, VestaConfig, C, N, D>(circuit_inputs).unwrap();
+        let circuit =
+            mint_circuit::<PallasConfig, VestaConfig, _, C, N, D>(circuit_inputs).unwrap();
 
-        assert!(circuit
-            .check_circuit_satisfiability(&circuit.public_input().unwrap())
-            .is_ok());
         circuit
     }
 

@@ -12,6 +12,7 @@ use plonk_prover::primitives::circuits::kem_dem::KemDemParams;
 
 use crate::domain::CircuitType;
 use plonk_prover::client::circuits::circuit_inputs::CircuitInputs;
+use plonk_prover::client::ClientPlonkCircuit;
 
 pub trait Prover<V, VSW>
 where
@@ -25,7 +26,7 @@ where
     #[allow(clippy::type_complexity)]
     // Returns Proofs and Public Inputs
     fn prove<P, const C: usize, const N: usize, const D: usize>(
-        circuit_type: CircuitType,
+        circuit: &dyn ClientPlonkCircuit<P, V, VSW, C, N, D>,
         circuit_inputs: CircuitInputs<P, C, N, D>,
         proving_key: Option<&ProvingKey<V>>,
     ) -> Result<

@@ -46,7 +46,7 @@ where
     Ok(vec![mink_vk, transfer_vk])
 }
 
-pub fn generate_dummy_mint_inputs<P, V, VSW, const C: usize, const N: usize, const D: usize>(
+fn generate_dummy_mint_inputs<P, V, VSW, const C: usize, const N: usize, const D: usize>(
 ) -> CircuitInputs<P, C, N, D>
 where
     V: Pairing<G1Affine = Affine<VSW>, G1 = Projective<VSW>, ScalarField = P::BaseField>,
@@ -76,7 +76,7 @@ where
 
     circuit_inputs
 }
-pub fn dummy_mint<P, V, VSW, const C: usize, const N: usize, const D: usize>(
+fn dummy_mint<P, V, VSW, const C: usize, const N: usize, const D: usize>(
 ) -> Result<(ProvingKey<V>, VerifyingKey<V>), CircuitError>
 where
     V: Pairing<G1Affine = Affine<VSW>, G1 = Projective<VSW>, ScalarField = P::BaseField>,
@@ -92,7 +92,7 @@ where
     <P as CurveConfig>::BaseField: PrimeField + PoseidonParams<Field = V::ScalarField>,
 {
     let circuit_inputs = generate_dummy_mint_inputs::<P, V, VSW, C, N, D>();
-    let mut circuit = mint_circuit::<P, V, C, N, D>(circuit_inputs)?;
+    let mut circuit = mint_circuit::<P, V, _, C, N, D>(circuit_inputs)?;
     circuit.finalize_for_arithmetization().unwrap();
 
     let srs_size = circuit.srs_size().unwrap();
@@ -104,9 +104,7 @@ where
     Ok((pk, vk))
 }
 
-pub fn generate_dummy_transfer_inputs<P, V, VSW>(
-    token_owner: Affine<P>,
-) -> CircuitInputs<P, 1, 1, 8>
+fn generate_dummy_transfer_inputs<P, V, VSW>(token_owner: Affine<P>) -> CircuitInputs<P, 1, 1, 8>
 where
     V: Pairing<G1Affine = Affine<VSW>, G1 = Projective<VSW>, ScalarField = P::BaseField>,
     <V as Pairing>::BaseField: RescueParameter + SWToTEConParam,
@@ -174,6 +172,9 @@ where
     circuit_inputs
 }
 
+use crate::client::circuits::transfer;
+use crate::client::generate_keys_from_inputs;
+
 fn dummy_transfer<P, V, VSW, const C: usize, const N: usize, const D: usize>(
 ) -> Result<(ProvingKey<V>, VerifyingKey<V>), CircuitError>
 where
@@ -188,9 +189,7 @@ where
     P: SWCurveConfig,
     <P as CurveConfig>::BaseField: PrimeField + PoseidonParams<Field = V::ScalarField>,
 {
-    let transfer_circuit = TransferCircuit::<V>::new::<P, _, C, N, D>()?;
-    Ok((
-        transfer_circuit.get_proving_key(),
-        transfer_circuit.get_verifying_key(),
-    ))
+    let inputs = transfer::build_random_inputs::<P, V, _, C, N, D>().unwrap();
+    let circuit = TransferCircuit::new();
+    generate_keys_from_inputs::<P, V, _, C, N, D>(&circuit, inputs)
 }

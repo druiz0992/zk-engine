@@ -1,5 +1,4 @@
 pub mod circuit_inputs;
-pub mod client_circuit;
 pub mod mint;
 pub mod swap;
 pub mod transfer;

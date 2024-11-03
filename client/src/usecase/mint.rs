@@ -10,8 +10,9 @@ use jf_primitives::rescue::RescueParameter;
 use jf_relation::gadgets::ecc::SWToTEConParam;
 use plonk_prover::{client::structs::ClientPubInputs, primitives::circuits::kem_dem::KemDemParams};
 
-use crate::domain::{CircuitType::Mint, PublicKey};
+use crate::domain::PublicKey;
 use plonk_prover::client::circuits::circuit_inputs::CircuitInputs;
+use plonk_prover::client::circuits::mint::MintCircuit;
 
 pub fn mint_tokens<P, V, VSW, Proof>(
     token_values: Vec<V::ScalarField>,
@@ -34,6 +35,7 @@ where
     const C: usize = 1;
     const N: usize = 0;
     const D: usize = 0;
+    let mint_circuit = MintCircuit::new();
     let mut circuit_inputs_builder = CircuitInputs::<P, C, N, D>::new();
     let circuit_inputs = circuit_inputs_builder
         .add_token_ids(token_ids)
@@ -43,7 +45,7 @@ where
         .build();
 
     let (proof, pub_inputs, g_polys, _pk) =
-        Proof::prove::<P, C, N, D>(Mint, circuit_inputs, proving_key).unwrap();
+        Proof::prove::<P, C, N, D>(&mint_circuit, circuit_inputs, proving_key).unwrap();
 
     let client_pub_inputs: ClientPubInputs<_, 0, 1> = pub_inputs.try_into()?;
 
