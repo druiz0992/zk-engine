@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 use ark_ec::short_weierstrass::SWCurveConfig;
 use ark_ec::AffineRepr;
 use ark_ff::PrimeField;
@@ -8,22 +6,6 @@ use derivative::Derivative;
 use serde::{Deserialize, Serialize};
 
 use super::{ark_de, ark_se, PublicKey};
-
-#[derive(Clone, Copy, Hash, Debug, Eq, PartialEq)]
-pub enum CircuitType {
-    Mint,
-    Transfer,
-    AtomicSwap,
-}
-impl Display for CircuitType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CircuitType::Mint => write!(f, "Mint"),
-            CircuitType::Transfer => write!(f, "Transfer"),
-            CircuitType::AtomicSwap => write!(f, "AtomicSwap"),
-        }
-    }
-}
 
 #[derive(
     Derivative, Default, Debug, Serialize, Deserialize, CanonicalSerialize, CanonicalDeserialize,

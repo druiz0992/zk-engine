@@ -18,6 +18,8 @@ use macros::client_circuit;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 
+use circuits::structs::CircuitId;
+
 pub mod circuits;
 pub mod structs;
 
@@ -62,8 +64,6 @@ pub fn generate_keys_from_inputs<P, V, VSW, const C: usize, const N: usize, cons
 pub fn generate_keys_from_plonk<P, V, VSW>(
     circuit: &mut PlonkCircuit<V::ScalarField>,
 ) -> Result<(ProvingKey<V>, VerifyingKey<V>), CircuitError> {
-    circuit.finalize_for_arithmetization()?;
-
     let srs_size = circuit.srs_size()?;
     let mut rng = ChaChaRng::from_entropy();
     let srs =

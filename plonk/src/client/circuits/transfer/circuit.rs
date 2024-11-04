@@ -203,6 +203,7 @@ where
         circuit.set_variable_public(ciphertext)?;
     }
     circuit.check_circuit_satisfiability(&circuit.public_input()?)?;
+    circuit.finalize_for_arithmetization()?;
 
     Ok(circuit)
 }

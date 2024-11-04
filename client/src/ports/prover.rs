@@ -10,8 +10,8 @@ use jf_primitives::rescue::RescueParameter;
 use jf_relation::{errors::CircuitError, gadgets::ecc::SWToTEConParam};
 use plonk_prover::primitives::circuits::kem_dem::KemDemParams;
 
-use crate::domain::CircuitType;
 use plonk_prover::client::circuits::circuit_inputs::CircuitInputs;
+use plonk_prover::client::circuits::structs::CircuitId;
 use plonk_prover::client::ClientPlonkCircuit;
 
 pub trait Prover<V, VSW>
@@ -44,6 +44,6 @@ where
 
     fn verify(vk: VerifyingKey<V>, public_inputs: Vec<V::ScalarField>, proof: Proof<V>) -> bool;
 
-    fn get_pk(&self, circuit_type: CircuitType) -> Option<&ProvingKey<V>>;
-    fn store_pk(&mut self, circuit_type: CircuitType, pk: ProvingKey<V>);
+    fn get_pk(&self, circuit_id: CircuitId) -> Option<&ProvingKey<V>>;
+    fn store_pk(&mut self, circuit_id: CircuitId, pk: ProvingKey<V>);
 }

@@ -19,19 +19,20 @@ pub mod in_memory_prover {
     use rand_chacha::ChaChaRng;
     use std::{collections::HashMap, time::Instant};
 
-    use crate::{domain::CircuitType, ports::prover::Prover};
+    use crate::ports::prover::Prover;
     use plonk_prover::client::circuits::circuit_inputs::CircuitInputs;
+    use plonk_prover::client::circuits::structs::CircuitId;
     use plonk_prover::{
         client::{self, ClientPlonkCircuit},
         primitives::circuits::kem_dem::KemDemParams,
     };
 
-    pub struct InMemProver<V: Pairing>
+    pub struct InMemProver<V>
     where
         V: Pairing,
         <V::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = V::BaseField>,
     {
-        pub key_storage: HashMap<String, ProvingKey<V>>,
+        pub key_storage: HashMap<CircuitId, ProvingKey<V>>,
     }
 
     impl<V> InMemProver<V>
@@ -89,7 +90,6 @@ pub mod in_memory_prover {
             ark_std::println!("Constraint count: {}", circuit.num_gates());
             let now = Instant::now();
 
-            circuit.finalize_for_arithmetization()?;
             let mut rng = ChaChaRng::from_entropy();
             let pk = proving_key.map_or_else(
                 || {
@@ -128,14 +128,12 @@ pub mod in_memory_prover {
             .is_ok()
         }
 
-        fn store_pk(&mut self, circuit_type: CircuitType, pk: ProvingKey<V>) {
-            self.key_storage
-                .entry(circuit_type.to_string())
-                .or_insert(pk);
+        fn store_pk(&mut self, circuit_id: CircuitId, pk: ProvingKey<V>) {
+            self.key_storage.entry(circuit_id).or_insert(pk);
         }
 
-        fn get_pk(&self, circuit_type: CircuitType) -> Option<&ProvingKey<V>> {
-            self.key_storage.get(&circuit_type.to_string())
+        fn get_pk(&self, circuit_id: CircuitId) -> Option<&ProvingKey<V>> {
+            self.key_storage.get(&circuit_id)
         }
     }
 }
@@ -143,10 +141,10 @@ pub mod in_memory_prover {
 #[cfg(test)]
 mod tests {
 
-    use crate::{InMemProver, Prover};
+    use crate::ports::prover::Prover;
+    use crate::InMemProver;
     use plonk_prover::client::circuits::transfer;
 
-    use crate::domain::CircuitType;
     use curves::pallas::PallasConfig;
     use curves::vesta::VestaConfig;
     use plonk_prover::client::{
@@ -212,13 +210,13 @@ mod tests {
             "Error generating key for transfer circuit from random inputs with C:{C}, N:{N}, D:{D}"
         ));
 
-        prover.store_pk(CircuitType::Mint, mint_pk.clone());
-        prover.store_pk(CircuitType::Transfer, transfer_pk.clone());
+        prover.store_pk(MintCircuit::circuit_id(), mint_pk.clone());
+        prover.store_pk(TransferCircuit::circuit_id(), transfer_pk.clone());
 
-        let stored_mint_pk = prover.get_pk(CircuitType::Mint).unwrap();
+        let stored_mint_pk = prover.get_pk(MintCircuit::circuit_id()).unwrap();
         assert_eq!(stored_mint_pk, &mint_pk);
 
-        let stored_transfer_pk = prover.get_pk(CircuitType::Transfer).unwrap();
+        let stored_transfer_pk = prover.get_pk(TransferCircuit::circuit_id()).unwrap();
         assert_eq!(stored_transfer_pk, &transfer_pk);
     }
 

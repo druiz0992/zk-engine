@@ -2,15 +2,12 @@ use std::sync::Arc;
 
 use crate::{
     adapters::rest_api::rest_api_entry::run_api,
-    domain::CircuitType,
-    ports::prover::Prover,
     services::{prover::in_memory_prover::InMemProver, storage::in_mem_storage::InMemStorage},
 };
 use curves::{
     pallas::{Fq, PallasConfig},
     vesta::VestaConfig,
 };
-use plonk_prover::utils::key_gen::generate_client_pks_and_vks;
 
 pub mod adapters;
 pub mod domain;
@@ -19,20 +16,9 @@ pub mod services;
 pub mod usecase;
 
 fn main() {
-    const C: usize = 1;
-    const N: usize = 1;
-    const D: usize = 8;
     let db: InMemStorage<PallasConfig, Fq> = InMemStorage::new();
     let thread_safe_db = std::sync::Arc::new(tokio::sync::Mutex::new(db));
-    let mut prover: InMemProver<VestaConfig> = InMemProver::new();
-    ark_std::println!("generating keys");
-    let pks =
-        generate_client_pks_and_vks::<PallasConfig, VestaConfig, VestaConfig, C, N, D>().unwrap();
-    pks.into_iter()
-        .zip([CircuitType::Mint, CircuitType::Transfer])
-        .for_each(|(pk, circuit_type)| prover.store_pk(circuit_type, pk.0));
-
-    ark_std::println!("keys generated");
+    let prover: InMemProver<VestaConfig> = InMemProver::new();
     let thread_safe_prover = Arc::new(tokio::sync::Mutex::new(prover));
     let _test_mnemonic = "pact gun essay three dash seat page silent slogan hole huge harvest awesome fault cute alter boss thank click menu service quarter gaze salmon";
 

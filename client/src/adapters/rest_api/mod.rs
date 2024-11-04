@@ -27,7 +27,6 @@ pub mod rest_api_entry {
     use dotenvy::dotenv;
     use serde_json::json;
 
-    use crate::domain::CircuitType;
     use crate::{
         domain::{Fr, Preimage, PublicKey},
         ports::{
@@ -43,6 +42,7 @@ pub mod rest_api_entry {
         },
         usecase::{mint::mint_tokens, transfer::transfer_tokens},
     };
+    use plonk_prover::client::circuits::{mint::MintCircuit, transfer::TransferCircuit};
 
     use super::structs::{MnemonicInput, PreimageResponse, TransferInput};
 
@@ -111,17 +111,20 @@ pub mod rest_api_entry {
         State(db): State<AppState>,
         Json(mint_details): Json<Preimage<PallasConfig>>,
     ) -> Result<Json<Transaction<VestaConfig>>, AppError> {
-        let prover = db.prover.lock().await;
-        let pk = prover.get_pk(CircuitType::Mint).cloned();
+        let mut prover = db.prover.lock().await;
+        let pk = prover.get_pk(MintCircuit::circuit_id()).cloned();
 
-        let transaction = mint_tokens::<PallasConfig, VestaConfig, _, InMemProver<VestaConfig>>(
-            vec![mint_details.value],
-            vec![mint_details.token_id],
-            vec![mint_details.salt],
-            vec![mint_details.public_key],
-            pk.as_ref(),
-        )
-        .map_err(|_| AppError::TxError)?;
+        let (transaction, pk) =
+            mint_tokens::<PallasConfig, VestaConfig, _, InMemProver<VestaConfig>>(
+                vec![mint_details.value],
+                vec![mint_details.token_id],
+                vec![mint_details.salt],
+                vec![mint_details.public_key],
+                pk.as_ref(),
+            )
+            .map_err(|_| AppError::TxError)?;
+
+        prover.store_pk(MintCircuit::circuit_id(), pk);
 
         let mut db = db.state_db.lock().await;
         let preimage_key = mint_details
@@ -267,12 +270,12 @@ pub mod rest_api_entry {
 
         let ephemeral_key = crate::domain::EFq::from(10u64);
 
-        let prover = db.prover.lock().await;
-        let pk = prover.get_pk(CircuitType::Transfer).cloned();
+        let mut prover = db.prover.lock().await;
+        let pk = prover.get_pk(TransferCircuit::circuit_id()).cloned();
 
         let recipients = PublicKey(transfer_details.recipient);
 
-        let transaction =
+        let (transaction, pk) =
             transfer_tokens::<PallasConfig, VestaConfig, _, InMemProver<VestaConfig>>(
                 old_preimages,
                 vec![transfer_details.transfer_amount],
@@ -285,6 +288,7 @@ pub mod rest_api_entry {
                 pk.as_ref(),
             )
             .map_err(|_| AppError::TxError)?;
+        prover.store_pk(TransferCircuit::circuit_id(), pk);
 
         Ok(Json(transaction))
     }

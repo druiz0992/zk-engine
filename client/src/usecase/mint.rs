@@ -20,7 +20,7 @@ pub fn mint_tokens<P, V, VSW, Proof>(
     salts: Vec<V::ScalarField>,
     owners: Vec<PublicKey<P>>,
     proving_key: Option<&ProvingKey<V>>,
-) -> Result<Transaction<V>, &'static str>
+) -> Result<(Transaction<V>, ProvingKey<V>), &'static str>
 where
     P: SWCurveConfig<BaseField = V::ScalarField>,
     V: Pairing<G1Affine = Affine<VSW>, G1 = Projective<VSW>>,
@@ -44,7 +44,7 @@ where
         .add_recipients(owners)
         .build();
 
-    let (proof, pub_inputs, g_polys, _pk) =
+    let (proof, pub_inputs, g_polys, pk) =
         Proof::prove::<P, C, N, D>(&mint_circuit, circuit_inputs, proving_key).unwrap();
 
     let client_pub_inputs: ClientPubInputs<_, 0, 1> = pub_inputs.try_into()?;
@@ -66,5 +66,5 @@ where
         client_pub_inputs.ephemeral_public_key,
         client_pub_inputs.swap_field,
     );
-    Ok(transaction)
+    Ok((transaction, pk))
 }

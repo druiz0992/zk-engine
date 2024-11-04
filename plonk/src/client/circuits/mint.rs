@@ -9,6 +9,7 @@ use jf_relation::{
     constraint_system::PlonkCircuit, errors::CircuitError, gadgets::ecc::SWToTEConParam,
 };
 
+use super::structs::CircuitId;
 use crate::{
     client::circuits::circuit_inputs::CircuitInputs, client::ClientPlonkCircuit,
     primitives::circuits::kem_dem::KemDemParams,
@@ -16,17 +17,23 @@ use crate::{
 use common::crypto::poseidon::constants::PoseidonParams;
 use macros::client_circuit;
 
-mod circuit;
+pub mod circuit;
 mod constants;
 pub mod utils;
 
 pub use circuit::*;
+pub use utils::build_random_inputs;
 
 pub struct MintCircuit;
 
 impl MintCircuit {
+    const CIRCUIT_ID: &'static str = "MINT";
+
     pub fn new() -> Self {
         MintCircuit
+    }
+    pub fn circuit_id() -> CircuitId {
+        CircuitId::new(MintCircuit::CIRCUIT_ID)
     }
 }
 
