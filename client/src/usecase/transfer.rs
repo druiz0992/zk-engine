@@ -30,7 +30,7 @@ pub fn transfer_tokens<P, V, VSW, Proof>(
     ephemeral_key: V::ScalarField,
     // Prover
     proving_key: Option<&ProvingKey<V>>,
-) -> Result<Transaction<V>, &'static str>
+) -> Result<(Transaction<V>, ProvingKey<V>), &'static str>
 where
     P: SWCurveConfig<BaseField = V::ScalarField>,
     V: Pairing<G1Affine = Affine<VSW>, G1 = Projective<VSW>>,
@@ -77,7 +77,7 @@ where
         .build();
 
     let transfer_circuit = TransferCircuit::new();
-    let (proof, pub_inputs, g_polys, _pk) =
+    let (proof, pub_inputs, g_polys, pk) =
         Proof::prove::<P, C, N, D>(&transfer_circuit, circuit_inputs, proving_key).unwrap();
 
     let client_pub_inputs: ClientPubInputs<_, 1, 1> = pub_inputs.try_into()?;
@@ -100,5 +100,5 @@ where
         client_pub_inputs.swap_field,
     );
 
-    Ok(transaction)
+    Ok((transaction, pk))
 }

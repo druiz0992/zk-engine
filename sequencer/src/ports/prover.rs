@@ -12,6 +12,7 @@ use jf_relation::{errors::CircuitError, gadgets::ecc::SWToTEConParam};
 use plonk_prover::rollup::circuits::base::ClientInput;
 
 use crate::domain::{CircuitType, RollupCommitKeys, RollupProvingKeys};
+use plonk_prover::client::circuits::structs::CircuitId;
 
 pub trait SequencerProver<V, P, SW>
 where
@@ -45,8 +46,8 @@ where
 
     fn get_pks(&self) -> Option<RollupProvingKeys>;
 
-    fn store_vk(&mut self, circuit_type: CircuitType, vk: VerifyingKey<V>);
-    fn get_vk(&self, circuit_type: CircuitType) -> Option<VerifyingKey<V>>;
+    fn store_vk(&mut self, circuit_id: CircuitId, vk: VerifyingKey<V>);
+    fn get_vk(&self, circuit_id: CircuitId) -> Option<VerifyingKey<V>>;
 
     fn store_cks(&mut self, cks: RollupCommitKeys);
     fn get_cks(&self) -> Option<RollupCommitKeys>;

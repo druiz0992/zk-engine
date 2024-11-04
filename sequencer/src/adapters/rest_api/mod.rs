@@ -17,8 +17,10 @@ pub mod sequencer_api {
     use serde::Deserialize;
     use tokio::sync::Mutex;
 
+    use plonk_prover::client::circuits::mint::MintCircuit;
+    use plonk_prover::client::circuits::transfer::TransferCircuit;
+
     use crate::{
-        domain::CircuitType,
         ports::{prover::SequencerProver, storage::TransactionStorage},
         services::{
             prover::in_mem_sequencer_prover::InMemProver,
@@ -97,7 +99,7 @@ pub mod sequencer_api {
         let transactions = state_db.get_all_transactions();
         let prover = db.prover.lock().await;
         ark_std::println!("Get the mofo vks");
-        let vks = [CircuitType::Mint, CircuitType::Transfer]
+        let vks = [MintCircuit::circuit_id(), TransferCircuit::circuit_id()]
             .into_iter()
             .map(|x| prover.get_vk(x))
             .collect::<Option<Vec<_>>>()

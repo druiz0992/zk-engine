@@ -19,14 +19,20 @@ pub mod circuit;
 mod constants;
 pub mod utils;
 
+pub use super::structs::CircuitId;
 pub use circuit::transfer_circuit;
 pub use utils::build_random_inputs;
 
 pub struct TransferCircuit;
 
 impl TransferCircuit {
+    const CIRCUIT_ID: &'static str = "TRANSFER";
+
     pub fn new() -> Self {
         TransferCircuit
+    }
+    pub fn circuit_id() -> CircuitId {
+        CircuitId::new(TransferCircuit::CIRCUIT_ID)
     }
 }
 

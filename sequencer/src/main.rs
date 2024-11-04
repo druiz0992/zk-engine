@@ -11,14 +11,17 @@ use jf_plonk::{
     proof_system::{structs::VK, UniversalSNARK},
 };
 use jf_primitives::pcs::StructuredReferenceString;
-use plonk_prover::utils::key_gen::generate_client_pks_and_vks;
+use plonk_prover::{
+    client::circuits::{mint::MintCircuit, transfer::TransferCircuit},
+    utils::key_gen::generate_client_pks_and_vks,
+};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use trees::{membership_tree::Tree, tree::AppendTree};
 
 use crate::{
     adapters::rest_api::sequencer_api::run_sequencer_api,
-    domain::{CircuitType, RollupCommitKeys},
+    domain::RollupCommitKeys,
     ports::{prover::SequencerProver, storage::GlobalStateStorage},
     services::{
         prover::in_mem_sequencer_prover::InMemProver,
@@ -39,7 +42,7 @@ fn main() {
         generate_client_pks_and_vks::<PallasConfig, VestaConfig, VestaConfig, C, N, D>().unwrap();
     let vks = pks
         .into_iter()
-        .zip([CircuitType::Mint, CircuitType::Transfer])
+        .zip([MintCircuit::circuit_id(), TransferCircuit::circuit_id()])
         .map(|(pk, circuit_type)| {
             prover.store_vk(circuit_type, pk.1.clone());
             pk.1

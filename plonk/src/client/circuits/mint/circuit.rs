@@ -64,6 +64,7 @@ pub fn mint_circuit<P, V, VSW, const C: usize, const N: usize, const D: usize>(
         circuit.create_public_variable(*c)?;
     }
     circuit.check_circuit_satisfiability(&circuit.public_input()?)?;
+    circuit.finalize_for_arithmetization()?;
 
     Ok(circuit)
 }

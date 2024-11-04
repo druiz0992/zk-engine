@@ -13,12 +13,13 @@ pub mod in_mem_sequencer_prover {
         transcript::RescueTranscript,
     };
     use jf_relation::{Arithmetization, Circuit};
+    use plonk_prover::client::circuits::structs::CircuitId;
     use plonk_prover::rollup::circuits::base::base_rollup_circuit;
 
     pub struct InMemProver {
         pub proving_key_store: Option<RollupProvingKeys>,
         pub commit_key_store: Option<RollupCommitKeys>,
-        pub verifying_key_store: HashMap<CircuitType, VerifyingKey<VestaConfig>>,
+        pub verifying_key_store: HashMap<CircuitId, VerifyingKey<VestaConfig>>,
     }
     impl InMemProver {
         pub fn new() -> Self {
@@ -101,14 +102,14 @@ pub mod in_mem_sequencer_prover {
             self.proving_key_store.clone()
         }
 
-        fn store_vk(&mut self, circuit_type: CircuitType, vk: VerifyingKey<VestaConfig>) {
-            self.verifying_key_store.insert(circuit_type, vk);
+        fn store_vk(&mut self, circuit_id: CircuitId, vk: VerifyingKey<VestaConfig>) {
+            self.verifying_key_store.insert(circuit_id, vk);
         }
 
-        fn get_vk(&self, circuit_type: CircuitType) -> Option<VerifyingKey<VestaConfig>> {
-            ark_std::println!("Getting vk for {:?}", circuit_type);
+        fn get_vk(&self, circuit_id: CircuitId) -> Option<VerifyingKey<VestaConfig>> {
+            ark_std::println!("Getting vk for {:?}", circuit_id);
             ark_std::println!("Capacity: {}", self.verifying_key_store.capacity());
-            self.verifying_key_store.get(&circuit_type).cloned()
+            self.verifying_key_store.get(&circuit_id).cloned()
         }
 
         fn store_cks(&mut self, cks: RollupCommitKeys) {
