@@ -101,7 +101,7 @@ pub mod sequencer_api {
         ark_std::println!("Get the mofo vks");
         let vks = [
             MintCircuit::<1>::circuit_id(),
-            TransferCircuit::<2, 2>::circuit_id(),
+            TransferCircuit::<2, 2, 8>::circuit_id(),
         ]
         .into_iter()
         .map(|x| prover.get_vk(x))

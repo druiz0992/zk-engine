@@ -14,9 +14,9 @@ use jf_relation::constraint_system::PlonkCircuit;
 use jf_relation::errors::CircuitError;
 use jf_relation::gadgets::ecc::SWToTEConParam;
 use jf_relation::Arithmetization;
-use macros::client_circuit;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+use zk_macros::client_circuit;
 
 pub mod circuits;
 pub mod client_macros;
@@ -36,7 +36,7 @@ pub mod structs;
 // >,
 
 #[client_circuit]
-pub trait ClientPlonkCircuit<P, V, VSW, const C: usize, const N: usize, const D: usize> {
+pub trait ClientPlonkCircuit<P, V, VSW> {
     fn generate_keys(
         &self,
         circuit_inputs: CircuitInputs<P>,
@@ -54,8 +54,17 @@ pub trait ClientPlonkCircuit<P, V, VSW, const C: usize, const N: usize, const D:
 }
 
 #[client_circuit]
-pub fn generate_keys<P, V, VSW, const C: usize, const N: usize, const D: usize>(
-    circuit: &dyn ClientPlonkCircuit<P, V, VSW, C, N, D>,
+pub fn build<P, V, VSW>(circuit_type: &str) -> Box<dyn ClientPlonkCircuit<P, V, VSW>> {
+    match circuit_type {
+        "mint" => Box::new(circuits::mint::MintCircuit::<1>::new()),
+        "transfer" => Box::new(circuits::transfer::TransferCircuit::<2, 2, 2>::new()),
+        _ => panic!("Not"),
+    }
+}
+
+#[client_circuit]
+pub fn generate_keys<P, V, VSW, T: ClientPlonkCircuit<P, V, VSW>>(
+    circuit: &T,
 ) -> Result<(ProvingKey<V>, VerifyingKey<V>), CircuitError> {
     let circuit_inputs = circuit.generate_inputs()?;
     circuit.generate_keys(circuit_inputs)
@@ -74,15 +83,8 @@ pub fn generate_keys_from_plonk<P, V, VSW>(
     Ok((pk, vk))
 }
 #[client_circuit]
-pub fn build_plonk_circuit_from_inputs<
-    P,
-    V,
-    VSW,
-    const C: usize,
-    const N: usize,
-    const D: usize,
->(
-    circuit: &dyn ClientPlonkCircuit<P, V, VSW, C, N, D>,
+pub fn build_plonk_circuit_from_inputs<P, V, VSW, T: ClientPlonkCircuit<P, V, VSW>>(
+    circuit: &T,
     circuit_inputs: CircuitInputs<P>,
 ) -> Result<PlonkCircuit<V::ScalarField>, CircuitError> {
     circuit.to_plonk_circuit(circuit_inputs)

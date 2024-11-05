@@ -15,7 +15,9 @@ use crate::{
     primitives::circuits::kem_dem::KemDemParams,
 };
 use common::crypto::poseidon::constants::PoseidonParams;
-use macros::client_circuit;
+use common::keypair::{PrivateKey, PublicKey};
+
+use zk_macros::client_circuit;
 
 pub mod circuit;
 mod constants;
@@ -42,6 +44,17 @@ impl<const C: usize> MintCircuit<C> {
         let id = format!("{}_{}", Self::CIRCUIT_ID, C);
         CircuitId::new(id)
     }
+
+    #[client_circuit]
+    pub fn build_new_inputs<P, V, VSW>(
+        &self,
+        values: Vec<V::ScalarField>,
+        ids: Vec<V::ScalarField>,
+        salts: Vec<V::ScalarField>,
+        owners: Vec<PublicKey<P>>,
+    ) -> Result<CircuitInputs<P>, CircuitError> {
+        utils::build_inputs::<P, V, VSW, C>(values, ids, salts, owners)
+    }
 }
 
 impl<const C: usize> Default for MintCircuit<C> {
@@ -51,7 +64,7 @@ impl<const C: usize> Default for MintCircuit<C> {
 }
 
 #[client_circuit]
-impl<P, V, VSW, const C: usize> ClientPlonkCircuit<P, V, VSW, C, 0, 0> for MintCircuit<C> {
+impl<P, V, VSW, const C: usize> ClientPlonkCircuit<P, V, VSW> for MintCircuit<C> {
     fn to_plonk_circuit(
         &self,
         circuit_inputs: CircuitInputs<P>,
@@ -113,7 +126,7 @@ mod test {
 
     fn generate_keys_helper<const C: usize>() {
         let mint_circuit = MintCircuit::<C>::new();
-        plonk_client::generate_keys::<PallasConfig, VestaConfig, _, C, 0, 0>(&mint_circuit).expect(
+        plonk_client::generate_keys::<PallasConfig, VestaConfig, _, _>(&mint_circuit).expect(
             &format!("Error generating key for mint circuit from random inputs with C:{C}"),
         );
     }
@@ -131,7 +144,7 @@ mod test {
         let mint_circuit = MintCircuit::<C>::new();
 
         let plonk_circuit =
-            plonk_client::build_plonk_circuit_from_inputs::<PallasConfig, VestaConfig, _, C, 0, 0>(
+            plonk_client::build_plonk_circuit_from_inputs::<PallasConfig, VestaConfig, _, _>(
                 &mint_circuit,
                 inputs.clone(),
             )

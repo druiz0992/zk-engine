@@ -20,12 +20,12 @@ pub mod in_memory_prover {
     use std::{collections::HashMap, time::Instant};
 
     use crate::ports::prover::Prover;
+    use ark_ff::PrimeField;
+    use common::crypto::poseidon::constants::PoseidonParams;
     use plonk_prover::client::circuits::circuit_inputs::CircuitInputs;
     use plonk_prover::client::circuits::structs::CircuitId;
-    use plonk_prover::{
-        client::{self, ClientPlonkCircuit},
-        primitives::circuits::kem_dem::KemDemParams,
-    };
+    use plonk_prover::client::{self, ClientPlonkCircuit};
+    use plonk_prover::primitives::circuits::kem_dem::KemDemParams;
 
     pub struct InMemProver<V>
     where
@@ -53,7 +53,9 @@ pub mod in_memory_prover {
         <V::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = V::BaseField>,
     {
         fn default() -> Self {
-            InMemProver::new()
+            Self {
+                key_storage: HashMap::new(),
+            }
         }
     }
 
@@ -68,8 +70,8 @@ pub mod in_memory_prover {
             ScalarField = <V as Pairing>::ScalarField,
         >,
     {
-        fn prove<P, const C: usize, const N: usize, const D: usize>(
-            circuit: &dyn ClientPlonkCircuit<P, V, VSW, C, N, D>,
+        fn prove<P, T: ClientPlonkCircuit<P, V, VSW>>(
+            circuit: &T,
             circuit_inputs: CircuitInputs<P>,
             proving_key: Option<&ProvingKey<V>>,
         ) -> Result<
@@ -143,7 +145,7 @@ mod tests {
 
     use crate::ports::prover::Prover;
     use crate::InMemProver;
-    use plonk_prover::client::circuits::transfer;
+    use plonk_prover::client::{circuits::transfer, ClientPlonkCircuit};
 
     use curves::pallas::PallasConfig;
     use curves::vesta::VestaConfig;
@@ -179,26 +181,30 @@ mod tests {
         let mut prover: InMemProver<VestaConfig> = InMemProver::default();
 
         let mint_circuit = mint::MintCircuit::<C>::new();
-        let (mint_pk, _) =
-            client::generate_keys::<PallasConfig, VestaConfig, _, C, 0, 0>(&mint_circuit).expect(
-                &format!("Error generating key for mint circuit from random inputs with C:{C}"),
-            );
+        let (mint_pk, _) = client::generate_keys::<PallasConfig, VestaConfig, _, _>(&mint_circuit)
+            .expect(&format!(
+                "Error generating key for mint circuit from random inputs with C:{C}"
+            ));
 
-        let transfer_circuit = TransferCircuit::<C, N>::new();
-        let (transfer_pk, _) =
-            client::generate_keys::<PallasConfig, VestaConfig, _, C, N, D>(&transfer_circuit)
-                .expect(&format!(
+        let transfer_circuit = TransferCircuit::<C, N, D>::new();
+        let (transfer_pk, _) = client::generate_keys::<PallasConfig, VestaConfig, _, _>(
+            &transfer_circuit,
+        )
+        .expect(&format!(
             "Error generating key for transfer circuit from random inputs with C:{C}, N:{N}, D:{D}"
         ));
 
         prover.store_pk(MintCircuit::<C>::circuit_id(), mint_pk.clone());
-        prover.store_pk(TransferCircuit::<C, N>::circuit_id(), transfer_pk.clone());
+        prover.store_pk(
+            TransferCircuit::<C, N, D>::circuit_id(),
+            transfer_pk.clone(),
+        );
 
         let stored_mint_pk = prover.get_pk(MintCircuit::<C>::circuit_id()).unwrap();
         assert_eq!(stored_mint_pk, &mint_pk);
 
         let stored_transfer_pk = prover
-            .get_pk(TransferCircuit::<C, N>::circuit_id())
+            .get_pk(TransferCircuit::<C, N, D>::circuit_id())
             .unwrap();
         assert_eq!(stored_transfer_pk, &transfer_pk);
     }
@@ -213,18 +219,13 @@ mod tests {
         let inputs = mint::utils::build_random_inputs::<PallasConfig, VestaConfig, _, C>().expect(
             &format!("Error generating random inputs for mint circuit with C:{C}, N:{N}, D:{D}"),
         );
-        let (pk, vk) = client::generate_keys::<PallasConfig, VestaConfig, _, C, 0, 0>(
-            &mint_circuit,
-        )
-        .expect(&format!(
-            "Error generating key for mint circuit from random inputs with C:{C}, N:{N}, D:{D}"
-        ));
+        let (pk, vk) = client::generate_keys::<PallasConfig, VestaConfig, _, _>(&mint_circuit)
+            .expect(&format!(
+                "Error generating key for mint circuit from random inputs with C:{C}, N:{N}, D:{D}"
+            ));
 
-        let result = <InMemProver<VestaConfig> as Prover<_, _>>::prove::<_, C, 0, 0>(
-            &mint_circuit,
-            inputs,
-            Some(&pk),
-        );
+        let result =
+            <InMemProver<VestaConfig> as Prover<_, _>>::prove(&mint_circuit, inputs, Some(&pk));
         assert!(
             result.is_ok(),
             "Proof generation should succeed for valid inputs"
@@ -242,22 +243,18 @@ mod tests {
         const N: usize = 2;
         const D: usize = 8;
 
-        let transfer_circuit = TransferCircuit::<C, N>::new();
+        let transfer_circuit = TransferCircuit::<C, N, D>::new();
         let inputs = transfer::build_random_inputs::<PallasConfig, VestaConfig, _, C, N, D>()
             .expect(&format!(
                 "Error generating random inputs for transfer circuit with C:{C}, N:{N}, D:{D}"
             ));
-        let (pk, vk) =
-            client::generate_keys::<PallasConfig, VestaConfig, _, C, N, D>(&transfer_circuit)
-                .expect(&format!(
+        let (pk, vk) = client::generate_keys::<PallasConfig, VestaConfig, _, _>(&transfer_circuit)
+            .expect(&format!(
             "Error generating key for transfer circuit from random inputs with C:{C}, N:{N}, D:{D}"
         ));
 
-        let result = <InMemProver<VestaConfig> as Prover<_, _>>::prove::<_, C, N, D>(
-            &transfer_circuit,
-            inputs,
-            Some(&pk),
-        );
+        let result =
+            <InMemProver<VestaConfig> as Prover<_, _>>::prove(&transfer_circuit, inputs, Some(&pk));
         assert!(
             result.is_ok(),
             "Proof generation should succeed for valid inputs"

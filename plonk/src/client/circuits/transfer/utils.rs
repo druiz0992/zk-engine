@@ -21,8 +21,8 @@ use crate::utils::poseidon_utils::build_commitment_hash;
 use common::crypto::poseidon::constants::PoseidonParams;
 use common::derived_keys::DerivedKeys;
 use common::keypair::PublicKey;
-use macros::client_circuit;
 use trees::{AppendTree, MembershipPath, MembershipTree, Tree};
+use zk_macros::client_circuit;
 
 #[client_circuit]
 pub fn build_random_inputs<P, V, VSW, const C: usize, const N: usize, const D: usize>(

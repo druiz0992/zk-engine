@@ -9,10 +9,10 @@ macro_rules! initialize_circuits {
                 const N: usize = $param.2;
                 if TYPE == "mint" {
                      let circuit = MintCircuit::<C>::new();
-                     info.push((circuit.get_circuit_id(), client::generate_keys::<PallasConfig, VestaConfig,_, C,0,0>(&circuit).unwrap()));
+                     info.push((circuit.get_circuit_id(), client::generate_keys::<PallasConfig, VestaConfig,_, _>(&circuit).unwrap()));
                 } else if TYPE == "transfer" {
-                     let circuit = TransferCircuit::<C,N>::new();
-                     info.push((circuit.get_circuit_id(), client::generate_keys::<PallasConfig, VestaConfig,_, C,N,DEPTH>(&circuit).unwrap()));
+                     let circuit = TransferCircuit::<C,N, DEPTH>::new();
+                     info.push((circuit.get_circuit_id(), client::generate_keys::<PallasConfig, VestaConfig,_, _>(&circuit).unwrap()));
                 }
             }
         )+

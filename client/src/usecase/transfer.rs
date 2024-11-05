@@ -76,9 +76,9 @@ where
         .add_token_salts(membership_path_index) //only the first salt needs to be the index
         .build();
 
-    let transfer_circuit = TransferCircuit::<C, N>::new();
+    let transfer_circuit = TransferCircuit::<C, N, D>::new();
     let (proof, pub_inputs, g_polys, pk) =
-        Proof::prove::<P, C, N, D>(&transfer_circuit, circuit_inputs, proving_key).unwrap();
+        Proof::prove(&transfer_circuit, circuit_inputs, proving_key).unwrap();
 
     let client_pub_inputs: ClientPubInputs<_, 1, 1> = pub_inputs.try_into()?;
 

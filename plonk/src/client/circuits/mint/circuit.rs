@@ -18,7 +18,7 @@ use crate::{
     },
 };
 use common::crypto::poseidon::constants::PoseidonParams;
-use macros::client_circuit;
+use zk_macros::client_circuit;
 
 #[client_circuit]
 pub fn mint_circuit<P, V, VSW, const C: usize>(

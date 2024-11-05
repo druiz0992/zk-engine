@@ -30,7 +30,7 @@ curves = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test"}
 # poseidon-ark = {git = "https://github.com/arnaucube/poseidon-ark.git", branch = "main"}
 common = {path = "../common"}
 trees = {path = "../trees"}
-macros = {path = "../macros"}
+zk-macros = {path = "../macros"}
 
 rayon = "1.8.0"
 serde = "1.0.192"

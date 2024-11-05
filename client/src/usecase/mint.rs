@@ -43,7 +43,7 @@ where
         .build();
 
     let (proof, pub_inputs, g_polys, pk) =
-        Proof::prove::<P, C, 0, 0>(&mint_circuit, circuit_inputs, proving_key).unwrap();
+        Proof::prove(&mint_circuit, circuit_inputs, proving_key).unwrap();
 
     let client_pub_inputs: ClientPubInputs<_, 0, 1> = pub_inputs.try_into()?;
 

@@ -13,7 +13,7 @@ use super::circuit_inputs::CircuitInputs;
 use crate::client::ClientPlonkCircuit;
 use crate::primitives::circuits::kem_dem::KemDemParams;
 use common::crypto::poseidon::constants::PoseidonParams;
-use macros::client_circuit;
+use zk_macros::client_circuit;
 
 pub mod circuit;
 mod constants;
@@ -24,9 +24,9 @@ pub use circuit::transfer_circuit;
 pub use constants::*;
 pub use utils::build_random_inputs;
 
-pub struct TransferCircuit<const C: usize, const N: usize>;
+pub struct TransferCircuit<const C: usize, const N: usize, const D: usize>;
 
-impl<const C: usize, const N: usize> TransferCircuit<C, N> {
+impl<const C: usize, const N: usize, const D: usize> TransferCircuit<C, N, D> {
     const CIRCUIT_ID: &'static str = "TRANSFER";
 
     pub fn new() -> Self {
@@ -42,15 +42,15 @@ impl<const C: usize, const N: usize> TransferCircuit<C, N> {
     }
 }
 
-impl<const C: usize, const D: usize> Default for TransferCircuit<C, D> {
+impl<const C: usize, const N: usize, const D: usize> Default for TransferCircuit<C, N, D> {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[client_circuit]
-impl<P, V, VSW, const C: usize, const N: usize, const D: usize>
-    ClientPlonkCircuit<P, V, VSW, C, N, D> for TransferCircuit<C, N>
+impl<P, V, VSW, const C: usize, const N: usize, const D: usize> ClientPlonkCircuit<P, V, VSW>
+    for TransferCircuit<C, N, D>
 {
     fn to_plonk_circuit(
         &self,
@@ -130,7 +130,7 @@ mod test {
     use crate::client as plonk_client;
     #[test]
     fn test_new_transfer_circuit() {
-        TransferCircuit::<2, 4>::new();
+        TransferCircuit::<2, 4, 8>::new();
     }
 
     #[test]
@@ -142,12 +142,10 @@ mod test {
     }
 
     fn generate_keys_helper<const C: usize, const N: usize, const D: usize>() {
-        let circuit = TransferCircuit::<C, N>::new();
-        plonk_client::generate_keys::<PallasConfig, VestaConfig, _, C, N, D>(&circuit).expect(
-            &format!(
+        let circuit = TransferCircuit::<C, N, D>::new();
+        plonk_client::generate_keys::<PallasConfig, VestaConfig, _, _>(&circuit).expect(&format!(
             "Error generating key for transfer circuit from random inputs with C:{C}, N:{N}, D:{D}"
-        ),
-        );
+        ));
     }
 
     #[test]
@@ -164,10 +162,10 @@ mod test {
             utils::build_random_inputs::<PallasConfig, VestaConfig, _, C, N, D>().expect(&format!(
                 "Error generating random inputs for transfer circuit with C:{C}, N:{N}, D:{D}"
             ));
-        let transfer_circuit = TransferCircuit::<C, N>::new();
+        let transfer_circuit = TransferCircuit::<C, N, D>::new();
 
         let plonk_circuit =
-            plonk_client::build_plonk_circuit_from_inputs::<PallasConfig, VestaConfig, _, C, N, D>(
+            plonk_client::build_plonk_circuit_from_inputs::<PallasConfig, VestaConfig, _, _>(
                 &transfer_circuit,
                 inputs.clone(),
             )

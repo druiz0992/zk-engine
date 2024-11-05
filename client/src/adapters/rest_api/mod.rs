@@ -115,10 +115,21 @@ pub mod rest_api_entry {
     ) -> Result<Json<Transaction<VestaConfig>>, AppError> {
         let mut prover = db.prover.lock().await;
         let pk = prover.get_pk(MintCircuit::<1>::circuit_id()).cloned();
+
         /*
-        let c = MintCircuit::<1>::new();
-        let input = <MintCircuit<1> as ClientPlonkCircuit<PallasConfig, VestaConfig, _, 1, 0, 0>>::generate_inputs(&c).unwrap();
-        */
+         let c = MintCircuit::<1>::new();
+        let inputs = c
+            .build_new_inputs::<PallasConfig, VestaConfig, _>(
+                vec![mint_details.value],
+                vec![mint_details.token_id],
+                vec![mint_details.salt],
+                vec![mint_details.public_key],
+            )
+            .unwrap();
+
+        let (proof, pub_inputs, g_polys, _pk) =
+            InMemProver::<VestaConfig>::prove(&c, inputs, None).unwrap();
+            */
 
         let (transaction, pk) =
             mint_tokens::<PallasConfig, VestaConfig, _, InMemProver<VestaConfig>>(
@@ -278,7 +289,7 @@ pub mod rest_api_entry {
 
         let mut prover = db.prover.lock().await;
         let pk = prover
-            .get_pk(TransferCircuit::<2, 2>::circuit_id())
+            .get_pk(TransferCircuit::<2, 2, 8>::circuit_id())
             .cloned();
 
         let recipients = PublicKey(transfer_details.recipient);
@@ -296,7 +307,7 @@ pub mod rest_api_entry {
                 pk.as_ref(),
             )
             .map_err(|_| AppError::TxError)?;
-        prover.store_pk(TransferCircuit::<2, 2>::circuit_id(), pk);
+        prover.store_pk(TransferCircuit::<2, 2, 8>::circuit_id(), pk);
 
         Ok(Json(transaction))
     }

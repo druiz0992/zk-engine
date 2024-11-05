@@ -25,8 +25,8 @@ where
 {
     #[allow(clippy::type_complexity)]
     // Returns Proofs and Public Inputs
-    fn prove<P, const C: usize, const N: usize, const D: usize>(
-        circuit: &dyn ClientPlonkCircuit<P, V, VSW, C, N, D>,
+    fn prove<P, T: ClientPlonkCircuit<P, V, VSW>>(
+        circuit: &T,
         circuit_inputs: CircuitInputs<P>,
         proving_key: Option<&ProvingKey<V>>,
     ) -> Result<
