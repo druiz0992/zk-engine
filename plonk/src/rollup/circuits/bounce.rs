@@ -134,7 +134,8 @@ pub mod bounce_test {
         const I: usize = 2;
         const C: usize = 1;
         const N: usize = 2;
-        let stored_proof_base = test_base_rollup_helper_transfer::<I, C, N>();
+        const D: usize = 8;
+        let stored_proof_base = test_base_rollup_helper_transfer::<I, C, N, D>();
 
         let mut rng = test_rng();
         let (global_public_inputs, subtree_public_inputs, passthrough_instance, _) =

@@ -21,22 +21,28 @@ pub mod utils;
 
 pub use super::structs::CircuitId;
 pub use circuit::transfer_circuit;
+pub use constants::*;
 pub use utils::build_random_inputs;
 
-pub struct TransferCircuit;
+pub struct TransferCircuit<const C: usize, const N: usize>;
 
-impl TransferCircuit {
+impl<const C: usize, const N: usize> TransferCircuit<C, N> {
     const CIRCUIT_ID: &'static str = "TRANSFER";
 
     pub fn new() -> Self {
         TransferCircuit
     }
     pub fn circuit_id() -> CircuitId {
-        CircuitId::new(TransferCircuit::CIRCUIT_ID)
+        let id = format!("{}_{}_{}", Self::CIRCUIT_ID, C, N);
+        CircuitId::new(id)
+    }
+    pub fn get_circuit_id(&self) -> CircuitId {
+        let id = format!("{}_{}_{}", Self::CIRCUIT_ID, C, N);
+        CircuitId::new(id)
     }
 }
 
-impl Default for TransferCircuit {
+impl<const C: usize, const D: usize> Default for TransferCircuit<C, D> {
     fn default() -> Self {
         Self::new()
     }
@@ -44,18 +50,21 @@ impl Default for TransferCircuit {
 
 #[client_circuit]
 impl<P, V, VSW, const C: usize, const N: usize, const D: usize>
-    ClientPlonkCircuit<P, V, VSW, C, N, D> for TransferCircuit
+    ClientPlonkCircuit<P, V, VSW, C, N, D> for TransferCircuit<C, N>
 {
     fn to_plonk_circuit(
         &self,
-        circuit_inputs: CircuitInputs<P, C, N, D>,
+        circuit_inputs: CircuitInputs<P>,
     ) -> Result<PlonkCircuit<V::ScalarField>, CircuitError> {
         transfer_circuit::<P, V, C, N, D>(circuit_inputs)
+    }
+    fn generate_inputs(&self) -> Result<CircuitInputs<P>, CircuitError> {
+        utils::build_random_inputs::<P, V, VSW, C, N, D>()
     }
 }
 
 fn check_inputs<P, V, const C: usize, const N: usize, const D: usize>(
-    circuit_inputs: &CircuitInputs<P, C, N, D>,
+    circuit_inputs: &CircuitInputs<P>,
 ) -> Result<(), CircuitError>
 where
     P: SWCurveConfig,
@@ -76,6 +85,9 @@ where
         }
     }
 
+    if C > MAX_N_COMMITMENTS {
+        return Err(CircuitError::ParameterError(format!("Incorrect number of commitments C in transfer circuit. Maximum C: {MAX_N_COMMITMENTS}, Obtained: {C}")));
+    }
     // Check all fields with their respective expected lengths
     check_length("token_values", circuit_inputs.token_values.len(), C)?;
     check_length("token_salts", circuit_inputs.token_salts.len(), C)?;
@@ -118,7 +130,7 @@ mod test {
     use crate::client as plonk_client;
     #[test]
     fn test_new_transfer_circuit() {
-        TransferCircuit::new();
+        TransferCircuit::<2, 4>::new();
     }
 
     #[test]
@@ -130,17 +142,12 @@ mod test {
     }
 
     fn generate_keys_helper<const C: usize, const N: usize, const D: usize>() {
-        let circuit = TransferCircuit::new();
-        let inputs =
-            utils::build_random_inputs::<PallasConfig, VestaConfig, _, C, N, D>().expect(&format!(
-                "Error generating random inputs for transfer circuit with C:{C}, N:{N}, D:{D}"
-            ));
-        plonk_client::generate_keys_from_inputs::<PallasConfig, VestaConfig, _, C, N, D>(
-            &circuit, inputs,
-        )
-        .expect(&format!(
+        let circuit = TransferCircuit::<C, N>::new();
+        plonk_client::generate_keys::<PallasConfig, VestaConfig, _, C, N, D>(&circuit).expect(
+            &format!(
             "Error generating key for transfer circuit from random inputs with C:{C}, N:{N}, D:{D}"
-        ));
+        ),
+        );
     }
 
     #[test]
@@ -157,7 +164,7 @@ mod test {
             utils::build_random_inputs::<PallasConfig, VestaConfig, _, C, N, D>().expect(&format!(
                 "Error generating random inputs for transfer circuit with C:{C}, N:{N}, D:{D}"
             ));
-        let transfer_circuit = TransferCircuit::new();
+        let transfer_circuit = TransferCircuit::<C, N>::new();
 
         let plonk_circuit =
             plonk_client::build_plonk_circuit_from_inputs::<PallasConfig, VestaConfig, _, C, N, D>(

@@ -8,6 +8,14 @@ use curves::{
     pallas::{Fq, PallasConfig},
     vesta::VestaConfig,
 };
+use jf_plonk::{nightfall::ipa_structs::ProvingKey, nightfall::ipa_structs::VerifyingKey};
+use plonk_prover::client::{
+    self,
+    circuits::{mint::MintCircuit, structs::CircuitId, transfer::TransferCircuit},
+};
+use ports::prover::Prover;
+
+use plonk_prover::initialize_circuits;
 
 pub mod adapters;
 pub mod domain;
@@ -18,10 +26,22 @@ pub mod usecase;
 fn main() {
     let db: InMemStorage<PallasConfig, Fq> = InMemStorage::new();
     let thread_safe_db = std::sync::Arc::new(tokio::sync::Mutex::new(db));
-    let prover: InMemProver<VestaConfig> = InMemProver::new();
+    let mut prover: InMemProver<VestaConfig> = InMemProver::new();
+
+    const DEPTH: usize = 8;
+    let info = initialize_circuits!(
+        ("mint", 1, 0),
+        ("mint", 2, 0),
+        ("transfer", 1, 1),
+        ("transfer", 1, 2),
+        ("transfer", 2, 2),
+        ("transfer", 2, 3)
+    );
+    info.iter()
+        .for_each(|(id, keys)| prover.store_pk(id.clone(), keys.0.clone()));
+
     let thread_safe_prover = Arc::new(tokio::sync::Mutex::new(prover));
     let _test_mnemonic = "pact gun essay three dash seat page silent slogan hole huge harvest awesome fault cute alter boss thank click menu service quarter gaze salmon";
-
     let async_rt = tokio::runtime::Builder::new_multi_thread()
         .enable_io()
         .enable_time()

@@ -70,7 +70,7 @@ pub mod in_memory_prover {
     {
         fn prove<P, const C: usize, const N: usize, const D: usize>(
             circuit: &dyn ClientPlonkCircuit<P, V, VSW, C, N, D>,
-            circuit_inputs: CircuitInputs<P, C, N, D>,
+            circuit_inputs: CircuitInputs<P>,
             proving_key: Option<&ProvingKey<V>>,
         ) -> Result<
             (
@@ -178,45 +178,28 @@ mod tests {
         const D: usize = 8;
         let mut prover: InMemProver<VestaConfig> = InMemProver::default();
 
-        let mint_circuit = mint::MintCircuit::new();
-        let mint_inputs =
-            mint::utils::build_random_inputs::<PallasConfig, VestaConfig, _, C, N, D>().expect(
-                &format!(
-                    "Error generating random inputs for mint circuit with C:{C}, N:{N}, D:{D}"
-                ),
-            );
+        let mint_circuit = mint::MintCircuit::<C>::new();
         let (mint_pk, _) =
-            client::generate_keys_from_inputs::<PallasConfig, VestaConfig, _, C, N, D>(
-                &mint_circuit,
-                mint_inputs.clone(),
-            )
-            .expect(&format!(
-                "Error generating key for mint circuit from random inputs with C:{C}, N:{N}, D:{D}"
-            ));
-
-        let transfer_circuit = TransferCircuit::new();
-        let transfer_inputs =
-            transfer::utils::build_random_inputs::<PallasConfig, VestaConfig, _, C, N, D>().expect(
-                &format!(
-                    "Error generating random inputs for transfer circuit with C:{C}, N:{N}, D:{D}"
-                ),
+            client::generate_keys::<PallasConfig, VestaConfig, _, C, 0, 0>(&mint_circuit).expect(
+                &format!("Error generating key for mint circuit from random inputs with C:{C}"),
             );
+
+        let transfer_circuit = TransferCircuit::<C, N>::new();
         let (transfer_pk, _) =
-            client::generate_keys_from_inputs::<PallasConfig, VestaConfig, _, C, N, D>(
-                &transfer_circuit,
-                transfer_inputs.clone(),
-            )
-            .expect(&format!(
+            client::generate_keys::<PallasConfig, VestaConfig, _, C, N, D>(&transfer_circuit)
+                .expect(&format!(
             "Error generating key for transfer circuit from random inputs with C:{C}, N:{N}, D:{D}"
         ));
 
-        prover.store_pk(MintCircuit::circuit_id(), mint_pk.clone());
-        prover.store_pk(TransferCircuit::circuit_id(), transfer_pk.clone());
+        prover.store_pk(MintCircuit::<C>::circuit_id(), mint_pk.clone());
+        prover.store_pk(TransferCircuit::<C, N>::circuit_id(), transfer_pk.clone());
 
-        let stored_mint_pk = prover.get_pk(MintCircuit::circuit_id()).unwrap();
+        let stored_mint_pk = prover.get_pk(MintCircuit::<C>::circuit_id()).unwrap();
         assert_eq!(stored_mint_pk, &mint_pk);
 
-        let stored_transfer_pk = prover.get_pk(TransferCircuit::circuit_id()).unwrap();
+        let stored_transfer_pk = prover
+            .get_pk(TransferCircuit::<C, N>::circuit_id())
+            .unwrap();
         assert_eq!(stored_transfer_pk, &transfer_pk);
     }
 
@@ -226,21 +209,22 @@ mod tests {
         const N: usize = 1;
         const D: usize = 8;
 
-        let mint_circuit = MintCircuit::new();
-        let inputs = mint::utils::build_random_inputs::<PallasConfig, VestaConfig, _, C, N, D>()
-            .expect(&format!(
-                "Error generating random inputs for mint circuit with C:{C}, N:{N}, D:{D}"
-            ));
-        let (pk, vk) = client::generate_keys_from_inputs::<PallasConfig, VestaConfig, _, C, N, D>(
+        let mint_circuit = MintCircuit::<C>::new();
+        let inputs = mint::utils::build_random_inputs::<PallasConfig, VestaConfig, _, C>().expect(
+            &format!("Error generating random inputs for mint circuit with C:{C}, N:{N}, D:{D}"),
+        );
+        let (pk, vk) = client::generate_keys::<PallasConfig, VestaConfig, _, C, 0, 0>(
             &mint_circuit,
-            inputs.clone(),
         )
         .expect(&format!(
             "Error generating key for mint circuit from random inputs with C:{C}, N:{N}, D:{D}"
         ));
 
-        let result =
-            <InMemProver<VestaConfig> as Prover<_, _>>::prove(&mint_circuit, inputs, Some(&pk));
+        let result = <InMemProver<VestaConfig> as Prover<_, _>>::prove::<_, C, 0, 0>(
+            &mint_circuit,
+            inputs,
+            Some(&pk),
+        );
         assert!(
             result.is_ok(),
             "Proof generation should succeed for valid inputs"
@@ -258,22 +242,22 @@ mod tests {
         const N: usize = 2;
         const D: usize = 8;
 
-        let transfer_circuit = TransferCircuit::new();
-        let inputs = transfer::utils::build_random_inputs::<PallasConfig, VestaConfig, _, C, N, D>(
-        )
-        .expect(&format!(
-            "Error generating random inputs for transfer circuit with C:{C}, N:{N}, D:{D}"
-        ));
-        let (pk, vk) = client::generate_keys_from_inputs::<PallasConfig, VestaConfig, _, C, N, D>(
-            &transfer_circuit,
-            inputs.clone(),
-        )
-        .expect(&format!(
+        let transfer_circuit = TransferCircuit::<C, N>::new();
+        let inputs = transfer::build_random_inputs::<PallasConfig, VestaConfig, _, C, N, D>()
+            .expect(&format!(
+                "Error generating random inputs for transfer circuit with C:{C}, N:{N}, D:{D}"
+            ));
+        let (pk, vk) =
+            client::generate_keys::<PallasConfig, VestaConfig, _, C, N, D>(&transfer_circuit)
+                .expect(&format!(
             "Error generating key for transfer circuit from random inputs with C:{C}, N:{N}, D:{D}"
         ));
 
-        let result =
-            <InMemProver<VestaConfig> as Prover<_, _>>::prove(&transfer_circuit, inputs, Some(&pk));
+        let result = <InMemProver<VestaConfig> as Prover<_, _>>::prove::<_, C, N, D>(
+            &transfer_circuit,
+            inputs,
+            Some(&pk),
+        );
         assert!(
             result.is_ok(),
             "Proof generation should succeed for valid inputs"

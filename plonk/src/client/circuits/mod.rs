@@ -14,11 +14,11 @@ pub mod structs {
         pub commitment_tree_root: V::ScalarField,
     }
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    pub struct CircuitId(&'static str);
+    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+    pub struct CircuitId(String);
 
     impl CircuitId {
-        pub const fn new(id: &'static str) -> Self {
+        pub const fn new(id: String) -> Self {
             CircuitId(id)
         }
     }

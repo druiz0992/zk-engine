@@ -12,6 +12,7 @@ use jf_relation::gadgets::ecc::SWToTEConParam;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 
+use super::check_inputs;
 use super::constants::*;
 use crate::client::circuits::circuit_inputs::CircuitInputs;
 use crate::client::circuits::mint;
@@ -25,9 +26,9 @@ use trees::{AppendTree, MembershipPath, MembershipTree, Tree};
 
 #[client_circuit]
 pub fn build_random_inputs<P, V, VSW, const C: usize, const N: usize, const D: usize>(
-) -> Result<CircuitInputs<P, C, N, D>, CircuitError> {
+) -> Result<CircuitInputs<P>, CircuitError> {
     let mut rng = ChaChaRng::from_entropy();
-    let mint_inputs = mint::utils::build_random_inputs::<P, V, _, N, N, D>()?;
+    let mint_inputs = mint::utils::build_random_inputs::<P, V, _, N>()?;
     let mut mint_commitment_hashes = Vec::with_capacity(N);
     let mut total_value = V::ScalarField::from(ZERO);
     let mut indices = Vec::<V::ScalarField>::with_capacity(N);
@@ -79,6 +80,7 @@ pub fn build_random_inputs<P, V, VSW, const C: usize, const N: usize, const D: u
         .add_root_key(root_key)
         .add_ephemeral_key(V::ScalarField::rand(&mut rng))
         .build();
+    check_inputs::<P, V, C, N, D>(&circuit_inputs)?;
 
     Ok(circuit_inputs)
 }

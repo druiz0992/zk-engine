@@ -11,6 +11,8 @@ pub mod rest_api_entry {
     use bip32::Mnemonic;
     use common::structs::Transaction;
     use jf_plonk::nightfall::ipa_structs::Proof;
+    use plonk_prover::client::circuits::circuit_inputs::CircuitInputs;
+    use plonk_prover::client::ClientPlonkCircuit;
     use serde::{Deserialize, Serialize};
     use std::sync::Arc;
     use tokio::sync::Mutex;
@@ -112,7 +114,11 @@ pub mod rest_api_entry {
         Json(mint_details): Json<Preimage<PallasConfig>>,
     ) -> Result<Json<Transaction<VestaConfig>>, AppError> {
         let mut prover = db.prover.lock().await;
-        let pk = prover.get_pk(MintCircuit::circuit_id()).cloned();
+        let pk = prover.get_pk(MintCircuit::<1>::circuit_id()).cloned();
+        /*
+        let c = MintCircuit::<1>::new();
+        let input = <MintCircuit<1> as ClientPlonkCircuit<PallasConfig, VestaConfig, _, 1, 0, 0>>::generate_inputs(&c).unwrap();
+        */
 
         let (transaction, pk) =
             mint_tokens::<PallasConfig, VestaConfig, _, InMemProver<VestaConfig>>(
@@ -124,7 +130,7 @@ pub mod rest_api_entry {
             )
             .map_err(|_| AppError::TxError)?;
 
-        prover.store_pk(MintCircuit::circuit_id(), pk);
+        prover.store_pk(MintCircuit::<1>::circuit_id(), pk);
 
         let mut db = db.state_db.lock().await;
         let preimage_key = mint_details
@@ -271,7 +277,9 @@ pub mod rest_api_entry {
         let ephemeral_key = crate::domain::EFq::from(10u64);
 
         let mut prover = db.prover.lock().await;
-        let pk = prover.get_pk(TransferCircuit::circuit_id()).cloned();
+        let pk = prover
+            .get_pk(TransferCircuit::<2, 2>::circuit_id())
+            .cloned();
 
         let recipients = PublicKey(transfer_details.recipient);
 
@@ -288,7 +296,7 @@ pub mod rest_api_entry {
                 pk.as_ref(),
             )
             .map_err(|_| AppError::TxError)?;
-        prover.store_pk(TransferCircuit::circuit_id(), pk);
+        prover.store_pk(TransferCircuit::<2, 2>::circuit_id(), pk);
 
         Ok(Json(transaction))
     }

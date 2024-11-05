@@ -648,27 +648,22 @@ pub mod base_test {
     use trees::MembershipPath;
     #[test]
     fn test_base_circuit() {
-        test_base_rollup_helper_mint::<2, 2, 0, 0>();
+        test_base_rollup_helper_mint::<2, 2>();
         // test_base_rollup_helper_mint::<2, 4>();
         // test_base_rollup_helper_mint::<4, 2>();
-        test_base_rollup_helper_transfer::<2, 2, 2>();
-        // test_base_rollup_helper_transfer::<4, 2, 2>();
-        // test_base_rollup_helper_transfer::<4, 4, 1>();
+        test_base_rollup_helper_transfer::<2, 2, 2, 8>();
+        // test_base_rollup_helper_transfer::<4, 2, 2,8>();
+        // test_base_rollup_helper_transfer::<4, 4, 1,8>();
         test_base_rollup_helper_swap();
     }
 
-    fn test_base_rollup_helper_mint<
-        const I: usize,
-        const C: usize,
-        const N: usize,
-        const D: usize,
-    >() {
+    fn test_base_rollup_helper_mint<const I: usize, const C: usize>() {
         let mut rng = test_rng();
         let mut client_inputs = vec![];
         let mut g_polys = vec![];
         for i in 0..I {
             let mut mint_circuit =
-                mint_circuit_helper_generator::<C, N, D>(ark_std::array::from_fn(|j| {
+                mint_circuit_helper_generator::<C>(ark_std::array::from_fn(|j| {
                     Fq::from((j + i) as u32)
                 }));
             mint_circuit.finalize_for_arithmetization().unwrap();
@@ -789,8 +784,12 @@ pub mod base_test {
         ark_std::println!("Base proof verified")
     }
 
-    pub fn test_base_rollup_helper_transfer<const I: usize, const C: usize, const N: usize>(
-    ) -> StoredProof<PallasConfig, VestaConfig> {
+    pub fn test_base_rollup_helper_transfer<
+        const I: usize,
+        const C: usize,
+        const N: usize,
+        const D: usize,
+    >() -> StoredProof<PallasConfig, VestaConfig> {
         // Prepare transfer preamble (i.e. create fake mints)
         let root_key = Fq::rand(&mut test_rng());
         let derived_keys = DerivedKeys::<PallasConfig>::new(root_key).unwrap();
@@ -831,12 +830,13 @@ pub mod base_test {
                     .try_into()
                     .unwrap();
             }
-            let (mut transfer_circuit, transfer_inputs) = transfer_circuit_helper_generator::<C, N>(
-                mint_values,
-                old_sib_paths,
-                [prev_commitment_tree.root(); N],
-                ark_std::array::from_fn(|i| i as u64),
-            );
+            let (mut transfer_circuit, transfer_inputs) =
+                transfer_circuit_helper_generator::<C, N, D>(
+                    mint_values,
+                    old_sib_paths,
+                    [prev_commitment_tree.root(); N],
+                    ark_std::array::from_fn(|i| i as u64),
+                );
 
             transfer_circuit.finalize_for_arithmetization().unwrap();
             let transfer_ipa_srs = <PlonkIpaSnark<VestaConfig> as UniversalSNARK<VestaConfig>>::universal_setup_for_testing(
@@ -1312,7 +1312,7 @@ pub mod base_test {
         // }
     }
 
-    fn transfer_circuit_helper_generator<const C: usize, const N: usize>(
+    fn transfer_circuit_helper_generator<const C: usize, const N: usize, const D: usize>(
         value: [Fq; N],
         old_sib_path: [[Fq; 8]; N],
         root: [Fq; N],
@@ -1353,7 +1353,7 @@ pub mod base_test {
             .build();
 
         let circuit =
-            transfer_circuit::<PallasConfig, VestaConfig, C, N, 8>(circuit_inputs).unwrap();
+            transfer_circuit::<PallasConfig, VestaConfig, C, N, D>(circuit_inputs).unwrap();
 
         let public_inputs = circuit.public_input().unwrap();
 
@@ -1414,16 +1414,14 @@ pub mod base_test {
         (circuit, client_input)
     }
 
-    fn mint_circuit_helper_generator<const C: usize, const N: usize, const D: usize>(
-        value: [Fq; C],
-    ) -> PlonkCircuit<Fq> {
+    fn mint_circuit_helper_generator<const C: usize>(value: [Fq; C]) -> PlonkCircuit<Fq> {
         let token_id = [Fq::from(12 as u64); C].to_vec();
         let token_nonce = [Fq::from(13 as u64); C].to_vec();
         let value = value.to_vec();
         let pk = PrivateKey::from_scalar(Fr::from(1u64));
         let token_owner = [PublicKey::from_private_key(&pk); C].to_vec();
 
-        let mut circuit_inputs_builder = CircuitInputs::<PallasConfig, C, N, D>::new();
+        let mut circuit_inputs_builder = CircuitInputs::<PallasConfig>::new();
 
         let circuit_inputs = circuit_inputs_builder
             .add_token_values(value)
@@ -1432,8 +1430,7 @@ pub mod base_test {
             .add_recipients(token_owner)
             .build();
 
-        let circuit =
-            mint_circuit::<PallasConfig, VestaConfig, _, C, N, D>(circuit_inputs).unwrap();
+        let circuit = mint_circuit::<PallasConfig, VestaConfig, _, C>(circuit_inputs).unwrap();
 
         circuit
     }

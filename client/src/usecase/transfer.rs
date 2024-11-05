@@ -51,7 +51,7 @@ where
         assert_eq!(x.token_id, token_id);
     });
     // Start the builder
-    let mut circuit_inputs_builder = CircuitInputs::<P, C, N, D>::new();
+    let mut circuit_inputs_builder = CircuitInputs::<P>::new();
     //let mut circuit_inputs_builder = CircuitInputs::<P>::new();
     // Add vector inputs
     let mut old_token_values = Vec::with_capacity(old_preimages.len());
@@ -76,7 +76,7 @@ where
         .add_token_salts(membership_path_index) //only the first salt needs to be the index
         .build();
 
-    let transfer_circuit = TransferCircuit::new();
+    let transfer_circuit = TransferCircuit::<C, N>::new();
     let (proof, pub_inputs, g_polys, pk) =
         Proof::prove::<P, C, N, D>(&transfer_circuit, circuit_inputs, proving_key).unwrap();
 

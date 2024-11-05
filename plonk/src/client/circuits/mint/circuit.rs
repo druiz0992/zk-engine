@@ -9,7 +9,6 @@ use jf_relation::{
     constraint_system::PlonkCircuit, errors::CircuitError, gadgets::ecc::SWToTEConParam, Circuit,
 };
 
-use super::check_inputs;
 use super::constants::*;
 use crate::{
     client::circuits::circuit_inputs::CircuitInputs,
@@ -22,11 +21,9 @@ use common::crypto::poseidon::constants::PoseidonParams;
 use macros::client_circuit;
 
 #[client_circuit]
-pub fn mint_circuit<P, V, VSW, const C: usize, const N: usize, const D: usize>(
-    circuit_inputs: CircuitInputs<P, C, N, D>,
+pub fn mint_circuit<P, V, VSW, const C: usize>(
+    circuit_inputs: CircuitInputs<P>,
 ) -> Result<PlonkCircuit<V::ScalarField>, CircuitError> {
-    check_inputs::<P, V, C, N, D>(&circuit_inputs)?;
-
     // Calculate output hash of the commitment
     let mut circuit = PlonkCircuit::new_turbo_plonk();
     // Swap_field = false

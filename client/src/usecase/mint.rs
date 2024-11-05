@@ -33,10 +33,8 @@ where
     Proof: Prover<V, VSW>,
 {
     const C: usize = 1;
-    const N: usize = 0;
-    const D: usize = 0;
-    let mint_circuit = MintCircuit::new();
-    let mut circuit_inputs_builder = CircuitInputs::<P, C, N, D>::new();
+    let mint_circuit = MintCircuit::<C>::new();
+    let mut circuit_inputs_builder = CircuitInputs::<P>::new();
     let circuit_inputs = circuit_inputs_builder
         .add_token_ids(token_ids)
         .add_token_salts(salts)
@@ -45,7 +43,7 @@ where
         .build();
 
     let (proof, pub_inputs, g_polys, pk) =
-        Proof::prove::<P, C, N, D>(&mint_circuit, circuit_inputs, proving_key).unwrap();
+        Proof::prove::<P, C, 0, 0>(&mint_circuit, circuit_inputs, proving_key).unwrap();
 
     let client_pub_inputs: ClientPubInputs<_, 0, 1> = pub_inputs.try_into()?;
 

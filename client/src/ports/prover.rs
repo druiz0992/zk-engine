@@ -27,7 +27,7 @@ where
     // Returns Proofs and Public Inputs
     fn prove<P, const C: usize, const N: usize, const D: usize>(
         circuit: &dyn ClientPlonkCircuit<P, V, VSW, C, N, D>,
-        circuit_inputs: CircuitInputs<P, C, N, D>,
+        circuit_inputs: CircuitInputs<P>,
         proving_key: Option<&ProvingKey<V>>,
     ) -> Result<
         (

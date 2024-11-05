@@ -31,7 +31,7 @@ pub fn benchmark_mint(c: &mut Criterion) {
             let token_nonce = Fq::from_str("3").unwrap();
             let token_owner = (PallasConfig::GENERATOR * Fr::from_str("4").unwrap()).into_affine();
 
-            let mut circuit_inputs_builder = CircuitInputs::<PallasConfig, C, N, D>::new();
+            let mut circuit_inputs_builder = CircuitInputs::<PallasConfig>::new();
             let circuit_inputs = circuit_inputs_builder
                 .add_token_values(vec![value; C])
                 .add_token_ids(vec![token_id; C])
@@ -39,7 +39,7 @@ pub fn benchmark_mint(c: &mut Criterion) {
                 .add_recipients(vec![PublicKey::from_affine(token_owner); C])
                 .build();
             let mut circuit =
-                mint_circuit::<PallasConfig, VestaConfig, _, C, N, D>(circuit_inputs).unwrap();
+                mint_circuit::<PallasConfig, VestaConfig, _, C>(circuit_inputs).unwrap();
             circuit.finalize_for_arithmetization().unwrap();
         })
     });
@@ -51,7 +51,7 @@ pub fn benchmark_mint(c: &mut Criterion) {
         let token_owner =
             (PallasConfig::GENERATOR * Fr::from_str("4").unwrap()).into_affine();
 
-        let mut circuit_inputs_builder = CircuitInputs::<PallasConfig, C, N, D>::new();
+        let mut circuit_inputs_builder = CircuitInputs::<PallasConfig>::new();
         let circuit_inputs = circuit_inputs_builder
             .add_token_values(vec![value; C])
             .add_token_ids(vec![token_id; C])
@@ -59,7 +59,7 @@ pub fn benchmark_mint(c: &mut Criterion) {
             .add_recipients(vec![PublicKey::from_affine(token_owner); C])
             .build();
 
-        let mut circuit = mint_circuit::<PallasConfig, VestaConfig,_, C, N, D>(circuit_inputs).unwrap();
+        let mut circuit = mint_circuit::<PallasConfig, VestaConfig,_, C>(circuit_inputs).unwrap();
         circuit.finalize_for_arithmetization().unwrap();
 
         let srs_size = circuit.srs_size().unwrap();
@@ -86,7 +86,7 @@ pub fn benchmark_mint(c: &mut Criterion) {
             let token_nonce = Fq::from_str("3").unwrap();
             let token_owner = (PallasConfig::GENERATOR * Fr::from_str("4").unwrap()).into_affine();
 
-            let mut circuit_inputs_builder = CircuitInputs::<PallasConfig, C, N, D>::new();
+            let mut circuit_inputs_builder = CircuitInputs::<PallasConfig>::new();
             let circuit_inputs = circuit_inputs_builder
                 .add_token_values(vec![value; C])
                 .add_token_ids(vec![token_id; C])
@@ -95,7 +95,7 @@ pub fn benchmark_mint(c: &mut Criterion) {
                 .build();
 
             let mut circuit =
-                mint_circuit::<PallasConfig, VestaConfig, _, C, N, D>(circuit_inputs).unwrap();
+                mint_circuit::<PallasConfig, VestaConfig, _, C>(circuit_inputs).unwrap();
             circuit.finalize_for_arithmetization().unwrap();
         })
     });
@@ -108,7 +108,7 @@ pub fn benchmark_mint(c: &mut Criterion) {
             (PallasConfig::GENERATOR * Fr::from_str("4").unwrap()).into_affine();
 
 
-        let mut circuit_inputs_builder = CircuitInputs::<PallasConfig, C, N, D>::new();
+        let mut circuit_inputs_builder = CircuitInputs::<PallasConfig>::new();
         let circuit_inputs = circuit_inputs_builder
             .add_token_values(vec![value; C])
             .add_token_ids(vec![token_id; C])
@@ -116,7 +116,7 @@ pub fn benchmark_mint(c: &mut Criterion) {
             .add_recipients(vec![PublicKey::from_affine(token_owner); C])
             .build();
 
-        let mut circuit = mint_circuit::<PallasConfig, VestaConfig,_, C, N, D>(circuit_inputs).unwrap();
+        let mut circuit = mint_circuit::<PallasConfig, VestaConfig,_, C>(circuit_inputs).unwrap();
         circuit.finalize_for_arithmetization().unwrap();
         let srs_size = circuit.srs_size().unwrap();
         let srs =

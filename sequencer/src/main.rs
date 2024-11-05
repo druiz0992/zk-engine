@@ -11,10 +11,8 @@ use jf_plonk::{
     proof_system::{structs::VK, UniversalSNARK},
 };
 use jf_primitives::pcs::StructuredReferenceString;
-use plonk_prover::{
-    client::circuits::{mint::MintCircuit, transfer::TransferCircuit},
-    utils::key_gen::generate_client_pks_and_vks,
-};
+use plonk_prover::client;
+use plonk_prover::client::circuits::{mint::MintCircuit, transfer::TransferCircuit};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use trees::{membership_tree::Tree, tree::AppendTree};
@@ -29,23 +27,30 @@ use crate::{
     },
 };
 
+use jf_plonk::{nightfall::ipa_structs::ProvingKey, nightfall::ipa_structs::VerifyingKey};
+use plonk_prover::client::circuits::structs::CircuitId;
+use plonk_prover::initialize_circuits;
+
 fn main() {
     let mut db: InMemStorage = InMemStorage::new();
     let mut prover: InMemProver = InMemProver::new();
-    const C: usize = 1;
-    const N: usize = 1;
-    const D: usize = 8;
 
     // Setup Preamble
     ark_std::println!("Generating Keys");
-    let pks =
-        generate_client_pks_and_vks::<PallasConfig, VestaConfig, VestaConfig, C, N, D>().unwrap();
-    let vks = pks
+    const DEPTH: usize = 8;
+    let info = initialize_circuits!(
+        ("mint", 1, 0),
+        ("mint", 2, 0),
+        ("transfer", 1, 1),
+        ("transfer", 1, 2),
+        ("transfer", 2, 2),
+        ("transfer", 2, 3)
+    );
+    let vks = info
         .into_iter()
-        .zip([MintCircuit::circuit_id(), TransferCircuit::circuit_id()])
-        .map(|(pk, circuit_type)| {
-            prover.store_vk(circuit_type, pk.1.clone());
-            pk.1
+        .map(|(id, keys)| {
+            prover.store_vk(id, keys.1.clone());
+            keys.1
         })
         .collect::<Vec<_>>();
 
