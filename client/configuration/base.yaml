@@ -1,0 +1,4 @@
+general:
+  log_level: "trace"
+application:
+  port: 8000

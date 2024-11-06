@@ -117,8 +117,8 @@ pub mod in_memory_prover {
 #[cfg(test)]
 mod tests {
 
+    use super::in_memory_prover::InMemProver;
     use crate::ports::prover::Prover;
-    use crate::InMemProver;
     use plonk_prover::client::circuits::transfer;
 
     use curves::pallas::PallasConfig;

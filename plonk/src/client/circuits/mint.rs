@@ -82,7 +82,7 @@ impl<P, V, VSW, const C: usize> ClientPlonkCircuit<P, V, VSW> for MintCircuit<C>
         self.get_circuit_id()
     }
     fn get_commitment_and_nullifier_count(&self) -> (usize, usize) {
-        (C as usize, 0)
+        (C, 0)
     }
 }
 

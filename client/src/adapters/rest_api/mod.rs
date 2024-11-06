@@ -14,6 +14,7 @@ pub mod rest_api_entry {
     use serde::{Deserialize, Serialize};
     use std::sync::Arc;
     use tokio::sync::Mutex;
+    use tracing_log::log;
     use trees::MembershipPath;
 
     use axum::{
@@ -46,6 +47,7 @@ pub mod rest_api_entry {
     use plonk_prover::client::circuits::{mint::MintCircuit, transfer::TransferCircuit};
 
     use super::structs::{MnemonicInput, PreimageResponse, TransferInput};
+    use crate::configuration::ApplicationSettings;
 
     pub enum AppError {
         TxError,
@@ -70,10 +72,55 @@ pub mod rest_api_entry {
         pub state_db: WriteDatabase,
         pub prover: Arc<Mutex<InMemProver<PallasConfig, VestaConfig, VestaConfig>>>,
     }
+
+    pub struct Application {
+        port: u16,
+        server: axum::serve::Serve<Router, Router>,
+        #[allow(dead_code)]
+        db: WriteDatabase,
+        #[allow(dead_code)]
+        prover: Arc<Mutex<InMemProver<PallasConfig, VestaConfig, VestaConfig>>>,
+    }
+
+    impl Application {
+        pub async fn build(
+            db: WriteDatabase,
+            prover: Arc<Mutex<InMemProver<PallasConfig, VestaConfig, VestaConfig>>>,
+            configuration: ApplicationSettings,
+        ) -> Result<Application, String> {
+            let address = format!("{}:{}", configuration.host, configuration.port);
+            let listener = tokio::net::TcpListener::bind(address)
+                .await
+                .expect("Unable to start application".into());
+            let port = listener.local_addr().unwrap().port();
+
+            let server: axum::serve::Serve<Router, Router> =
+                run_api(listener, db.clone(), prover.clone()).await;
+            log::trace!("Launching server at {}:{}", configuration.host, port);
+
+            Ok(Application {
+                server,
+                port,
+                db: db.clone(),
+                prover: prover.clone(),
+            })
+        }
+
+        pub fn port(&self) -> u16 {
+            self.port
+        }
+
+        pub async fn run_until_stopped(self) -> Result<(), std::io::Error> {
+            log::trace!("Server launched");
+            self.server.await
+        }
+    }
+
     pub async fn run_api(
+        listener: tokio::net::TcpListener,
         db_state: WriteDatabase,
         prover: Arc<Mutex<InMemProver<PallasConfig, VestaConfig, VestaConfig>>>,
-    ) {
+    ) -> axum::serve::Serve<Router, Router> {
         dotenv().ok();
         let app_state = AppState {
             state_db: db_state,
@@ -88,10 +135,13 @@ pub mod rest_api_entry {
             .route("/block", post(handle_block))
             .with_state(app_state);
 
+        axum::serve(listener, app)
+        /*
         axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())
             .serve(app.into_make_service())
             .await
             .unwrap();
+        */
     }
 
     #[derive(Serialize, Debug, Deserialize)]
@@ -280,7 +330,6 @@ pub mod rest_api_entry {
             .ok_or(AppError::TxError)?;
 
         let recipients = PublicKey(transfer_details.recipient);
-
         let transaction = transfer_tokens::<
             PallasConfig,
             VestaConfig,
