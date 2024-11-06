@@ -3,7 +3,6 @@ use ark_ff::PrimeField;
 
 use jf_relation::{errors::CircuitError, Circuit, PlonkCircuit};
 
-use super::check_inputs;
 use super::constants::*;
 use crate::client::circuits::circuit_inputs::CircuitInputs;
 use crate::primitives::circuits::{
@@ -15,14 +14,13 @@ use common::derived_keys::{NULLIFIER_PREFIX, PRIVATE_KEY_PREFIX};
 use std::str::FromStr;
 
 pub fn transfer_circuit<P, V, const C: usize, const N: usize, const D: usize>(
-    circuit_inputs: CircuitInputs<P, C, N, D>,
+    circuit_inputs: CircuitInputs<P>,
 ) -> Result<PlonkCircuit<V::ScalarField>, CircuitError>
 where
     P: SWCurveConfig,
     V: Pairing<ScalarField = P::BaseField>,
     <P as CurveConfig>::BaseField: PrimeField + KemDemParams<Field = V::ScalarField>,
 {
-    check_inputs::<P, V, C, N, D>(&circuit_inputs)?;
     let mut circuit = PlonkCircuit::new_turbo_plonk();
 
     // Swap_field = false

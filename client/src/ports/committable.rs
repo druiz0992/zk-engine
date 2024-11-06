@@ -1,3 +1,4 @@
+use crate::domain::Preimage;
 use ark_ec::short_weierstrass::SWCurveConfig;
 use ark_ff::PrimeField;
 use common::{
@@ -7,8 +8,6 @@ use common::{
     },
     structs::Commitment,
 };
-
-use crate::domain::Preimage;
 
 pub trait Committable<F: PrimeField> {
     type Error;

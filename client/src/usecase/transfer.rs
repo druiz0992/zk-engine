@@ -11,12 +11,13 @@ use jf_relation::gadgets::ecc::SWToTEConParam;
 use plonk_prover::{client::structs::ClientPubInputs, primitives::circuits::kem_dem::KemDemParams};
 use trees::MembershipPath;
 
-use crate::domain::PublicKey;
+use common::keypair::PublicKey;
 use plonk_prover::client::circuits::circuit_inputs::CircuitInputs;
-use plonk_prover::client::circuits::transfer::TransferCircuit;
+use plonk_prover::client::ClientPlonkCircuit;
 
 #[allow(clippy::too_many_arguments)]
 pub fn transfer_tokens<P, V, VSW, Proof>(
+    transfer_circuit: Box<dyn ClientPlonkCircuit<P, V, VSW>>,
     // Token information
     old_preimages: Vec<Preimage<P>>,
     new_token_values: Vec<V::ScalarField>,
@@ -29,8 +30,8 @@ pub fn transfer_tokens<P, V, VSW, Proof>(
     root_key: V::ScalarField,
     ephemeral_key: V::ScalarField,
     // Prover
-    proving_key: Option<&ProvingKey<V>>,
-) -> Result<(Transaction<V>, ProvingKey<V>), &'static str>
+    proving_key: &ProvingKey<V>,
+) -> Result<Transaction<V>, &'static str>
 where
     P: SWCurveConfig<BaseField = V::ScalarField>,
     V: Pairing<G1Affine = Affine<VSW>, G1 = Projective<VSW>>,
@@ -40,18 +41,15 @@ where
         BaseField = <V as Pairing>::BaseField,
         ScalarField = <V as Pairing>::ScalarField,
     >,
-    Proof: Prover<V, VSW>,
+    Proof: Prover<P, V, VSW>,
 {
-    const C: usize = 1;
-    const N: usize = 1;
-    const D: usize = 8;
     // Assert all token ids are the same
     let token_id = old_preimages[0].token_id;
     old_preimages.iter().skip(1).for_each(|x| {
         assert_eq!(x.token_id, token_id);
     });
     // Start the builder
-    let mut circuit_inputs_builder = CircuitInputs::<P, C, N, D>::new();
+    let mut circuit_inputs_builder = CircuitInputs::<P>::new();
     //let mut circuit_inputs_builder = CircuitInputs::<P>::new();
     // Add vector inputs
     let mut old_token_values = Vec::with_capacity(old_preimages.len());
@@ -76,11 +74,13 @@ where
         .add_token_salts(membership_path_index) //only the first salt needs to be the index
         .build();
 
-    let transfer_circuit = TransferCircuit::new();
-    let (proof, pub_inputs, g_polys, pk) =
-        Proof::prove::<P, C, N, D>(&transfer_circuit, circuit_inputs, proving_key).unwrap();
+    let (proof, pub_inputs, g_polys) =
+        Proof::prove(&*transfer_circuit, circuit_inputs, proving_key).unwrap();
 
-    let client_pub_inputs: ClientPubInputs<_, 1, 1> = pub_inputs.try_into()?;
+    let client_pub_inputs = ClientPubInputs::new(
+        pub_inputs,
+        transfer_circuit.get_commitment_and_nullifier_count(),
+    )?;
 
     let transaction = Transaction::new(
         client_pub_inputs
@@ -100,5 +100,5 @@ where
         client_pub_inputs.swap_field,
     );
 
-    Ok((transaction, pk))
+    Ok(transaction)
 }

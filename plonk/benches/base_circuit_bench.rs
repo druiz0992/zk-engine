@@ -31,9 +31,6 @@ use trees::{
 pub fn benchmark_mints<const I: usize, const C: usize, const N: usize, const D: usize>(
     c: &mut Criterion,
 ) {
-    const D: usize = 0;
-    const N: usize = 0;
-
     // Below taken from test_base_rollup_helper_mint
     let mut rng = test_rng();
     let mut client_inputs = vec![];
@@ -51,7 +48,7 @@ pub fn benchmark_mints<const I: usize, const C: usize, const N: usize, const D: 
         let secret_key_fr = field_switching::<Fq, Fr>(&secret_key);
         let token_owner = (PallasConfig::GENERATOR * secret_key_fr).into_affine();
 
-        let mut circuit_inputs_builder = CircuitInputs::<PallasConfig, C, N, D>::new();
+        let mut circuit_inputs_builder = CircuitInputs::<PallasConfig>::new();
         let circuit_inputs = circuit_inputs_builder
             .add_token_values(value.to_vec())
             .add_token_ids(token_id.to_vec())
@@ -60,7 +57,7 @@ pub fn benchmark_mints<const I: usize, const C: usize, const N: usize, const D: 
             .build();
 
         let mut mint_circuit =
-            mint_circuit::<PallasConfig, VestaConfig, _, C, N, D>(circuit_inputs).unwrap();
+            mint_circuit::<PallasConfig, VestaConfig, _, C>(circuit_inputs).unwrap();
 
         mint_circuit.finalize_for_arithmetization().unwrap();
         if i == 0 {

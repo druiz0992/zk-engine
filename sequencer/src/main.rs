@@ -4,20 +4,13 @@ pub mod ports;
 pub mod services;
 pub mod usecase;
 
-use common::crypto::poseidon::Poseidon;
-use curves::{pallas::PallasConfig, vesta::VestaConfig};
 use jf_plonk::{
-    nightfall::PlonkIpaSnark,
+    nightfall::{ipa_structs::VerifyingKey, PlonkIpaSnark},
     proof_system::{structs::VK, UniversalSNARK},
 };
 use jf_primitives::pcs::StructuredReferenceString;
-use plonk_prover::{
-    client::circuits::{mint::MintCircuit, transfer::TransferCircuit},
-    utils::key_gen::generate_client_pks_and_vks,
-};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-use trees::{membership_tree::Tree, tree::AppendTree};
 
 use crate::{
     adapters::rest_api::sequencer_api::run_sequencer_api,
@@ -28,26 +21,38 @@ use crate::{
         storage::in_mem_sequencer_storage::InMemStorage,
     },
 };
+use common::crypto::poseidon::Poseidon;
+use curves::{pallas::PallasConfig, vesta::VestaConfig};
+use plonk_prover::client::{
+    circuits::{mint::MintCircuit, transfer::TransferCircuit},
+    ClientPlonkCircuit,
+};
+use trees::{membership_tree::Tree, tree::AppendTree};
 
 fn main() {
     let mut db: InMemStorage = InMemStorage::new();
     let mut prover: InMemProver = InMemProver::new();
-    const C: usize = 1;
-    const N: usize = 1;
-    const D: usize = 8;
 
     // Setup Preamble
     ark_std::println!("Generating Keys");
-    let pks =
-        generate_client_pks_and_vks::<PallasConfig, VestaConfig, VestaConfig, C, N, D>().unwrap();
-    let vks = pks
+    const DEPTH: usize = 8;
+    let circuit_info: Vec<Box<dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>>> = vec![
+        Box::new(MintCircuit::<1>::new()),
+        Box::new(MintCircuit::<2>::new()),
+        Box::new(TransferCircuit::<1, 1, DEPTH>::new()),
+        Box::new(TransferCircuit::<1, 2, DEPTH>::new()),
+        Box::new(TransferCircuit::<2, 2, DEPTH>::new()),
+        Box::new(TransferCircuit::<2, 3, DEPTH>::new()),
+    ];
+
+    let vks = circuit_info
         .into_iter()
-        .zip([MintCircuit::circuit_id(), TransferCircuit::circuit_id()])
-        .map(|(pk, circuit_type)| {
-            prover.store_vk(circuit_type, pk.1.clone());
-            pk.1
+        .map(|c| {
+            let keys = c.generate_keys().unwrap();
+            prover.store_vk(c.get_circuit_id(), keys.1.clone());
+            keys.1
         })
-        .collect::<Vec<_>>();
+        .collect::<Vec<VerifyingKey<_>>>();
 
     let poseidon: Poseidon<curves::vesta::Fq> = Poseidon::new();
     let vk_hashes = vks

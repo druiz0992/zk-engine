@@ -120,7 +120,7 @@ pub fn transfer_circuit_helper_generator<const C: usize, const N: usize, const D
         new_values[0] = total_value;
     }
 
-    let circuit_inputs = CircuitInputs::<PallasConfig, C, N, D>::new()
+    let circuit_inputs = CircuitInputs::<PallasConfig>::new()
         .add_old_token_values(value.to_vec())
         .add_old_token_salts(vec![token_nonce; N])
         .add_membership_path(old_sib_path)

@@ -2,7 +2,7 @@ pub mod in_mem_sequencer_prover {
     use std::{collections::HashMap, time::Instant};
 
     use crate::{
-        domain::{CircuitType, RollupCommitKeys, RollupProvingKeys},
+        domain::{RollupCommitKeys, RollupProvingKeys},
         ports::prover::SequencerProver,
     };
     use curves::pallas::{Fq, Fr};

@@ -99,11 +99,14 @@ pub mod sequencer_api {
         let transactions = state_db.get_all_transactions();
         let prover = db.prover.lock().await;
         ark_std::println!("Get the mofo vks");
-        let vks = [MintCircuit::circuit_id(), TransferCircuit::circuit_id()]
-            .into_iter()
-            .map(|x| prover.get_vk(x))
-            .collect::<Option<Vec<_>>>()
-            .ok_or(StatusCode::BAD_REQUEST)?;
+        let vks = [
+            MintCircuit::<1>::circuit_id(),
+            TransferCircuit::<2, 2, 8>::circuit_id(),
+        ]
+        .into_iter()
+        .map(|x| prover.get_vk(x))
+        .collect::<Option<Vec<_>>>()
+        .ok_or(StatusCode::BAD_REQUEST)?;
 
         let commit_keys = prover.get_cks().ok_or(StatusCode::BAD_REQUEST)?;
         let proving_keys = prover.get_pks();

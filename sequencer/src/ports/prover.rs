@@ -11,7 +11,7 @@ use jf_primitives::rescue::RescueParameter;
 use jf_relation::{errors::CircuitError, gadgets::ecc::SWToTEConParam};
 use plonk_prover::rollup::circuits::base::ClientInput;
 
-use crate::domain::{CircuitType, RollupCommitKeys, RollupProvingKeys};
+use crate::domain::{RollupCommitKeys, RollupProvingKeys};
 use plonk_prover::client::circuits::structs::CircuitId;
 
 pub trait SequencerProver<V, P, SW>

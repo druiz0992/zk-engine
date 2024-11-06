@@ -13,14 +13,13 @@ use common::{
 };
 use jf_primitives::rescue::RescueParameter;
 use jf_relation::{errors::CircuitError, gadgets::ecc::SWToTEConParam};
-use macros::client_circuit;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+use zk_macros::client_circuit;
 
 use super::check_inputs;
 #[client_circuit]
-pub fn build_random_inputs<P, V, VSW, const C: usize, const N: usize, const D: usize>(
-) -> Result<CircuitInputs<P, C, N, D>, CircuitError> {
+pub fn build_random_inputs<P, V, VSW, const C: usize>() -> Result<CircuitInputs<P>, CircuitError> {
     let mut rng = ChaChaRng::from_entropy();
 
     let mut values = Vec::with_capacity(C);
@@ -37,13 +36,33 @@ pub fn build_random_inputs<P, V, VSW, const C: usize, const N: usize, const D: u
         recipients.push(PublicKey::from_private_key(&pk));
     }
 
-    let mut circuit_inputs = CircuitInputs::<P, C, N, D>::new();
+    let mut circuit_inputs = CircuitInputs::<P>::new();
     circuit_inputs
         .add_token_values(values)
         .add_token_ids(ids)
         .add_token_salts(salts)
         .add_recipients(recipients)
         .build();
-    check_inputs::<P, V, C, N, D>(&circuit_inputs)?;
+    check_inputs::<P, V, C>(&circuit_inputs)?;
+
+    Ok(circuit_inputs)
+}
+
+#[client_circuit]
+pub fn build_inputs<P, V, VSW, const C: usize>(
+    values: Vec<V::ScalarField>,
+    ids: Vec<V::ScalarField>,
+    salts: Vec<V::ScalarField>,
+    owners: Vec<PublicKey<P>>,
+) -> Result<CircuitInputs<P>, CircuitError> {
+    let mut circuit_inputs = CircuitInputs::<P>::new();
+    circuit_inputs
+        .add_token_values(values)
+        .add_token_ids(ids)
+        .add_token_salts(salts)
+        .add_recipients(owners)
+        .build();
+    check_inputs::<P, V, C>(&circuit_inputs)?;
+
     Ok(circuit_inputs)
 }

@@ -15,7 +15,7 @@ use trees::MembershipPath;
 // N: number of nullifiers
 // C: number of commitments
 // D: depth of the merkle tree
-pub struct CircuitInputs<E, const C: usize, const N: usize, const D: usize>
+pub struct CircuitInputs<E>
 where
     E: SWCurveConfig,
 {
@@ -69,22 +69,22 @@ Swap:
     ephemeral_key: P::ScalarField,
 
 */
-impl<E, const C: usize, const N: usize, const D: usize> CircuitInputs<E, C, N, D>
+impl<E> CircuitInputs<E>
 where
     E: SWCurveConfig,
 {
     pub fn new() -> Self {
         Self {
-            token_values: Vec::with_capacity(C),
-            token_salts: Vec::with_capacity(C),
-            token_ids: Vec::with_capacity(C),
-            old_token_values: Vec::with_capacity(N),
-            old_token_salts: Vec::with_capacity(N),
-            old_token_ids: Vec::with_capacity(N),
-            commitment_tree_root: Vec::with_capacity(N),
-            membership_path: Vec::with_capacity(N),
-            membership_path_index: Vec::with_capacity(N),
-            recipients: Vec::with_capacity(1),
+            token_values: Vec::new(),
+            token_salts: Vec::new(),
+            token_ids: Vec::new(),
+            old_token_values: Vec::new(),
+            old_token_salts: Vec::new(),
+            old_token_ids: Vec::new(),
+            commitment_tree_root: Vec::new(),
+            membership_path: Vec::new(),
+            membership_path_index: Vec::new(),
+            recipients: Vec::new(),
             root_key: E::BaseField::zero(),
             ephemeral_key: E::BaseField::zero(),
         }

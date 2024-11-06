@@ -2,10 +2,11 @@ use ark_ec::short_weierstrass::SWCurveConfig;
 use ark_ec::AffineRepr;
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use common::keypair::PublicKey;
 use derivative::Derivative;
 use serde::{Deserialize, Serialize};
 
-use super::{ark_de, ark_se, PublicKey};
+use super::{ark_de, ark_se};
 
 #[derive(
     Derivative, Default, Debug, Serialize, Deserialize, CanonicalSerialize, CanonicalDeserialize,

@@ -37,6 +37,31 @@ impl<F: Copy> MembershipPath<F> {
             })
             .collect()
     }
+
+    pub fn to_array<const N: usize, const L: usize>(
+        v: Vec<MembershipPath<F>>,
+    ) -> Result<[[F; N]; L], String> {
+        if v.len() != L {
+            return Err(format!(
+                "MembershipPath vector length : {} doesnt match expected length: {L}",
+                v.len()
+            ));
+        }
+
+        let result: Result<Vec<[F; N]>, _> = v
+            .into_iter()
+            .map(|mp| {
+                let elements: Vec<F> = mp.as_vec(); // Assume `elements` provides a `Vec<F>` of items
+                elements
+                    .try_into()
+                    .map_err(|_| format!("MembershipPath length does not match {N}"))
+            })
+            .collect();
+
+        result?
+            .try_into()
+            .map_err(|_| "Failed to convert to array".to_string())
+    }
 }
 
 impl<F: Copy> Default for MembershipPath<F> {
@@ -145,5 +170,10 @@ mod tests {
         assert_eq!(paths.len(), 2);
         assert_eq!(paths[0].clone().as_vec(), vec![1, 2, 3]);
         assert_eq!(paths[1].clone().as_vec(), vec![4, 5, 6]);
+
+        let path_array: [[i32; 3]; 2] = MembershipPath::to_array(paths)
+            .expect("Error converting MembershipPath vector to array");
+
+        assert_eq!(array, path_array);
     }
 }

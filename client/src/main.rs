@@ -8,6 +8,11 @@ use curves::{
     pallas::{Fq, PallasConfig},
     vesta::VestaConfig,
 };
+use plonk_prover::client::{
+    circuits::{mint::MintCircuit, transfer::TransferCircuit},
+    ClientPlonkCircuit,
+};
+use ports::prover::Prover;
 
 pub mod adapters;
 pub mod domain;
@@ -18,10 +23,25 @@ pub mod usecase;
 fn main() {
     let db: InMemStorage<PallasConfig, Fq> = InMemStorage::new();
     let thread_safe_db = std::sync::Arc::new(tokio::sync::Mutex::new(db));
-    let prover: InMemProver<VestaConfig> = InMemProver::new();
+    let mut prover: InMemProver<PallasConfig, VestaConfig, _> = InMemProver::new();
+
+    const DEPTH: usize = 8;
+    let circuit_info: Vec<Box<dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>>> = vec![
+        Box::new(MintCircuit::<1>::new()),
+        Box::new(MintCircuit::<2>::new()),
+        Box::new(TransferCircuit::<1, 1, DEPTH>::new()),
+        Box::new(TransferCircuit::<1, 2, DEPTH>::new()),
+        Box::new(TransferCircuit::<2, 2, DEPTH>::new()),
+        Box::new(TransferCircuit::<2, 3, DEPTH>::new()),
+    ];
+
+    circuit_info.into_iter().for_each(|c| {
+        let keys = c.generate_keys().unwrap();
+        prover.store_pk(c.get_circuit_id(), keys.0);
+    });
+
     let thread_safe_prover = Arc::new(tokio::sync::Mutex::new(prover));
     let _test_mnemonic = "pact gun essay three dash seat page silent slogan hole huge harvest awesome fault cute alter boss thank click menu service quarter gaze salmon";
-
     let async_rt = tokio::runtime::Builder::new_multi_thread()
         .enable_io()
         .enable_time()

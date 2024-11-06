@@ -6,6 +6,7 @@ use ark_ec::{
 };
 use ark_ff::PrimeField;
 use circuits::circuit_inputs::CircuitInputs;
+use circuits::structs::CircuitId;
 use common::crypto::poseidon::constants::PoseidonParams;
 use jf_plonk::{nightfall::ipa_structs::ProvingKey, nightfall::ipa_structs::VerifyingKey};
 use jf_plonk::{nightfall::PlonkIpaSnark, proof_system::UniversalSNARK};
@@ -14,11 +15,9 @@ use jf_relation::constraint_system::PlonkCircuit;
 use jf_relation::errors::CircuitError;
 use jf_relation::gadgets::ecc::SWToTEConParam;
 use jf_relation::Arithmetization;
-use macros::client_circuit;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-
-use circuits::structs::CircuitId;
+use zk_macros::client_circuit;
 
 pub mod circuits;
 pub mod structs;
@@ -37,27 +36,30 @@ pub mod structs;
 // >,
 
 #[client_circuit]
-pub trait ClientPlonkCircuit<P, V, VSW, const C: usize, const N: usize, const D: usize> {
-    fn generate_keys(
-        &self,
-        circuit_inputs: CircuitInputs<P, C, N, D>,
-    ) -> Result<(ProvingKey<V>, VerifyingKey<V>), CircuitError> {
-        let mut circuit = self.to_plonk_circuit(circuit_inputs)?;
+pub trait ClientPlonkCircuit<P, V, VSW>: Send + Sync + 'static {
+    fn generate_keys(&self) -> Result<(ProvingKey<V>, VerifyingKey<V>), CircuitError> {
+        let inputs = self.generate_random_inputs()?;
+        let mut circuit = self.to_plonk_circuit(inputs)?;
         generate_keys_from_plonk::<P, V, VSW>(&mut circuit)
     }
 
     fn to_plonk_circuit(
         &self,
-        circuit_inputs: CircuitInputs<P, C, N, D>,
+        circuit_inputs: CircuitInputs<P>,
     ) -> Result<PlonkCircuit<V::ScalarField>, CircuitError>;
+
+    fn generate_random_inputs(&self) -> Result<CircuitInputs<P>, CircuitError>;
+    fn get_circuit_id(&self) -> CircuitId;
+    fn get_commitment_and_nullifier_count(&self) -> (usize, usize);
 }
 
 #[client_circuit]
-pub fn generate_keys_from_inputs<P, V, VSW, const C: usize, const N: usize, const D: usize>(
-    circuit: &dyn ClientPlonkCircuit<P, V, VSW, C, N, D>,
-    circuit_inputs: CircuitInputs<P, C, N, D>,
-) -> Result<(ProvingKey<V>, VerifyingKey<V>), CircuitError> {
-    circuit.generate_keys(circuit_inputs)
+pub fn build<P, V, VSW>(circuit_type: &str) -> Box<dyn ClientPlonkCircuit<P, V, VSW>> {
+    match circuit_type {
+        "mint" => Box::new(circuits::mint::MintCircuit::<1>::new()),
+        "transfer" => Box::new(circuits::transfer::TransferCircuit::<2, 2, 2>::new()),
+        _ => panic!("Not"),
+    }
 }
 
 #[client_circuit]
@@ -71,18 +73,4 @@ pub fn generate_keys_from_plonk<P, V, VSW>(
 
     let (pk, vk) = PlonkIpaSnark::<V>::preprocess(&srs, circuit)?;
     Ok((pk, vk))
-}
-#[client_circuit]
-pub fn build_plonk_circuit_from_inputs<
-    P,
-    V,
-    VSW,
-    const C: usize,
-    const N: usize,
-    const D: usize,
->(
-    circuit: &dyn ClientPlonkCircuit<P, V, VSW, C, N, D>,
-    circuit_inputs: CircuitInputs<P, C, N, D>,
-) -> Result<PlonkCircuit<V::ScalarField>, CircuitError> {
-    circuit.to_plonk_circuit(circuit_inputs)
 }

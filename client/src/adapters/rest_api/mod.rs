@@ -28,7 +28,7 @@ pub mod rest_api_entry {
     use serde_json::json;
 
     use crate::{
-        domain::{Fr, Preimage, PublicKey},
+        domain::{Fr, Preimage},
         ports::{
             committable::Committable,
             keys::FullKey,
@@ -42,6 +42,7 @@ pub mod rest_api_entry {
         },
         usecase::{mint::mint_tokens, transfer::transfer_tokens},
     };
+    use common::keypair::PublicKey;
     use plonk_prover::client::circuits::{mint::MintCircuit, transfer::TransferCircuit};
 
     use super::structs::{MnemonicInput, PreimageResponse, TransferInput};
@@ -67,9 +68,12 @@ pub mod rest_api_entry {
     #[derive(Clone)]
     pub struct AppState {
         pub state_db: WriteDatabase,
-        pub prover: Arc<Mutex<InMemProver<VestaConfig>>>,
+        pub prover: Arc<Mutex<InMemProver<PallasConfig, VestaConfig, VestaConfig>>>,
     }
-    pub async fn run_api(db_state: WriteDatabase, prover: Arc<Mutex<InMemProver<VestaConfig>>>) {
+    pub async fn run_api(
+        db_state: WriteDatabase,
+        prover: Arc<Mutex<InMemProver<PallasConfig, VestaConfig, VestaConfig>>>,
+    ) {
         dotenv().ok();
         let app_state = AppState {
             state_db: db_state,
@@ -111,20 +115,19 @@ pub mod rest_api_entry {
         State(db): State<AppState>,
         Json(mint_details): Json<Preimage<PallasConfig>>,
     ) -> Result<Json<Transaction<VestaConfig>>, AppError> {
-        let mut prover = db.prover.lock().await;
-        let pk = prover.get_pk(MintCircuit::circuit_id()).cloned();
+        let prover = db.prover.lock().await;
+        let circuit = MintCircuit::<1>::new();
+        let pk = prover
+            .get_pk(circuit.get_circuit_id())
+            .ok_or(AppError::TxError)?;
 
-        let (transaction, pk) =
-            mint_tokens::<PallasConfig, VestaConfig, _, InMemProver<VestaConfig>>(
-                vec![mint_details.value],
-                vec![mint_details.token_id],
-                vec![mint_details.salt],
-                vec![mint_details.public_key],
-                pk.as_ref(),
+        let transaction =
+            mint_tokens::<PallasConfig, VestaConfig, _, InMemProver<PallasConfig, VestaConfig, _>>(
+                circuit.as_circuit::<PallasConfig, VestaConfig, _>(),
+                mint_details,
+                pk,
             )
             .map_err(|_| AppError::TxError)?;
-
-        prover.store_pk(MintCircuit::circuit_id(), pk);
 
         let mut db = db.state_db.lock().await;
         let preimage_key = mint_details
@@ -270,25 +273,32 @@ pub mod rest_api_entry {
 
         let ephemeral_key = crate::domain::EFq::from(10u64);
 
-        let mut prover = db.prover.lock().await;
-        let pk = prover.get_pk(TransferCircuit::circuit_id()).cloned();
+        let prover = db.prover.lock().await;
+        let circuit = TransferCircuit::<2, 2, 8>::new();
+        let pk = prover
+            .get_pk(circuit.get_circuit_id())
+            .ok_or(AppError::TxError)?;
 
         let recipients = PublicKey(transfer_details.recipient);
 
-        let (transaction, pk) =
-            transfer_tokens::<PallasConfig, VestaConfig, _, InMemProver<VestaConfig>>(
-                old_preimages,
-                vec![transfer_details.transfer_amount],
-                vec![recipients],
-                sibling_paths,
-                commitment_roots,
-                sibling_path_indices,
-                root_key,
-                ephemeral_key,
-                pk.as_ref(),
-            )
-            .map_err(|_| AppError::TxError)?;
-        prover.store_pk(TransferCircuit::circuit_id(), pk);
+        let transaction = transfer_tokens::<
+            PallasConfig,
+            VestaConfig,
+            _,
+            InMemProver<PallasConfig, VestaConfig, _>,
+        >(
+            circuit.as_circuit::<PallasConfig, VestaConfig, _>(),
+            old_preimages,
+            vec![transfer_details.transfer_amount],
+            vec![recipients],
+            sibling_paths,
+            commitment_roots,
+            sibling_path_indices,
+            root_key,
+            ephemeral_key,
+            pk,
+        )
+        .map_err(|_| AppError::TxError)?;
 
         Ok(Json(transaction))
     }
