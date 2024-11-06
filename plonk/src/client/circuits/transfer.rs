@@ -69,7 +69,7 @@ impl<P, V, VSW, const C: usize, const N: usize, const D: usize> ClientPlonkCircu
         self.get_circuit_id()
     }
     fn get_commitment_and_nullifier_count(&self) -> (usize, usize) {
-        (C as usize, N as usize)
+        (C, N)
     }
 }
 
