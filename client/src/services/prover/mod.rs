@@ -2,7 +2,7 @@ pub mod in_memory_prover {
     use ark_ec::{
         pairing::Pairing,
         short_weierstrass::{Affine, Projective, SWCurveConfig},
-        CurveConfig, CurveGroup,
+        CurveConfig,
     };
     use ark_poly::univariate::DensePolynomial;
     use jf_plonk::{
@@ -24,82 +24,57 @@ pub mod in_memory_prover {
     use common::crypto::poseidon::constants::PoseidonParams;
     use plonk_prover::client::circuits::circuit_inputs::CircuitInputs;
     use plonk_prover::client::circuits::structs::CircuitId;
-    use plonk_prover::client::{self, ClientPlonkCircuit};
+    use plonk_prover::client::ClientPlonkCircuit;
     use plonk_prover::primitives::circuits::kem_dem::KemDemParams;
+    use std::marker::PhantomData;
+    use zk_macros::client_circuit;
 
-    pub struct InMemProver<V>
-    where
-        V: Pairing,
-        <V::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = V::BaseField>,
-    {
+    #[client_circuit]
+    pub struct InMemProver<P, V, VSW> {
         pub key_storage: HashMap<CircuitId, ProvingKey<V>>,
+        _marker: PhantomData<(P, VSW)>,
     }
 
-    impl<V> InMemProver<V>
-    where
-        V: Pairing,
-        <V::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = V::BaseField>,
-    {
+    #[client_circuit]
+    impl<P, V, VSW> InMemProver<P, V, VSW> {
         pub fn new() -> Self {
             Self {
                 key_storage: HashMap::new(),
+                _marker: PhantomData,
             }
         }
     }
 
-    impl<V> Default for InMemProver<V>
-    where
-        V: Pairing,
-        <V::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = V::BaseField>,
-    {
+    #[client_circuit]
+    impl<P, V, VSW> Default for InMemProver<P, V, VSW> {
         fn default() -> Self {
             Self {
                 key_storage: HashMap::new(),
+                _marker: PhantomData,
             }
         }
     }
 
-    impl<V, VSW> Prover<V, VSW> for InMemProver<V>
-    where
-        V: Pairing<G1Affine = Affine<VSW>, G1 = Projective<VSW>>,
-        <V as Pairing>::BaseField: RescueParameter + SWToTEConParam,
-
-        <V as Pairing>::ScalarField: KemDemParams<Field = <V as Pairing>::ScalarField>,
-        VSW: SWCurveConfig<
-            BaseField = <V as Pairing>::BaseField,
-            ScalarField = <V as Pairing>::ScalarField,
-        >,
-    {
-        fn prove<P, T: ClientPlonkCircuit<P, V, VSW>>(
-            circuit: &T,
+    #[client_circuit]
+    impl<P, V, VSW> Prover<P, V, VSW> for InMemProver<P, V, VSW> {
+        fn prove(
+            circuit: &dyn ClientPlonkCircuit<P, V, VSW>,
             circuit_inputs: CircuitInputs<P>,
-            proving_key: Option<&ProvingKey<V>>,
+            proving_key: &ProvingKey<V>,
         ) -> Result<
             (
                 Proof<V>,
                 Vec<V::ScalarField>,
                 DensePolynomial<V::ScalarField>,
-                ProvingKey<V>,
             ),
             CircuitError,
-        >
-        where
-            P: SWCurveConfig<BaseField = V::ScalarField>,
-            <P as CurveConfig>::BaseField: KemDemParams<Field = V::ScalarField>,
-        {
+        > {
             // Convert the Vec to an array, checking for exactly 8 elements
-            let mut circuit = client::build_plonk_circuit_from_inputs(circuit, circuit_inputs)?;
+            let circuit = circuit.to_plonk_circuit(circuit_inputs)?;
             ark_std::println!("Constraint count: {}", circuit.num_gates());
             let now = Instant::now();
 
             let mut rng = ChaChaRng::from_entropy();
-            let pk = proving_key.map_or_else(
-                || {
-                    let (pk, _) = client::generate_keys_from_plonk::<P, V, VSW>(&mut circuit)?;
-                    Ok::<ProvingKey<V>, CircuitError>(pk)
-                },
-                |pkey| Ok(pkey.clone()),
-            )?;
 
             ark_std::println!("Preprocess done: {:?}", now.elapsed());
 
@@ -110,10 +85,10 @@ pub mod in_memory_prover {
                 _,
                 _,
                 RescueTranscript<<V as Pairing>::BaseField>,
-            >(&mut rng, &circuit, &pk, None)?;
+            >(&mut rng, &circuit, proving_key, None)?;
             ark_std::println!("Proof done: {:?}", now.elapsed());
 
-            Ok((proof, circuit.public_input()?, g_poly, pk.clone()))
+            Ok((proof, circuit.public_input()?, g_poly))
         }
 
         fn verify(
@@ -130,12 +105,11 @@ pub mod in_memory_prover {
             .is_ok()
         }
 
-        fn store_pk(&mut self, circuit_id: CircuitId, pk: ProvingKey<V>) {
-            self.key_storage.entry(circuit_id).or_insert(pk);
-        }
-
         fn get_pk(&self, circuit_id: CircuitId) -> Option<&ProvingKey<V>> {
             self.key_storage.get(&circuit_id)
+        }
+        fn store_pk(&mut self, circuit_id: CircuitId, pk: ProvingKey<V>) {
+            self.key_storage.entry(circuit_id).or_insert(pk);
         }
     }
 }
@@ -145,19 +119,18 @@ mod tests {
 
     use crate::ports::prover::Prover;
     use crate::InMemProver;
-    use plonk_prover::client::{circuits::transfer, ClientPlonkCircuit};
+    use plonk_prover::client::circuits::transfer;
 
     use curves::pallas::PallasConfig;
     use curves::vesta::VestaConfig;
     use plonk_prover::client::{
-        self,
         circuits::mint::{self, MintCircuit},
         circuits::transfer::TransferCircuit,
     };
 
     #[test]
     fn test_new_initialization() {
-        let prover: InMemProver<VestaConfig> = InMemProver::new();
+        let prover: InMemProver<PallasConfig, VestaConfig, _> = InMemProver::new();
         assert!(
             prover.key_storage.is_empty(),
             "Key storage should be empty on initialization"
@@ -166,7 +139,7 @@ mod tests {
 
     #[test]
     fn test_default_initialization() {
-        let prover: InMemProver<VestaConfig> = InMemProver::default();
+        let prover: InMemProver<PallasConfig, VestaConfig, _> = InMemProver::default();
         assert!(
             prover.key_storage.is_empty(),
             "Key storage should be empty on initialization"
@@ -178,34 +151,31 @@ mod tests {
         const C: usize = 1;
         const N: usize = 1;
         const D: usize = 8;
-        let mut prover: InMemProver<VestaConfig> = InMemProver::default();
+        let mut prover: InMemProver<PallasConfig, VestaConfig, _> = InMemProver::default();
 
-        let mint_circuit = mint::MintCircuit::<C>::new();
-        let (mint_pk, _) = client::generate_keys::<PallasConfig, VestaConfig, _, _>(&mint_circuit)
-            .expect(&format!(
-                "Error generating key for mint circuit from random inputs with C:{C}"
-            ));
+        let mint_circuit =
+            mint::MintCircuit::<C>::new().as_circuit::<PallasConfig, VestaConfig, _>();
+        let (mint_pk, _) = mint_circuit.generate_keys().expect(&format!(
+            "Error generating key for mint circuit from random inputs with C:{C}"
+        ));
 
-        let transfer_circuit = TransferCircuit::<C, N, D>::new();
-        let (transfer_pk, _) = client::generate_keys::<PallasConfig, VestaConfig, _, _>(
-            &transfer_circuit,
-        )
-        .expect(&format!(
+        let transfer_circuit =
+            TransferCircuit::<C, N, D>::new().as_circuit::<PallasConfig, VestaConfig, _>();
+        let (transfer_pk, _) = transfer_circuit.generate_keys().expect(&format!(
             "Error generating key for transfer circuit from random inputs with C:{C}, N:{N}, D:{D}"
         ));
 
-        prover.store_pk(MintCircuit::<C>::circuit_id(), mint_pk.clone());
-        prover.store_pk(
-            TransferCircuit::<C, N, D>::circuit_id(),
-            transfer_pk.clone(),
-        );
+        let mint_circuit = MintCircuit::<C>;
+        prover.store_pk(mint_circuit.get_circuit_id(), mint_pk.clone());
+        let transfer_circuit = TransferCircuit::<C, N, D>;
+        prover.store_pk(transfer_circuit.get_circuit_id(), transfer_pk.clone());
 
-        let stored_mint_pk = prover.get_pk(MintCircuit::<C>::circuit_id()).unwrap();
+        let mint_circuit = MintCircuit::<C>;
+        let stored_mint_pk = prover.get_pk(mint_circuit.get_circuit_id()).unwrap();
         assert_eq!(stored_mint_pk, &mint_pk);
 
-        let stored_transfer_pk = prover
-            .get_pk(TransferCircuit::<C, N, D>::circuit_id())
-            .unwrap();
+        let transfer_circuit = TransferCircuit::<C, N, D>;
+        let stored_transfer_pk = prover.get_pk(transfer_circuit.get_circuit_id()).unwrap();
         assert_eq!(stored_transfer_pk, &transfer_pk);
     }
 
@@ -215,24 +185,30 @@ mod tests {
         const N: usize = 1;
         const D: usize = 8;
 
-        let mint_circuit = MintCircuit::<C>::new();
+        let mint_circuit = MintCircuit::<C>::new().as_circuit::<PallasConfig, VestaConfig, _>();
         let inputs = mint::utils::build_random_inputs::<PallasConfig, VestaConfig, _, C>().expect(
             &format!("Error generating random inputs for mint circuit with C:{C}, N:{N}, D:{D}"),
         );
-        let (pk, vk) = client::generate_keys::<PallasConfig, VestaConfig, _, _>(&mint_circuit)
-            .expect(&format!(
-                "Error generating key for mint circuit from random inputs with C:{C}, N:{N}, D:{D}"
-            ));
+        let (pk, vk) = mint_circuit.generate_keys().expect(&format!(
+            "Error generating key for mint circuit from random inputs with C:{C}, N:{N}, D:{D}"
+        ));
 
-        let result =
-            <InMemProver<VestaConfig> as Prover<_, _>>::prove(&mint_circuit, inputs, Some(&pk));
+        let result = <InMemProver<PallasConfig, VestaConfig, _> as Prover<_, _, _>>::prove(
+            &*mint_circuit,
+            inputs,
+            &pk,
+        );
         assert!(
             result.is_ok(),
             "Proof generation should succeed for valid inputs"
         );
 
-        let (proof, public_inputs, _, _) = result.unwrap();
-        let is_valid = <InMemProver<VestaConfig> as Prover<_, _>>::verify(vk, public_inputs, proof);
+        let (proof, public_inputs, _) = result.unwrap();
+        let is_valid = <InMemProver<PallasConfig, VestaConfig, _> as Prover<_, _, _>>::verify(
+            vk,
+            public_inputs,
+            proof,
+        );
 
         assert!(is_valid, "Verification should succeed for a valid proof");
     }
@@ -243,24 +219,31 @@ mod tests {
         const N: usize = 2;
         const D: usize = 8;
 
-        let transfer_circuit = TransferCircuit::<C, N, D>::new();
+        let transfer_circuit =
+            TransferCircuit::<C, N, D>::new().as_circuit::<PallasConfig, VestaConfig, _>();
         let inputs = transfer::build_random_inputs::<PallasConfig, VestaConfig, _, C, N, D>()
             .expect(&format!(
                 "Error generating random inputs for transfer circuit with C:{C}, N:{N}, D:{D}"
             ));
-        let (pk, vk) = client::generate_keys::<PallasConfig, VestaConfig, _, _>(&transfer_circuit)
-            .expect(&format!(
+        let (pk, vk) = transfer_circuit.generate_keys().expect(&format!(
             "Error generating key for transfer circuit from random inputs with C:{C}, N:{N}, D:{D}"
         ));
 
-        let result =
-            <InMemProver<VestaConfig> as Prover<_, _>>::prove(&transfer_circuit, inputs, Some(&pk));
+        let result = <InMemProver<PallasConfig, VestaConfig, _> as Prover<_, _, _>>::prove(
+            &*transfer_circuit,
+            inputs,
+            &pk,
+        );
         assert!(
             result.is_ok(),
             "Proof generation should succeed for valid inputs"
         );
-        let (proof, public_inputs, _, _) = result.unwrap();
-        let is_valid = <InMemProver<VestaConfig> as Prover<_, _>>::verify(vk, public_inputs, proof);
+        let (proof, public_inputs, _) = result.unwrap();
+        let is_valid = <InMemProver<PallasConfig, VestaConfig, _> as Prover<_, _, _>>::verify(
+            vk,
+            public_inputs,
+            proof,
+        );
 
         assert!(is_valid, "Verification should succeed for a valid proof");
     }

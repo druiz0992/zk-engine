@@ -21,8 +21,6 @@ use std::str::FromStr;
 use trees::MembershipPath;
 
 pub fn benchmark_mint(c: &mut Criterion) {
-    const N: usize = 0;
-    const D: usize = 0;
     c.bench_function("Mint Circuit - 1 Output: Witness Generation", |b| {
         const C: usize = 1;
         b.iter(|| {

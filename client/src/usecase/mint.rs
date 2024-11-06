@@ -8,19 +8,19 @@ use common::structs::Transaction;
 use jf_plonk::nightfall::ipa_structs::ProvingKey;
 use jf_primitives::rescue::RescueParameter;
 use jf_relation::gadgets::ecc::SWToTEConParam;
-use plonk_prover::{client::structs::ClientPubInputs, primitives::circuits::kem_dem::KemDemParams};
+use plonk_prover::{
+    client::{structs::ClientPubInputs, ClientPlonkCircuit},
+    primitives::circuits::kem_dem::KemDemParams,
+};
 
-use crate::domain::PublicKey;
+use crate::domain::Preimage;
 use plonk_prover::client::circuits::circuit_inputs::CircuitInputs;
-use plonk_prover::client::circuits::mint::MintCircuit;
 
 pub fn mint_tokens<P, V, VSW, Proof>(
-    token_values: Vec<V::ScalarField>,
-    token_ids: Vec<V::ScalarField>,
-    salts: Vec<V::ScalarField>,
-    owners: Vec<PublicKey<P>>,
-    proving_key: Option<&ProvingKey<V>>,
-) -> Result<(Transaction<V>, ProvingKey<V>), &'static str>
+    mint_circuit: Box<dyn ClientPlonkCircuit<P, V, VSW>>,
+    preimage: Preimage<P>,
+    proving_key: &ProvingKey<V>,
+) -> Result<Transaction<V>, &'static str>
 where
     P: SWCurveConfig<BaseField = V::ScalarField>,
     V: Pairing<G1Affine = Affine<VSW>, G1 = Projective<VSW>>,
@@ -30,22 +30,29 @@ where
         BaseField = <V as Pairing>::BaseField,
         ScalarField = <V as Pairing>::ScalarField,
     >,
-    Proof: Prover<V, VSW>,
+    Proof: Prover<P, V, VSW>,
 {
-    const C: usize = 1;
-    let mint_circuit = MintCircuit::<C>::new();
+    let Preimage {
+        value,
+        token_id,
+        salt,
+        public_key,
+    } = preimage;
     let mut circuit_inputs_builder = CircuitInputs::<P>::new();
     let circuit_inputs = circuit_inputs_builder
-        .add_token_ids(token_ids)
-        .add_token_salts(salts)
-        .add_token_values(token_values)
-        .add_recipients(owners)
+        .add_token_ids(vec![token_id])
+        .add_token_salts(vec![salt])
+        .add_token_values(vec![value])
+        .add_recipients(vec![public_key])
         .build();
 
-    let (proof, pub_inputs, g_polys, pk) =
-        Proof::prove(&mint_circuit, circuit_inputs, proving_key).unwrap();
+    let (proof, pub_inputs, g_polys) =
+        Proof::prove(&*mint_circuit, circuit_inputs, proving_key).unwrap();
 
-    let client_pub_inputs: ClientPubInputs<_, 0, 1> = pub_inputs.try_into()?;
+    let client_pub_inputs = ClientPubInputs::new(
+        pub_inputs,
+        mint_circuit.get_commitment_and_nullifier_count(),
+    )?;
 
     let transaction = Transaction::new(
         client_pub_inputs
@@ -64,5 +71,5 @@ where
         client_pub_inputs.ephemeral_public_key,
         client_pub_inputs.swap_field,
     );
-    Ok((transaction, pk))
+    Ok(transaction)
 }

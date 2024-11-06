@@ -31,9 +31,6 @@ use trees::{
 pub fn benchmark_mints<const I: usize, const C: usize, const N: usize, const D: usize>(
     c: &mut Criterion,
 ) {
-    const D: usize = 0;
-    const N: usize = 0;
-
     // Below taken from test_base_rollup_helper_mint
     let mut rng = test_rng();
     let mut client_inputs = vec![];

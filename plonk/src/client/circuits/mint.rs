@@ -15,7 +15,7 @@ use crate::{
     primitives::circuits::kem_dem::KemDemParams,
 };
 use common::crypto::poseidon::constants::PoseidonParams;
-use common::keypair::{PrivateKey, PublicKey};
+use common::keypair::PublicKey;
 
 use zk_macros::client_circuit;
 
@@ -55,6 +55,10 @@ impl<const C: usize> MintCircuit<C> {
     ) -> Result<CircuitInputs<P>, CircuitError> {
         utils::build_inputs::<P, V, VSW, C>(values, ids, salts, owners)
     }
+    #[client_circuit]
+    pub fn as_circuit<P, V, VSW>(self) -> Box<dyn ClientPlonkCircuit<P, V, VSW>> {
+        Box::new(self)
+    }
 }
 
 impl<const C: usize> Default for MintCircuit<C> {
@@ -71,8 +75,14 @@ impl<P, V, VSW, const C: usize> ClientPlonkCircuit<P, V, VSW> for MintCircuit<C>
     ) -> Result<PlonkCircuit<V::ScalarField>, CircuitError> {
         mint_circuit::<P, V, VSW, C>(circuit_inputs)
     }
-    fn generate_inputs(&self) -> Result<CircuitInputs<P>, CircuitError> {
+    fn generate_random_inputs(&self) -> Result<CircuitInputs<P>, CircuitError> {
         utils::build_random_inputs::<P, V, VSW, C>()
+    }
+    fn get_circuit_id(&self) -> CircuitId {
+        self.get_circuit_id()
+    }
+    fn get_commitment_and_nullifier_count(&self) -> (usize, usize) {
+        (C as usize, 0)
     }
 }
 
@@ -108,7 +118,6 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::client as plonk_client;
     use curves::pallas::PallasConfig;
     use curves::vesta::VestaConfig;
     use jf_relation::{errors::CircuitError, Circuit};
@@ -125,10 +134,10 @@ mod test {
     }
 
     fn generate_keys_helper<const C: usize>() {
-        let mint_circuit = MintCircuit::<C>::new();
-        plonk_client::generate_keys::<PallasConfig, VestaConfig, _, _>(&mint_circuit).expect(
-            &format!("Error generating key for mint circuit from random inputs with C:{C}"),
-        );
+        let mint_circuit = MintCircuit::<C>::new().as_circuit::<PallasConfig, VestaConfig, _>();
+        mint_circuit.generate_keys().expect(&format!(
+            "Error generating key for mint circuit from random inputs with C:{C}"
+        ));
     }
 
     #[test]
@@ -141,13 +150,10 @@ mod test {
         let inputs = utils::build_random_inputs::<PallasConfig, VestaConfig, _, C>().expect(
             &format!("Error generating random inputs for mint circuit with C:{C}"),
         );
-        let mint_circuit = MintCircuit::<C>::new();
+        let mint_circuit = MintCircuit::<C>::new().as_circuit::<PallasConfig, VestaConfig, _>();
 
-        let plonk_circuit =
-            plonk_client::build_plonk_circuit_from_inputs::<PallasConfig, VestaConfig, _, _>(
-                &mint_circuit,
-                inputs.clone(),
-            )
+        let plonk_circuit = mint_circuit
+            .to_plonk_circuit(inputs.clone())
             .expect(&format!(
                 "Error building plonk mint circuit from random inputs with C:{C}"
             ));
