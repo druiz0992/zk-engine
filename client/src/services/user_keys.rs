@@ -56,7 +56,7 @@ impl<C: SWCurveConfig> FullKey<C> for UserKeys<C> {
     }
 }
 
-pub fn generate_keys<P>(mnemonic: Mnemonic) -> Result<UserKeys<P>, bip32::Error>
+pub fn generate_user_keys<P>(mnemonic: Mnemonic) -> Result<UserKeys<P>, bip32::Error>
 where
     P: SWCurveConfig,
     <P as CurveConfig>::BaseField:
@@ -88,15 +88,15 @@ mod tests {
     fn test_generate_valid_keys() {
         let mnemonic_str = "pact gun essay three dash seat page silent slogan hole huge harvest awesome fault cute alter boss thank click menu service quarter gaze salmon";
         let mnemonic = Mnemonic::new(mnemonic_str, bip32::Language::English).unwrap();
-        generate_keys::<PallasConfig>(mnemonic).expect("Should be able to generate new keys");
+        generate_user_keys::<PallasConfig>(mnemonic).expect("Should be able to generate new keys");
     }
 
     #[test]
     fn test_serialization() {
         let mnemonic_str = "pact gun essay three dash seat page silent slogan hole huge harvest awesome fault cute alter boss thank click menu service quarter gaze salmon";
         let mnemonic = Mnemonic::new(mnemonic_str, bip32::Language::English).unwrap();
-        let keys =
-            generate_keys::<PallasConfig>(mnemonic).expect("Should be able to generate new keys");
+        let keys = generate_user_keys::<PallasConfig>(mnemonic)
+            .expect("Should be able to generate new keys");
 
         let serialized = serde_json::to_string(&keys).expect("Failed to serialize UserKeys");
 

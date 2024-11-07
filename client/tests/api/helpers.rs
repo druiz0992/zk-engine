@@ -4,36 +4,24 @@ use client::configuration;
 use client::services::{
     prover::in_memory_prover::InMemProver, storage::in_mem_storage::InMemStorage,
 };
-use client::utils;
 use curves::{
     pallas::{Fq, PallasConfig},
     vesta::VestaConfig,
 };
 
 use once_cell::sync::Lazy;
-use plonk_prover::client::ClientPlonkCircuit;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+pub mod circuits;
+pub mod keys;
 
 pub struct TestApp {
     pub address: String,
     pub port: u16,
     pub prover: Arc<Mutex<InMemProver<PallasConfig, VestaConfig, VestaConfig>>>,
     pub db: Arc<Mutex<InMemStorage<PallasConfig, Fq>>>,
-}
-impl TestApp {
-    pub async fn add_client_circuits(
-        &mut self,
-        circuits: Vec<Box<dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>>>,
-    ) -> anyhow::Result<()> {
-        utils::circuits::add_client_circuits::<
-            PallasConfig,
-            VestaConfig,
-            VestaConfig,
-            InMemProver<PallasConfig, VestaConfig, VestaConfig>,
-        >(&self.prover, circuits)
-        .await
-    }
+    pub api_client: reqwest::Client,
 }
 
 static TRACING: Lazy<()> = Lazy::new(|| {
@@ -79,6 +67,7 @@ pub async fn spawn_app() -> TestApp {
         port: application_port,
         prover: thread_safe_prover.clone(),
         db: thread_safe_db.clone(),
+        api_client: reqwest::Client::new(),
     };
 
     test_app
