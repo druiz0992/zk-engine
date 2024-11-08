@@ -15,7 +15,8 @@ impl<F: Field> ClientPubInputs<F> {
         commitment_nullifier_count: (usize, usize),
     ) -> Result<Self, &'static str> {
         let (c, n) = commitment_nullifier_count;
-        if value.len() != c + 2 * n + 6 {
+        // C + 2 (Ephemeral key) + 3 (Ciphertext) + max( 1 NULL + 1 ROOT, N NULL + N ROOT)
+        if value.len() != c + std::cmp::max(2, 2 * n) + 6 {
             return Err("Invalid number of inputs");
         }
         Ok(Self {

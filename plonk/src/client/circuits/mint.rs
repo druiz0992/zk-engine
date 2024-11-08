@@ -26,23 +26,16 @@ pub mod utils;
 pub use circuit::*;
 pub use utils::build_random_inputs;
 
+const CIRCUIT_ID: &'static str = "MINT";
 pub struct MintCircuit<const C: usize>;
 
 impl<const C: usize> MintCircuit<C> {
-    const CIRCUIT_ID: &'static str = "MINT";
-
     pub fn new() -> Self {
         MintCircuit
     }
 
-    pub fn circuit_id() -> CircuitId {
-        let id = format!("{}_{}", Self::CIRCUIT_ID, C);
-        CircuitId::new(id)
-    }
-
     pub fn get_circuit_id(&self) -> CircuitId {
-        let id = format!("{}_{}", Self::CIRCUIT_ID, C);
-        CircuitId::new(id)
+        get_circuit_id_from_params(C, 0)
     }
 
     #[client_circuit]
@@ -59,6 +52,11 @@ impl<const C: usize> MintCircuit<C> {
     pub fn as_circuit<P, V, VSW>(self) -> Box<dyn ClientPlonkCircuit<P, V, VSW>> {
         Box::new(self)
     }
+}
+
+pub fn get_circuit_id_from_params(c: usize, _n: usize) -> CircuitId {
+    let id = format!("{}_{}", CIRCUIT_ID, c);
+    CircuitId::new(id)
 }
 
 impl<const C: usize> Default for MintCircuit<C> {
