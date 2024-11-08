@@ -121,6 +121,7 @@ mod tests {
     use crate::ports::prover::Prover;
     use plonk_prover::client::circuits::transfer;
 
+    use crate::utils::circuits;
     use curves::pallas::PallasConfig;
     use curves::vesta::VestaConfig;
     use plonk_prover::client::{
@@ -151,8 +152,8 @@ mod tests {
         const C: usize = 1;
         const N: usize = 1;
         const D: usize = 8;
-        let mut prover: InMemProver<PallasConfig, VestaConfig, _> = InMemProver::default();
 
+        let mut prover: InMemProver<PallasConfig, VestaConfig, _> = InMemProver::default();
         let mint_circuit =
             mint::MintCircuit::<C>::new().as_circuit::<PallasConfig, VestaConfig, _>();
         let (mint_pk, _) = mint_circuit.generate_keys().expect(&format!(
@@ -185,6 +186,7 @@ mod tests {
         const N: usize = 1;
         const D: usize = 8;
 
+        let mut prover: InMemProver<PallasConfig, VestaConfig, _> = InMemProver::default();
         let mint_circuit = MintCircuit::<C>::new().as_circuit::<PallasConfig, VestaConfig, _>();
         let inputs = mint::utils::build_random_inputs::<PallasConfig, VestaConfig, _, C>().expect(
             &format!("Error generating random inputs for mint circuit with C:{C}, N:{N}, D:{D}"),
@@ -195,8 +197,36 @@ mod tests {
 
         let result = <InMemProver<PallasConfig, VestaConfig, _> as Prover<_, _, _>>::prove(
             &*mint_circuit,
-            inputs,
+            inputs.clone(),
             &pk,
+        );
+        assert!(
+            result.is_ok(),
+            "Proof generation should succeed for valid inputs"
+        );
+
+        let (proof, public_inputs, _) = result.unwrap();
+        let is_valid = <InMemProver<PallasConfig, VestaConfig, _> as Prover<_, _, _>>::verify(
+            vk.clone(),
+            public_inputs,
+            proof,
+        );
+
+        assert!(is_valid, "Verification should succeed for a valid proof");
+
+        circuits::init_client_circuits::<PallasConfig, VestaConfig, VestaConfig, _>(&mut prover)
+            .expect("Error initializing client circuits");
+
+        let result = <InMemProver<PallasConfig, VestaConfig, _> as Prover<_, _, _>>::prove(
+            &*mint_circuit,
+            inputs,
+            prover
+                .get_pk(
+                    MintCircuit::<C>::new()
+                        .as_circuit::<PallasConfig, VestaConfig, VestaConfig>()
+                        .get_circuit_id(),
+                )
+                .unwrap(),
         );
         assert!(
             result.is_ok(),
