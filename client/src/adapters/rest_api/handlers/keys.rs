@@ -16,6 +16,7 @@ pub async fn create_keys(
 ) -> Result<Json<UserKeys<PallasConfig>>, AppError> {
     let keys = create_user_keys_from_mnemonic::<PallasConfig>(mnemonic_str)
         .map_err(|_| AppError::TxError)?;
+
     db.state_db
         .lock()
         .await

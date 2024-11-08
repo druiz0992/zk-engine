@@ -43,7 +43,7 @@ async fn keys_endpoint_returns_415_error_with_empty_request() {
     assert_eq!(
         response.status(),
         reqwest::StatusCode::UNSUPPORTED_MEDIA_TYPE,
-        "Expected a 415  Internal Server Error, but got {}",
+        "Expected a 415  Unsupported Media Type Error, but got {}",
         response.status()
     );
 }

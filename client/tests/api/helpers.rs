@@ -9,12 +9,14 @@ use curves::{
     vesta::VestaConfig,
 };
 
+use keys::UserKeysResponseBody;
 use once_cell::sync::Lazy;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 pub mod circuits;
 pub mod keys;
+pub mod mint;
 
 pub struct TestApp {
     pub address: String,
@@ -22,6 +24,7 @@ pub struct TestApp {
     pub prover: Arc<Mutex<InMemProver<PallasConfig, VestaConfig, VestaConfig>>>,
     pub db: Arc<Mutex<InMemStorage<PallasConfig, Fq>>>,
     pub api_client: reqwest::Client,
+    pub user_keys: Option<UserKeysResponseBody>,
 }
 
 static TRACING: Lazy<()> = Lazy::new(|| {
@@ -68,6 +71,7 @@ pub async fn spawn_app() -> TestApp {
         prover: thread_safe_prover.clone(),
         db: thread_safe_db.clone(),
         api_client: reqwest::Client::new(),
+        user_keys: None,
     };
 
     test_app
