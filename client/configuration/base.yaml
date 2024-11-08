@@ -2,3 +2,5 @@ general:
   log_level: "debug"
 application:
   port: 8000
+sequencer:
+  timeout_milliseconds: 10000

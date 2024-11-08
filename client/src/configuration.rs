@@ -32,6 +32,7 @@ impl TryFrom<String> for Environment {
 pub struct Settings {
     pub general: GeneralSettings,
     pub application: ApplicationSettings,
+    pub sequencer: SequencerSettings,
 }
 
 impl Settings {
@@ -71,4 +72,16 @@ pub fn get_configuration() -> Result<Settings, config::ConfigError> {
         .build()?; // Build the configuration
 
     settings.try_deserialize::<Settings>()
+}
+
+#[derive(serde::Deserialize, Clone, Debug)]
+pub struct SequencerSettings {
+    pub base_url: String,
+    pub timeout_milliseconds: u64,
+}
+
+impl SequencerSettings {
+    pub fn timeout(&self) -> std::time::Duration {
+        std::time::Duration::from_millis(self.timeout_milliseconds)
+    }
 }

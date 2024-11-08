@@ -24,7 +24,8 @@ pub mod rest_api_entry {
     use serde_json::json;
 
     use crate::services::{
-        prover::in_memory_prover::InMemProver, storage::in_mem_storage::InMemStorage,
+        notifier::HttpNotifier, prover::in_memory_prover::InMemProver,
+        storage::in_mem_storage::InMemStorage,
     };
 
     use crate::configuration::ApplicationSettings;
@@ -51,6 +52,7 @@ pub mod rest_api_entry {
     pub struct AppState {
         pub state_db: WriteDatabase,
         pub prover: Arc<Mutex<InMemProver<PallasConfig, VestaConfig, VestaConfig>>>,
+        pub notifier: Arc<Mutex<HttpNotifier>>,
     }
 
     pub struct Application {
@@ -60,12 +62,15 @@ pub mod rest_api_entry {
         db: WriteDatabase,
         #[allow(dead_code)]
         prover: Arc<Mutex<InMemProver<PallasConfig, VestaConfig, VestaConfig>>>,
+        #[allow(dead_code)]
+        notifier: Arc<Mutex<HttpNotifier>>,
     }
 
     impl Application {
         pub async fn build(
             db: WriteDatabase,
             prover: Arc<Mutex<InMemProver<PallasConfig, VestaConfig, VestaConfig>>>,
+            notifier: Arc<Mutex<HttpNotifier>>,
             configuration: ApplicationSettings,
         ) -> Result<Application, anyhow::Error> {
             let address = format!("{}:{}", configuration.host, configuration.port);
@@ -75,7 +80,7 @@ pub mod rest_api_entry {
             let port = listener.local_addr().unwrap().port();
 
             let server: axum::serve::Serve<Router, Router> =
-                run_api(listener, db.clone(), prover.clone()).await;
+                run_api(listener, db.clone(), prover.clone(), notifier.clone()).await;
             log::trace!("Launching server at {}:{}", configuration.host, port);
 
             Ok(Application {
@@ -83,6 +88,7 @@ pub mod rest_api_entry {
                 port,
                 db: db.clone(),
                 prover: prover.clone(),
+                notifier: notifier.clone(),
             })
         }
 
@@ -100,11 +106,13 @@ pub mod rest_api_entry {
         listener: tokio::net::TcpListener,
         db_state: WriteDatabase,
         prover: Arc<Mutex<InMemProver<PallasConfig, VestaConfig, VestaConfig>>>,
+        notifier: Arc<Mutex<HttpNotifier>>,
     ) -> axum::serve::Serve<Router, Router> {
         dotenv().ok();
         let app_state = AppState {
             state_db: db_state,
             prover,
+            notifier,
         };
         let app = Router::new()
             .route("/health", get(|| async { StatusCode::OK }))
