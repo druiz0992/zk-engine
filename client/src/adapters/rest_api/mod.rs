@@ -13,6 +13,8 @@ pub mod rest_api_entry {
     use super::handlers::preimage::get_preimages;
     use super::handlers::transfer::create_transfer;
 
+    use common::structs::Transaction;
+
     use axum::{
         http::StatusCode,
         response::IntoResponse,
@@ -52,7 +54,7 @@ pub mod rest_api_entry {
     pub struct AppState {
         pub state_db: WriteDatabase,
         pub prover: Arc<Mutex<InMemProver<PallasConfig, VestaConfig, VestaConfig>>>,
-        pub notifier: Arc<Mutex<HttpNotifier>>,
+        pub notifier: Arc<Mutex<HttpNotifier<Transaction<VestaConfig>>>>,
     }
 
     pub struct Application {
@@ -63,14 +65,14 @@ pub mod rest_api_entry {
         #[allow(dead_code)]
         prover: Arc<Mutex<InMemProver<PallasConfig, VestaConfig, VestaConfig>>>,
         #[allow(dead_code)]
-        notifier: Arc<Mutex<HttpNotifier>>,
+        notifier: Arc<Mutex<HttpNotifier<Transaction<VestaConfig>>>>,
     }
 
     impl Application {
         pub async fn build(
             db: WriteDatabase,
             prover: Arc<Mutex<InMemProver<PallasConfig, VestaConfig, VestaConfig>>>,
-            notifier: Arc<Mutex<HttpNotifier>>,
+            notifier: Arc<Mutex<HttpNotifier<Transaction<VestaConfig>>>>,
             configuration: ApplicationSettings,
         ) -> Result<Application, anyhow::Error> {
             let address = format!("{}:{}", configuration.host, configuration.port);
@@ -106,7 +108,7 @@ pub mod rest_api_entry {
         listener: tokio::net::TcpListener,
         db_state: WriteDatabase,
         prover: Arc<Mutex<InMemProver<PallasConfig, VestaConfig, VestaConfig>>>,
-        notifier: Arc<Mutex<HttpNotifier>>,
+        notifier: Arc<Mutex<HttpNotifier<Transaction<VestaConfig>>>>,
     ) -> axum::serve::Serve<Router, Router> {
         dotenv().ok();
         let app_state = AppState {

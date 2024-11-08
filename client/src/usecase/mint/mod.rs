@@ -42,7 +42,7 @@ pub async fn mint_process<
     VSW,
     Proof: Prover<P, V, VSW>,
     Storage: PreimageDB<E = P>,
-    Comms: Notifier<V>,
+    Comms: Notifier<Info = Transaction<V>>,
 >(
     db: Arc<Mutex<Storage>>,
     prover: Arc<Mutex<Proof>>,
@@ -78,7 +78,7 @@ pub async fn mint_process<
 
     // ark_std::println!("Posted res");
     let notifier = notifier.lock().await;
-    notifier.send_transaction(transaction.clone()).await?;
+    notifier.send_info(transaction.clone()).await?;
 
     Ok(transaction)
 }
