@@ -24,26 +24,25 @@ pub use circuit::transfer_circuit;
 pub use constants::*;
 pub use utils::build_random_inputs;
 
+const CIRCUIT_ID: &'static str = "TRANSFER";
 pub struct TransferCircuit<const C: usize, const N: usize, const D: usize>;
 
 impl<const C: usize, const N: usize, const D: usize> TransferCircuit<C, N, D> {
-    const CIRCUIT_ID: &'static str = "TRANSFER";
-
     pub fn new() -> Self {
         TransferCircuit
     }
-    pub fn circuit_id() -> CircuitId {
-        let id = format!("{}_{}_{}", Self::CIRCUIT_ID, C, N);
-        CircuitId::new(id)
-    }
     pub fn get_circuit_id(&self) -> CircuitId {
-        let id = format!("{}_{}_{}", Self::CIRCUIT_ID, C, N);
-        CircuitId::new(id)
+        get_circuit_id_from_params(C, N)
     }
     #[client_circuit]
     pub fn as_circuit<P, V, VSW>(self) -> Box<dyn ClientPlonkCircuit<P, V, VSW>> {
         Box::new(self)
     }
+}
+
+pub fn get_circuit_id_from_params(c: usize, n: usize) -> CircuitId {
+    let id = format!("{}_{}_{}", CIRCUIT_ID, c, n);
+    CircuitId::new(id)
 }
 
 impl<const C: usize, const N: usize, const D: usize> Default for TransferCircuit<C, N, D> {
