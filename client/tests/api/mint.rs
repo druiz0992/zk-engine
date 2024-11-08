@@ -2,7 +2,7 @@ use crate::helpers::spawn_app;
 use plonk_prover::client::circuits::mint::MintCircuit;
 
 #[tokio::test]
-async fn mint_endpoint_returns_200_with_corrent_input() {
+async fn mint_endpoint_returns_200_with_correct_input() {
     let mut app = spawn_app().await;
 
     app.add_client_circuits(vec![Box::new(MintCircuit::<1>::new())])

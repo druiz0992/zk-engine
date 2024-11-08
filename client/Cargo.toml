@@ -63,12 +63,15 @@ dotenvy = "0.15.7"
 derivative = "2.2.0"
 reqwest = {version = "0.11.22", features = ["json"]}
 config = "0.14"
-
 rayon = "1.8.0"
 anyhow = "1"
+async-trait = "0.1.83"
+
 
 [dev-dependencies]
 once_cell = "1"
 bip39 = {version = "2.1", features = ["rand", "french"]}
 itertools = "0.13.0"
 random_word = { version = "0.4.2", features = ["en"] }
+wiremock = "0.5"
+

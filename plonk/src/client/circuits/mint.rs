@@ -26,7 +26,7 @@ pub mod utils;
 pub use circuit::*;
 pub use utils::build_random_inputs;
 
-const CIRCUIT_ID: &'static str = "MINT";
+const CIRCUIT_ID: &str = "MINT";
 pub struct MintCircuit<const C: usize>;
 
 impl<const C: usize> MintCircuit<C> {

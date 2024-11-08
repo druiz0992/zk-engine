@@ -18,7 +18,7 @@ use zk_macros::client_circuit;
 #[client_circuit]
 pub(crate) fn mint_tokens<P, V, VSW, Proof: Prover<P, V, VSW>>(
     mint_circuit: Box<dyn ClientPlonkCircuit<P, V, VSW>>,
-    preimage: &Vec<Preimage<P>>,
+    preimage: &[Preimage<P>],
     proving_key: &ProvingKey<V>,
 ) -> Result<Transaction<V>, &'static str> {
     let values: Vec<_> = preimage.iter().map(|s| s.value).collect();

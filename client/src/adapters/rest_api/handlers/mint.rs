@@ -11,9 +11,10 @@ pub async fn create_mint(
     State(db): State<AppState>,
     Json(mint_details): Json<Vec<Preimage<PallasConfig>>>,
 ) -> Result<Json<Transaction<VestaConfig>>, AppError> {
-    let transaction = usecase::mint::mint_process(db.state_db, db.prover, mint_details)
-        .await
-        .map_err(|_| AppError::TxError)?;
+    let transaction =
+        usecase::mint::mint_process(db.state_db, db.prover, db.notifier, mint_details)
+            .await
+            .map_err(|_| AppError::TxError)?;
 
     Ok(Json(transaction))
 }
