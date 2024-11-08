@@ -151,7 +151,7 @@ where
     emul_g_comm_bounce.extend(bounce_acc_vars[0..2].to_vec());
     emul_g_comm_bounce.extend(bounce_acc_vars[4..6].to_vec());
 
-    let _ = vec![
+    let _ = [
         g_comm_bounce.get_x(),
         g_comm_bounce.get_y(),
         g_comm_bounce_2.get_x(),

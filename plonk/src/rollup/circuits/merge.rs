@@ -25,7 +25,7 @@ use jf_relation::{
         },
         from_emulated_field, EmulationConfig,
     },
-    BoolVar, Circuit, PlonkCircuit, Variable,
+    Circuit, PlonkCircuit, Variable,
 };
 use jf_utils::field_switching;
 

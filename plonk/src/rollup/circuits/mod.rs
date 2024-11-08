@@ -9,7 +9,6 @@ pub mod utils {
 
     use ark_ec::{pairing::Pairing, short_weierstrass::SWCurveConfig, CurveGroup};
 
-    use ark_ff::PrimeField;
     use ark_poly::univariate::DensePolynomial;
     use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
     use curves::{pallas::PallasConfig, vesta::VestaConfig};
@@ -94,7 +93,7 @@ pub mod utils {
         ),
     }
 
-    pub fn serial_to_file<E: Pairing, I: Pairing>(
+    pub fn serial_to_file<E, I>(
         proof: Proof<E>,
         pub_inputs: (
             GlobalPublicInputs<curves::pallas::Fr>,

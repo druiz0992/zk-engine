@@ -17,8 +17,10 @@ pub mod sequencer_api {
     use serde::Deserialize;
     use tokio::sync::Mutex;
 
+    use plonk_prover::client::circuits::mint::MintCircuit;
+    use plonk_prover::client::circuits::transfer::TransferCircuit;
+
     use crate::{
-        domain::CircuitType,
         ports::{prover::SequencerProver, storage::TransactionStorage},
         services::{
             prover::in_mem_sequencer_prover::InMemProver,
@@ -97,11 +99,18 @@ pub mod sequencer_api {
         let transactions = state_db.get_all_transactions();
         let prover = db.prover.lock().await;
         ark_std::println!("Get the mofo vks");
-        let vks = [CircuitType::Mint, CircuitType::Transfer]
-            .into_iter()
-            .map(|x| prover.get_vk(x))
-            .collect::<Option<Vec<_>>>()
-            .ok_or(StatusCode::BAD_REQUEST)?;
+        let vks = [
+            MintCircuit::<1>::new()
+                .as_circuit::<PallasConfig, VestaConfig, _>()
+                .get_circuit_id(),
+            TransferCircuit::<2, 2, 8>::new()
+                .as_circuit::<PallasConfig, VestaConfig, _>()
+                .get_circuit_id(),
+        ]
+        .into_iter()
+        .map(|x| prover.get_vk(x))
+        .collect::<Option<Vec<_>>>()
+        .ok_or(StatusCode::BAD_REQUEST)?;
 
         let commit_keys = prover.get_cks().ok_or(StatusCode::BAD_REQUEST)?;
         let proving_keys = prover.get_pks();

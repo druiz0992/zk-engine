@@ -7,11 +7,12 @@ pub mod in_mem_storage {
     use trees::{
         membership_tree::{MembershipTree, Tree},
         tree::AppendTree,
+        MembershipPath,
     };
 
     use crate::{
-        ports::storage::{KeyDB, PreimageDB, StoredPreimageInfo, TreeDB},
-        services::derive_keys::UserKeys,
+        ports::storage::{KeyDB, PreimageDB, StoredPreimageInfo, StoredPreimageInfoVector, TreeDB},
+        services::user_keys::UserKeys,
     };
 
     pub struct InMemStorage<VSW, F>
@@ -37,6 +38,15 @@ pub mod in_mem_storage {
             }
         }
     }
+    impl<VSW, F> Default for InMemStorage<VSW, F>
+    where
+        VSW: SWCurveConfig<BaseField = F>,
+        F: PrimeField,
+    {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
 
     impl<VSW, F> PreimageDB for InMemStorage<VSW, F>
     where
@@ -45,11 +55,11 @@ pub mod in_mem_storage {
     {
         type E = VSW;
 
-        fn get_value(&self, value: VSW::BaseField) -> Option<StoredPreimageInfo<VSW>> {
+        fn get_value(&self, _value: VSW::BaseField) -> Option<StoredPreimageInfo<VSW>> {
             todo!()
         }
 
-        fn get_spendable(&self) -> Option<Vec<StoredPreimageInfo<VSW>>> {
+        fn get_spendable(&self) -> Option<StoredPreimageInfoVector<VSW>> {
             todo!()
         }
 
@@ -67,13 +77,13 @@ pub mod in_mem_storage {
                 return None;
             }
             // Insert returns None if there wasnt a key.
-            let insert = self.preimage_db.insert(key.to_string(), preimage);
+            let _insert = self.preimage_db.insert(key.to_string(), preimage);
             Some(())
         }
 
-        fn get_all_preimages(&self) -> Vec<StoredPreimageInfo<VSW>> {
+        fn get_all_preimages(&self) -> StoredPreimageInfoVector<VSW> {
             let mut v = Vec::new();
-            self.preimage_db.values().for_each(|&x| v.push(x.clone()));
+            self.preimage_db.values().for_each(|&x| v.push(x));
             v
         }
 
@@ -103,7 +113,11 @@ pub mod in_mem_storage {
     {
         type F = F;
 
-        fn get_sibling_path(&self, block_number: &u64, leaf_index: usize) -> Option<Vec<Self::F>> {
+        fn get_sibling_path(
+            &self,
+            block_number: &u64,
+            leaf_index: usize,
+        ) -> Option<MembershipPath<Self::F>> {
             self.commitment_tree_db
                 .get(block_number)
                 .and_then(|t| t.membership_witness(leaf_index))
@@ -122,7 +136,7 @@ pub mod in_mem_storage {
             if !self.commitment_tree_db.contains_key(block_number) {
                 return None;
             }
-            self.commitment_tree_db.get(block_number).map(|t| t.root.0)
+            self.commitment_tree_db.get(block_number).map(|t| t.root())
         }
     }
 

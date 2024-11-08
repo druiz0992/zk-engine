@@ -247,7 +247,7 @@ mod test {
             outgoing_nonce,
             old_comm_path,
             Fq::from(0 as u32),
-            comm_tree.root.0,
+            comm_tree.root(),
             outgoing_token_id,
             incoming_value,
             incoming_nonce,
