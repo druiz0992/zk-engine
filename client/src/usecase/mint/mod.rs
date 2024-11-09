@@ -1,6 +1,6 @@
 use crate::domain::Preimage;
 use crate::ports::storage::StoredPreimageInfo;
-use crate::ports::{prover::Prover, storage::PreimageDB};
+use crate::ports::{notifier::Notifier, prover::Prover, storage::PreimageDB};
 use crate::services::prover::in_memory_prover::InMemProver;
 use crate::utils;
 use ark_ec::{
@@ -22,13 +22,9 @@ use zk_macros::client_circuit;
 
 mod compute_preimages;
 mod mint_tokens;
-mod send_transaction;
-mod store_preimages;
 
 use compute_preimages::*;
 use mint_tokens::*;
-use send_transaction::*;
-use store_preimages::*;
 
 struct MintPreimage<P>
 where
@@ -40,14 +36,27 @@ where
 }
 
 #[client_circuit]
-pub async fn mint_process<P, V, VSW, Proof: Prover<P, V, VSW>, Storage: PreimageDB<E = P>>(
+pub async fn mint_process<
+    P,
+    V,
+    VSW,
+    Proof: Prover<P, V, VSW>,
+    Storage: PreimageDB<E = P>,
+    Comms: Notifier<Info = Transaction<V>>,
+>(
     db: Arc<Mutex<Storage>>,
     prover: Arc<Mutex<Proof>>,
+    notifier: Arc<Mutex<Comms>>,
     mint_details: Vec<Preimage<P>>,
 ) -> anyhow::Result<Transaction<V>> {
     let (proving_key, circuit) = get_circuit_and_pk(prover, &mint_details).await?;
     let (transaction, preimages) = spawn_mint(circuit, mint_details, proving_key).await?;
-    store_mint_preimages::<P, V, _, _>(db, preimages).await?;
+    let mut db = db.lock().await;
+
+    for mint_preimage in preimages {
+        db.insert_preimage(mint_preimage.key.0, mint_preimage.preimage)
+            .ok_or(anyhow::anyhow!("Error inserting mint preimage"))?;
+    }
 
     // This is to simulate the mint being added to the tree
     // Replace with something better
@@ -68,7 +77,8 @@ pub async fn mint_process<P, V, VSW, Proof: Prover<P, V, VSW>, Storage: Preimage
     // );
 
     // ark_std::println!("Posted res");
-    send_transaction_to_sequencer(transaction.clone());
+    let notifier = notifier.lock().await;
+    notifier.send_info(transaction.clone()).await?;
 
     Ok(transaction)
 }
@@ -76,7 +86,7 @@ pub async fn mint_process<P, V, VSW, Proof: Prover<P, V, VSW>, Storage: Preimage
 #[client_circuit]
 async fn get_circuit_and_pk<P, V, VSW, Proof: Prover<P, V, VSW>>(
     prover: Arc<Mutex<Proof>>,
-    mint_details: &Vec<Preimage<P>>,
+    mint_details: &[Preimage<P>],
 ) -> anyhow::Result<(ProvingKey<V>, Box<dyn ClientPlonkCircuit<P, V, VSW>>)> {
     let prover_guard = prover.lock().await;
     let n_commitments = mint_details.len();

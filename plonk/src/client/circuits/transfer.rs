@@ -24,7 +24,7 @@ pub use circuit::transfer_circuit;
 pub use constants::*;
 pub use utils::build_random_inputs;
 
-const CIRCUIT_ID: &'static str = "TRANSFER";
+const CIRCUIT_ID: &str = "TRANSFER";
 pub struct TransferCircuit<const C: usize, const N: usize, const D: usize>;
 
 impl<const C: usize, const N: usize, const D: usize> TransferCircuit<C, N, D> {
