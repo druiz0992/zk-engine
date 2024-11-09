@@ -4,8 +4,6 @@ use rand_chacha::ChaChaRng;
 use reqwest::Response;
 use serde::Serialize;
 use serde_json::json;
-use wiremock::matchers::{method, path};
-use wiremock::{Mock, ResponseTemplate};
 
 #[derive(Clone, Serialize, Debug)]
 pub struct MintRequestBody {
@@ -40,13 +38,6 @@ impl TestApp {
                 .expect("Error generating user keys")
         };
 
-        Mock::given(path("/transactions"))
-            .and(method("POST"))
-            .respond_with(ResponseTemplate::new(200))
-            .expect(1)
-            .mount(&self.sequencer_server)
-            .await;
-
         let mint_request: Vec<MintRequestBody> = mint_values
             .iter()
             .map(|m| MintRequestBody::new(m[0], m[1], &user_keys.public_key.as_str()))
@@ -61,15 +52,6 @@ impl TestApp {
             .send()
             .await
             .unwrap();
-
-        let sequencer_requests = self
-            .sequencer_server
-            .received_requests()
-            .await
-            .unwrap()
-            .len();
-
-        assert_eq!(sequencer_requests, 1);
 
         mint_response
     }

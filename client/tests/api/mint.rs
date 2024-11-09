@@ -9,9 +9,15 @@ async fn mint_endpoint_returns_200_with_correct_input() {
         .await
         .expect("Error adding new circuit");
 
+    app.enable_sequencer().await;
     let mint_response = app.post_mint_request(vec![["1", "1"]]).await;
+    let sequencer_requests = app.get_sequencer_requests().await;
 
     assert!(mint_response.status().is_success());
+    assert_eq!(
+        sequencer_requests, 1,
+        "Sequencer did not receive the transaction"
+    );
 }
 
 #[tokio::test]
@@ -67,10 +73,16 @@ async fn mint_endpoint_returns_200_with_4_transactions() {
         .await
         .expect("Error adding new circuit");
     let mint_requests = vec![["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"]];
+    app.enable_sequencer().await;
 
     let mint_response = app.post_mint_request(mint_requests).await;
+    let sequencer_requests = app.get_sequencer_requests().await;
 
     assert!(mint_response.status().is_success());
+    assert_eq!(
+        sequencer_requests, 1,
+        "Sequencer did not receive the transaction"
+    );
 }
 
 #[tokio::test]
