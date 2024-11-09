@@ -2,6 +2,8 @@ use ark_ec::{pairing::Pairing, short_weierstrass::SWCurveConfig, CurveGroup};
 use ark_ff::{One, Zero};
 use ark_std::UniformRand;
 use common::crypto::poseidon::Poseidon;
+use common::derived_keys::DerivedKeys;
+use common::keypair::PublicKey;
 use criterion::{criterion_group, criterion_main, Criterion};
 use curves::{
     pallas::{Fq, Fr, PallasConfig},
@@ -12,7 +14,8 @@ use jf_plonk::{
 };
 use jf_primitives::pcs::StructuredReferenceString;
 use jf_relation::{Arithmetization, Circuit};
-use jf_utils::{field_switching, fq_to_fr_with_mask, test_rng};
+use jf_utils::{field_switching, test_rng};
+use plonk_prover::client::circuits::circuit_inputs::CircuitInputs;
 use plonk_prover::utils::bench_utils::{transfer_circuit_helper_generator, tree_generator};
 use plonk_prover::{
     client::circuits::mint::mint_circuit,
@@ -25,7 +28,9 @@ use trees::{
     tree::AppendTree,
 };
 
-pub fn benchmark_mints<const I: usize, const C: usize>(c: &mut Criterion) {
+pub fn benchmark_mints<const I: usize, const C: usize, const N: usize, const D: usize>(
+    c: &mut Criterion,
+) {
     // Below taken from test_base_rollup_helper_mint
     let mut rng = test_rng();
     let mut client_inputs = vec![];
@@ -36,19 +41,24 @@ pub fn benchmark_mints<const I: usize, const C: usize>(c: &mut Criterion) {
                                                // let mut mint_ipa_pk= ProvingKey { sigmas: Default::default()};
     ark_std::println!("Creating {} Mint Circuits", I);
     for i in 0..I {
-        let value = ark_std::array::from_fn(|j| Fq::from((j + i) as u32));
+        let value = ark_std::array::from_fn::<_, C, _>(|j| Fq::from((j + i) as u32));
         let token_id = [Fq::from(12 as u64); C];
         let token_nonce = [Fq::from(13 as u64); C];
         let secret_key = Fq::from_str("4").unwrap();
         let secret_key_fr = field_switching::<Fq, Fr>(&secret_key);
         let token_owner = (PallasConfig::GENERATOR * secret_key_fr).into_affine();
-        let mut mint_circuit = mint_circuit::<PallasConfig, VestaConfig, C>(
-            value,
-            token_id,
-            token_nonce,
-            [token_owner; C],
-        )
-        .unwrap();
+
+        let mut circuit_inputs_builder = CircuitInputs::<PallasConfig>::new();
+        let circuit_inputs = circuit_inputs_builder
+            .add_token_values(value.to_vec())
+            .add_token_ids(token_id.to_vec())
+            .add_token_salts(token_nonce.to_vec())
+            .add_recipients(vec![PublicKey::from_affine(token_owner); C])
+            .build();
+
+        let mut mint_circuit =
+            mint_circuit::<PallasConfig, VestaConfig, _, C>(circuit_inputs).unwrap();
+
         mint_circuit.finalize_for_arithmetization().unwrap();
         if i == 0 {
             mint_ipa_srs = <PlonkIpaSnark<VestaConfig> as UniversalSNARK<VestaConfig>>::universal_setup_for_testing(
@@ -108,10 +118,10 @@ pub fn benchmark_mints<const I: usize, const C: usize>(c: &mut Criterion) {
     //         let (mut base_rollup_circuit, _) =
     //         base_rollup_circuit::<VestaConfig, PallasConfig, I, C, 1>(
     //             client_inputs.clone().try_into().unwrap(),
-    //             vk_tree.root.0,
+    //             vk_tree.root(),
     //             nullifier_tree.root,
     //             nullifier_tree.leaf_count.into(),
-    //             global_comm_tree.root.0,
+    //             global_comm_tree.root(),
     //             g_polys.clone().try_into().unwrap(),
     //             vesta_commit_key.clone(),
     //         )
@@ -130,10 +140,10 @@ pub fn benchmark_mints<const I: usize, const C: usize>(c: &mut Criterion) {
     // ==================================================
     let (mut base_circuit, _) = base_rollup_circuit::<VestaConfig, PallasConfig, I, C, 1>(
         client_inputs.clone().try_into().unwrap(),
-        vk_tree.root.0,
-        nullifier_tree.root,
-        nullifier_tree.leaf_count.into(),
-        global_comm_tree.root.0,
+        vk_tree.root(),
+        nullifier_tree.root(),
+        (nullifier_tree.leaf_count() as u64).into(),
+        global_comm_tree.root(),
         g_polys.clone().try_into().unwrap(),
         vesta_commit_key.clone(),
     )
@@ -153,7 +163,10 @@ pub fn benchmark_mints<const I: usize, const C: usize>(c: &mut Criterion) {
     let (base_ipa_pk, _) =
         PlonkIpaSnark::<PallasConfig>::preprocess(&base_ipa_srs, &base_circuit).unwrap();
     c.bench_function("Base with I Mints - Output: Proof Generation", |b| {
+        let mut n = 0;
         b.iter(|| {
+            ark_std::println!("Iteration {n}");
+            n += 1;
             let _ = PlonkIpaSnark::<PallasConfig>::prove::<
                 _,
                 _,
@@ -164,16 +177,14 @@ pub fn benchmark_mints<const I: usize, const C: usize>(c: &mut Criterion) {
     });
 }
 
-pub fn benchmark_transfers<const I: usize, const N: usize, const C: usize>(c: &mut Criterion) {
+pub fn benchmark_transfers<const I: usize, const C: usize, const N: usize, const D: usize>(
+    c: &mut Criterion,
+) {
     // Below taken from test_base_rollup_helper_transfer
     let poseidon = Poseidon::<Fq>::new();
     let root_key = Fq::rand(&mut test_rng());
-    let private_key_domain = Fq::from_str("1").unwrap();
-    let private_key: Fq = Poseidon::<Fq>::new()
-        .hash(vec![root_key, private_key_domain])
-        .unwrap();
-
-    let private_key_fr: Fr = fq_to_fr_with_mask(&private_key);
+    let derived_keys = DerivedKeys::<PallasConfig>::new(root_key).unwrap();
+    let token_owner = derived_keys.public_key;
 
     let mut rng = test_rng();
     let mut client_inputs = vec![];
@@ -188,10 +199,9 @@ pub fn benchmark_transfers<const I: usize, const N: usize, const C: usize>(c: &m
     for i in 0..I {
         let token_id = Fq::from_str("2").unwrap();
         let token_nonce = Fq::from(3u32);
-        let token_owner = (PallasConfig::GENERATOR * private_key_fr).into_affine();
 
         let mint_values: [Fq; N] =
-            ark_std::array::from_fn(|index| Fq::from((index + i * N) as u32));
+            ark_std::array::from_fn(|index| Fq::from((index + i * N + 1) as u32));
         let mint_commitments = mint_values
             .into_iter()
             .map(|v| {
@@ -204,8 +214,9 @@ pub fn benchmark_transfers<const I: usize, const N: usize, const C: usize>(c: &m
                 ])
             })
             .collect::<Vec<_>>();
-        let prev_commitment_tree = Tree::<Fq, 8>::from_leaves(mint_commitments.clone());
+        let prev_commitment_tree = Tree::<Fq, D>::from_leaves(mint_commitments.clone());
         let mut old_sib_paths: [[Fq; 8]; N] = [[Fq::zero(); 8]; N];
+
         for j in 0..N {
             old_sib_paths[j] = prev_commitment_tree
                 .membership_witness(j)
@@ -213,10 +224,10 @@ pub fn benchmark_transfers<const I: usize, const N: usize, const C: usize>(c: &m
                 .try_into()
                 .unwrap();
         }
-        let (mut transfer_circuit, transfer_inputs) = transfer_circuit_helper_generator::<C, N>(
+        let (mut transfer_circuit, transfer_inputs) = transfer_circuit_helper_generator::<C, N, D>(
             mint_values,
             old_sib_paths,
-            [prev_commitment_tree.root.0; N],
+            [prev_commitment_tree.root(); N],
             ark_std::array::from_fn(|i| i as u64),
         );
         transfer_circuit.finalize_for_arithmetization().unwrap();
@@ -261,9 +272,9 @@ pub fn benchmark_transfers<const I: usize, const N: usize, const C: usize>(c: &m
             if i == 0 && j == 0 {
                 let this_poseidon = Poseidon::<Fr>::new();
                 let low_nullifier_hash = this_poseidon.hash_unchecked(vec![
-                    low_null.node.value,
+                    low_null.node.value(),
                     Fr::from(low_null.tree_index as u64),
-                    low_null.node.next_value,
+                    low_null.node.next_value(),
                 ]);
 
                 init_nullifier_root = nullifier_tree
@@ -288,7 +299,7 @@ pub fn benchmark_transfers<const I: usize, const N: usize, const C: usize>(c: &m
             swap_field: false,
             nullifiers,
             commitments: transfer_inputs.1,
-            commitment_tree_root: [prev_commitment_tree.root.0; N],
+            commitment_tree_root: [prev_commitment_tree.root(); N],
             path_comm_tree_root_to_global_tree_root: [[Fr::zero(); 8]; N], // filled later
             path_comm_tree_index: [Fr::zero(); N],                         // filled later
             low_nullifier: low_nullifiers,
@@ -305,7 +316,7 @@ pub fn benchmark_transfers<const I: usize, const N: usize, const C: usize>(c: &m
         };
 
         client_inputs.push(client_input);
-        global_comm_roots.push(field_switching(&prev_commitment_tree.root.0));
+        global_comm_roots.push(field_switching(&prev_commitment_tree.root()));
     }
     ark_std::println!("Created {} Transfer Proofs", I);
     // all have the same vk
@@ -345,10 +356,10 @@ pub fn benchmark_transfers<const I: usize, const N: usize, const C: usize>(c: &m
     //         let (mut base_rollup_circuit, _) =
     //         base_rollup_circuit::<VestaConfig, PallasConfig, I, C, N>(
     //             client_inputs.clone().try_into().unwrap(),
-    //             vk_tree.root.0,
+    //             vk_tree.root(),
     //             init_nullifier_root,
     //             initial_nullifier_tree.leaf_count.into(),
-    //             global_comm_tree.root.0,
+    //             global_comm_tree.root(),
     //             g_polys.clone().try_into().unwrap(),
     //             vesta_commit_key.clone(),
     //         )
@@ -367,10 +378,10 @@ pub fn benchmark_transfers<const I: usize, const N: usize, const C: usize>(c: &m
     // ==================================================
     let (mut base_circuit, _) = base_rollup_circuit::<VestaConfig, PallasConfig, I, C, N>(
         client_inputs.try_into().unwrap(),
-        vk_tree.root.0,
+        vk_tree.root(),
         init_nullifier_root,
-        initial_nullifier_tree.leaf_count.into(),
-        global_comm_tree.root.0,
+        (initial_nullifier_tree.leaf_count() as u64).into(),
+        global_comm_tree.root(),
         g_polys.try_into().unwrap(),
         vesta_commit_key.clone(),
     )
@@ -390,7 +401,10 @@ pub fn benchmark_transfers<const I: usize, const N: usize, const C: usize>(c: &m
     let (base_ipa_pk, _) =
         PlonkIpaSnark::<PallasConfig>::preprocess(&base_ipa_srs, &base_circuit).unwrap();
     c.bench_function("Base with I Transfers - Output: Proof Generation", |b| {
+        let mut n = 0;
         b.iter(|| {
+            ark_std::println!("Iteration {n}");
+            n += 1;
             let _ = PlonkIpaSnark::<PallasConfig>::prove::<
                 _,
                 _,
@@ -401,5 +415,5 @@ pub fn benchmark_transfers<const I: usize, const N: usize, const C: usize>(c: &m
     });
 }
 
-criterion_group! {name = benches; config = Criterion::default().significance_level(0.1).sample_size(10);targets = benchmark_mints::<2, 2>, benchmark_transfers::<2, 2, 1>}
+criterion_group! {name = benches; config = Criterion::default().significance_level(0.1).sample_size(10);targets = benchmark_mints::<2, 2,1,8>, benchmark_transfers::<2, 1, 2, 8>}
 criterion_main!(benches);

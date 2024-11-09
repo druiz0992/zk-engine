@@ -2,7 +2,7 @@ pub mod in_mem_sequencer_prover {
     use std::{collections::HashMap, time::Instant};
 
     use crate::{
-        domain::{CircuitType, RollupCommitKeys, RollupProvingKeys},
+        domain::{RollupCommitKeys, RollupProvingKeys},
         ports::prover::SequencerProver,
     };
     use curves::pallas::{Fq, Fr};
@@ -13,12 +13,13 @@ pub mod in_mem_sequencer_prover {
         transcript::RescueTranscript,
     };
     use jf_relation::{Arithmetization, Circuit};
+    use plonk_prover::client::circuits::structs::CircuitId;
     use plonk_prover::rollup::circuits::base::base_rollup_circuit;
 
     pub struct InMemProver {
         pub proving_key_store: Option<RollupProvingKeys>,
         pub commit_key_store: Option<RollupCommitKeys>,
-        pub verifying_key_store: HashMap<CircuitType, VerifyingKey<VestaConfig>>,
+        pub verifying_key_store: HashMap<CircuitId, VerifyingKey<VestaConfig>>,
     }
     impl InMemProver {
         pub fn new() -> Self {
@@ -27,6 +28,12 @@ pub mod in_mem_sequencer_prover {
                 commit_key_store: None,
                 verifying_key_store: HashMap::new(),
             }
+        }
+    }
+
+    impl Default for InMemProver {
+        fn default() -> Self {
+            Self::new()
         }
     }
 
@@ -45,7 +52,7 @@ pub mod in_mem_sequencer_prover {
             jf_plonk::nightfall::ipa_structs::Proof<PallasConfig>,
             jf_relation::errors::CircuitError,
         > {
-            let (mut circuit, pi_star) = base_rollup_circuit::<VestaConfig, PallasConfig, 2, 1, 1>(
+            let (mut circuit, _pi_star) = base_rollup_circuit::<VestaConfig, PallasConfig, 2, 1, 1>(
                 client_inputs,
                 global_vk_root,
                 global_nullifier_root,
@@ -59,8 +66,8 @@ pub mod in_mem_sequencer_prover {
             let mut rng = &mut jf_utils::test_rng();
             ark_std::println!("Constraint count: {}", circuit.num_gates());
             let now = Instant::now();
-            let pk = if proving_keys.is_some() {
-                proving_keys.unwrap().base_proving_key
+            let pk = if let Some(pkey) = proving_keys {
+                pkey.base_proving_key
             } else {
                 let srs = <PlonkIpaSnark<PallasConfig> as UniversalSNARK<PallasConfig>>::universal_setup_for_testing(
                 circuit.srs_size()?,
@@ -68,7 +75,7 @@ pub mod in_mem_sequencer_prover {
             )?;
                 ark_std::println!("SRS size {} done: {:?}", circuit.srs_size()?, now.elapsed());
                 let now = Instant::now();
-                let (pk, vk) = PlonkIpaSnark::<PallasConfig>::preprocess(&srs, &circuit)?;
+                let (pk, _vk) = PlonkIpaSnark::<PallasConfig>::preprocess(&srs, &circuit)?;
                 ark_std::println!("Preprocess done: {:?}", now.elapsed());
                 pk
             };
@@ -79,7 +86,7 @@ pub mod in_mem_sequencer_prover {
                 .check_circuit_satisfiability(&circuit.public_input().unwrap())
                 .is_ok());
 
-            let (proof, g_poly, _) =
+            let (proof, _g_poly, _) =
                 PlonkIpaSnark::<PallasConfig>::prove_for_partial::<_, _, RescueTranscript<Fq>>(
                     &mut rng, &circuit, &pk, None,
                 )?;
@@ -95,14 +102,14 @@ pub mod in_mem_sequencer_prover {
             self.proving_key_store.clone()
         }
 
-        fn store_vk(&mut self, circuit_type: CircuitType, vk: VerifyingKey<VestaConfig>) {
-            self.verifying_key_store.insert(circuit_type, vk);
+        fn store_vk(&mut self, circuit_id: CircuitId, vk: VerifyingKey<VestaConfig>) {
+            self.verifying_key_store.insert(circuit_id, vk);
         }
 
-        fn get_vk(&self, circuit_type: CircuitType) -> Option<VerifyingKey<VestaConfig>> {
-            ark_std::println!("Getting vk for {:?}", circuit_type);
+        fn get_vk(&self, circuit_id: CircuitId) -> Option<VerifyingKey<VestaConfig>> {
+            ark_std::println!("Getting vk for {:?}", circuit_id);
             ark_std::println!("Capacity: {}", self.verifying_key_store.capacity());
-            self.verifying_key_store.get(&circuit_type).cloned()
+            self.verifying_key_store.get(&circuit_id).cloned()
         }
 
         fn store_cks(&mut self, cks: RollupCommitKeys) {

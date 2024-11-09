@@ -12,8 +12,8 @@ use jf_relation::{
 use crate::primitives::circuits::poseidon::{PoseidonGadget, PoseidonStateVar};
 // from_le_bytes_mod_order(
 pub trait KemDemParams: PoseidonParams {
-    const DOMAIN_DEM: &'static [u8; 32];
-    const DOMAIN_KEM: &'static [u8; 32];
+    const DOMAIN_DEM: &'static [u8; kem_dem_constants::FIELD_ELEMENT_BYTES];
+    const DOMAIN_KEM: &'static [u8; kem_dem_constants::FIELD_ELEMENT_BYTES];
 }
 
 pub trait KemDemGadget<T, E, F> {

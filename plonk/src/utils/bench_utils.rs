@@ -8,12 +8,13 @@ use crate::{
         utils::StoredProof,
     },
 };
-use ark_ec::{pairing::Pairing, short_weierstrass::SWCurveConfig, CurveGroup};
+use ark_ec::pairing::Pairing;
 use ark_ff::Zero;
 use ark_std::UniformRand;
 use common::crypto::poseidon::Poseidon;
+use common::derived_keys::DerivedKeys;
 use curves::{
-    pallas::{Affine, Fq, Fr, PallasConfig},
+    pallas::{Fq, Fr, PallasConfig},
     vesta::VestaConfig,
 };
 use jf_plonk::{
@@ -25,7 +26,7 @@ use jf_primitives::pcs::StructuredReferenceString;
 use jf_relation::{
     gadgets::ecc::short_weierstrass::SWPoint, Arithmetization, Circuit, PlonkCircuit,
 };
-use jf_utils::{field_switching, fq_to_fr_with_mask, test_rng};
+use jf_utils::{field_switching, test_rng};
 use std::str::FromStr;
 use trees::{
     membership_tree::{MembershipTree, Tree},
@@ -87,18 +88,23 @@ pub fn tree_generator(
     (vk_tree, commitment_tree, nullifier_tree, global_root_tree)
 }
 
-pub fn transfer_circuit_helper_generator<const C: usize, const N: usize>(
+use crate::client::circuits::circuit_inputs::CircuitInputs;
+use common::keypair::PublicKey;
+use trees::MembershipPath;
+
+#[allow(clippy::type_complexity)]
+pub fn transfer_circuit_helper_generator<const C: usize, const N: usize, const D: usize>(
     value: [Fq; N],
     old_sib_path: [[Fq; 8]; N],
     root: [Fq; N],
     old_leaf_index: [u64; N],
 ) -> (PlonkCircuit<Fq>, ([Fq; N], [Fq; C], [Fq; 2], [Fq; 3])) {
-    let recipient_public_key = Affine::rand(&mut test_rng());
-    let ephemeral_key = Fq::rand(&mut test_rng());
+    let old_sib_path = MembershipPath::from_array(old_sib_path);
+
     let token_id = Fq::from_str("2").unwrap();
     let root_key = Fq::rand(&mut test_rng());
-    let private_key_domain = Fq::from_str("1").unwrap();
-    let nullifier_key_domain = Fq::from_str("2").unwrap();
+    let derived_keys = DerivedKeys::new(root_key).unwrap();
+    let token_owner = derived_keys.public_key;
 
     let token_nonce = Fq::from(3u32);
     let indices = old_leaf_index
@@ -106,35 +112,34 @@ pub fn transfer_circuit_helper_generator<const C: usize, const N: usize>(
         .map(|i| Fq::from(*i))
         .collect::<Vec<_>>();
     let total_value = value.iter().fold(Fq::zero(), |acc, x| acc + x);
-    let mut new_values = [Fq::from(0 as u32); C];
+    let mut new_values = [Fq::from(0_u32); C];
     if C > 1 {
-        new_values[0] = total_value - Fq::from(1 as u32);
-        new_values[1] = Fq::from(1 as u32);
+        new_values[0] = total_value - Fq::from(1_u32);
+        new_values[1] = Fq::from(1_u32);
     } else {
         new_values[0] = total_value;
     }
 
-    let circuit = transfer_circuit::<PallasConfig, VestaConfig, N, C, 8>(
-        value,
-        [token_nonce; N],
-        old_sib_path.try_into().unwrap(),
-        indices.clone().try_into().unwrap(),
-        root,
-        new_values,
-        indices[0..C].try_into().unwrap(),
-        token_id,
-        recipient_public_key,
-        root_key,
-        ephemeral_key,
-        private_key_domain,
-        nullifier_key_domain,
-    )
-    .unwrap();
+    let circuit_inputs = CircuitInputs::<PallasConfig>::new()
+        .add_old_token_values(value.to_vec())
+        .add_old_token_salts(vec![token_nonce; N])
+        .add_membership_path(old_sib_path)
+        .add_membership_path_index(indices.clone())
+        .add_commitment_tree_root(root.to_vec())
+        .add_token_values(new_values.to_vec())
+        .add_token_salts(indices[0..C].to_vec())
+        .add_token_ids(vec![token_id; 1])
+        .add_recipients(vec![PublicKey::from_affine(token_owner)])
+        .add_root_key(root_key)
+        .add_ephemeral_key(Fq::rand(&mut test_rng()))
+        .build();
+
+    let circuit = transfer_circuit::<PallasConfig, VestaConfig, C, N, D>(circuit_inputs).unwrap();
 
     let public_inputs = circuit.public_input().unwrap();
-    let len = public_inputs.len();
     assert!(circuit.check_circuit_satisfiability(&public_inputs).is_ok());
 
+    let len = public_inputs.len();
     let client_input = (
         public_inputs[N + 1..=2 * N].try_into().unwrap(), // nullifiers
         public_inputs[2 * N + 1..=2 * N + C].try_into().unwrap(), // new commitments
@@ -144,17 +149,17 @@ pub fn transfer_circuit_helper_generator<const C: usize, const N: usize>(
     (circuit, client_input)
 }
 
-pub fn base_circuit_helper_generator<const I: usize, const C: usize, const N: usize>(
-) -> StoredProof<PallasConfig, VestaConfig> {
+pub fn base_circuit_helper_generator<
+    const I: usize,
+    const C: usize,
+    const N: usize,
+    const D: usize,
+>() -> StoredProof<PallasConfig, VestaConfig> {
     // Below taken from test_base_rollup_helper_transfer
     let poseidon = Poseidon::<Fq>::new();
     let root_key = Fq::rand(&mut test_rng());
-    let private_key_domain = Fq::from_str("1").unwrap();
-    let private_key: Fq = Poseidon::<Fq>::new()
-        .hash(vec![root_key, private_key_domain])
-        .unwrap();
-
-    let private_key_fr: Fr = fq_to_fr_with_mask(&private_key);
+    let derived_keys = DerivedKeys::<PallasConfig>::new(root_key).unwrap();
+    let token_owner = derived_keys.public_key;
 
     let mut rng = test_rng();
     let mut client_inputs = vec![];
@@ -169,7 +174,6 @@ pub fn base_circuit_helper_generator<const I: usize, const C: usize, const N: us
     for i in 0..I {
         let token_id = Fq::from_str("2").unwrap();
         let token_nonce = Fq::from(3u32);
-        let token_owner = (PallasConfig::GENERATOR * private_key_fr).into_affine();
 
         let mint_values: [Fq; N] =
             ark_std::array::from_fn(|index| Fq::from((index + i * N) as u32));
@@ -187,6 +191,7 @@ pub fn base_circuit_helper_generator<const I: usize, const C: usize, const N: us
             .collect::<Vec<_>>();
         let prev_commitment_tree = Tree::<Fq, 8>::from_leaves(mint_commitments.clone());
         let mut old_sib_paths: [[Fq; 8]; N] = [[Fq::zero(); 8]; N];
+        #[allow(clippy::needless_range_loop)]
         for j in 0..N {
             old_sib_paths[j] = prev_commitment_tree
                 .membership_witness(j)
@@ -194,10 +199,10 @@ pub fn base_circuit_helper_generator<const I: usize, const C: usize, const N: us
                 .try_into()
                 .unwrap();
         }
-        let (mut transfer_circuit, transfer_inputs) = transfer_circuit_helper_generator::<C, N>(
+        let (mut transfer_circuit, transfer_inputs) = transfer_circuit_helper_generator::<C, N, D>(
             mint_values,
             old_sib_paths,
-            [prev_commitment_tree.root.0; N],
+            [prev_commitment_tree.root(); N],
             ark_std::array::from_fn(|i| i as u64),
         );
         transfer_circuit.finalize_for_arithmetization().unwrap();
@@ -231,7 +236,7 @@ pub fn base_circuit_helper_generator<const I: usize, const C: usize, const N: us
         let mut low_paths: [[Fr; 32]; N] = [[Fr::zero(); 32]; N];
         for (j, null) in lifted_nullifiers.iter().enumerate() {
             let low_null = nullifier_tree.find_predecessor(*null);
-            low_nullifiers[j] = low_null.node.clone();
+            low_nullifiers[j] = low_null.node;
             low_paths[j] = nullifier_tree
                 .non_membership_witness(*null)
                 .unwrap()
@@ -242,9 +247,9 @@ pub fn base_circuit_helper_generator<const I: usize, const C: usize, const N: us
             if i == 0 && j == 0 {
                 let this_poseidon = Poseidon::<Fr>::new();
                 let low_nullifier_hash = this_poseidon.hash_unchecked(vec![
-                    low_null.node.value,
+                    low_null.node.value(),
                     Fr::from(low_null.tree_index as u64),
-                    low_null.node.next_value,
+                    low_null.node.next_value(),
                 ]);
 
                 init_nullifier_root = nullifier_tree
@@ -269,7 +274,7 @@ pub fn base_circuit_helper_generator<const I: usize, const C: usize, const N: us
             swap_field: false,
             nullifiers,
             commitments: transfer_inputs.1,
-            commitment_tree_root: [prev_commitment_tree.root.0; N],
+            commitment_tree_root: [prev_commitment_tree.root(); N],
             path_comm_tree_root_to_global_tree_root: [[Fr::zero(); 8]; N], // filled later
             path_comm_tree_index: [Fr::zero(); N],                         // filled later
             low_nullifier: low_nullifiers,
@@ -286,7 +291,7 @@ pub fn base_circuit_helper_generator<const I: usize, const C: usize, const N: us
         };
 
         client_inputs.push(client_input);
-        global_comm_roots.push(field_switching(&prev_commitment_tree.root.0));
+        global_comm_roots.push(field_switching(&prev_commitment_tree.root()));
     }
     ark_std::println!("Created {} Transfer Proofs", I);
     // all have the same vk
@@ -329,10 +334,10 @@ pub fn base_circuit_helper_generator<const I: usize, const C: usize, const N: us
 
     let (mut base_circuit, pi_star) = base_rollup_circuit::<VestaConfig, PallasConfig, I, C, N>(
         client_inputs.try_into().unwrap(),
-        vk_tree.root.0,
+        vk_tree.root(),
         init_nullifier_root,
-        initial_nullifier_tree.leaf_count.into(),
-        global_comm_tree.root.0,
+        initial_nullifier_tree.leaf_count().into(),
+        global_comm_tree.root(),
         g_polys.try_into().unwrap(),
         vesta_commit_key.clone(),
     )
@@ -384,12 +389,16 @@ pub fn base_circuit_helper_generator<const I: usize, const C: usize, const N: us
     }
 }
 
-pub fn bounce_circuit_helper_generator<const I: usize, const N: usize, const C: usize>(
-) -> StoredProof<VestaConfig, PallasConfig> {
+pub fn bounce_circuit_helper_generator<
+    const I: usize,
+    const N: usize,
+    const C: usize,
+    const D: usize,
+>() -> StoredProof<VestaConfig, PallasConfig> {
     // Below taken from bounce_test_helper
     let mut rng = test_rng();
     ark_std::println!("Creating Bounce Circuit");
-    let stored_proof_base = base_circuit_helper_generator::<I, C, N>();
+    let stored_proof_base = base_circuit_helper_generator::<I, C, N, D>();
     let (global_public_inputs, subtree_public_inputs, passthrough_instance, _) =
         stored_proof_base.pub_inputs;
     let (mut bounce_circuit, public_outputs) = bounce_circuit::<PallasConfig, VestaConfig>(
@@ -461,11 +470,15 @@ pub fn bounce_circuit_helper_generator<const I: usize, const N: usize, const C: 
     }
 }
 
-pub fn merge_circuit_helper_generator<const I: usize, const N: usize, const C: usize>(
-) -> StoredProof<PallasConfig, VestaConfig> {
+pub fn merge_circuit_helper_generator<
+    const I: usize,
+    const N: usize,
+    const C: usize,
+    const D: usize,
+>() -> StoredProof<PallasConfig, VestaConfig> {
     // Below taken from merge_test_helper
     let mut rng = test_rng();
-    let stored_bounce = bounce_circuit_helper_generator::<I, C, N>();
+    let stored_bounce = bounce_circuit_helper_generator::<I, C, N, D>();
     let stored_bounce_2 = stored_bounce.clone();
     let (global_public_inputs, subtree_pi_1, passthrough_instance_1, instance_1) =
         stored_bounce.pub_inputs;

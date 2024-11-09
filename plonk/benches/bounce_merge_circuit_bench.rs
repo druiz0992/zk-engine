@@ -11,10 +11,12 @@ use plonk_prover::{
     utils::bench_utils::merge_circuit_helper_generator,
 };
 
-pub fn benchmark_bounce_merge<const I: usize, const N: usize, const C: usize>(c: &mut Criterion) {
+pub fn benchmark_bounce_merge<const I: usize, const N: usize, const C: usize, const D: usize>(
+    c: &mut Criterion,
+) {
     // Below taken from bounce_merge_test_helper
     let mut rng = test_rng();
-    let stored_proof_merge = merge_circuit_helper_generator::<I, C, N>();
+    let stored_proof_merge = merge_circuit_helper_generator::<I, C, N, D>();
     let (global_public_inputs, subtree_public_inputs, passthrough_instance, bounce_accs) =
         stored_proof_merge.pub_inputs;
     let (mut bounce_circuit, _) = bounce_merge_circuit::<PallasConfig, VestaConfig>(
@@ -56,5 +58,5 @@ pub fn benchmark_bounce_merge<const I: usize, const N: usize, const C: usize>(c:
     });
 }
 
-criterion_group! {name = benches; config = Criterion::default().significance_level(0.1).sample_size(10);targets = benchmark_bounce_merge::<2, 2, 2>,}
+criterion_group! {name = benches; config = Criterion::default().significance_level(0.1).sample_size(10);targets = benchmark_bounce_merge::<2, 2, 2, 8>,}
 criterion_main!(benches);

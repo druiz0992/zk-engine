@@ -41,19 +41,16 @@ pub mod in_mem_sequencer_storage {
         fn get_all_transactions(&self) -> Vec<Transaction<VestaConfig>> {
             let past_txs = self.past_txs.clone();
             let mempool_txs = self.mempool.clone();
-            past_txs
-                .into_iter()
-                .chain(mempool_txs.into_iter())
-                .collect()
+            past_txs.into_iter().chain(mempool_txs).collect()
         }
     }
 
     impl BlockStorage<curves::vesta::Fr> for InMemStorage {
-        fn get_block(&self, blocknumber: u64) -> Option<Block<curves::vesta::Fr>> {
+        fn get_block(&self, _blocknumber: u64) -> Option<Block<curves::vesta::Fr>> {
             todo!()
         }
 
-        fn insert_block(&mut self, block: Block<curves::vesta::Fr>) {
+        fn insert_block(&mut self, _block: Block<curves::vesta::Fr>) {
             todo!()
         }
 

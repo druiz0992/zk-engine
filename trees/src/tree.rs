@@ -2,10 +2,16 @@ use ark_ff::{PrimeField, Zero};
 use common::crypto::poseidon::{constants::PoseidonParams, Poseidon};
 use rayon::prelude::*;
 
+pub use super::membership_tree::{MembershipTree, Tree};
+pub use super::non_membership_tree::{
+    IndexedMerkleTree, IndexedNode, NonMembershipTree, SortedIndexedNode,
+};
+
+/// Position represents the location of a node within a tree
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct Position {
-    pub index: usize,  // 0 is the left most
-    pub height: usize, // 0 is the leaf layer
+    index: usize,  // 0 is the left most
+    height: usize, // 0 is the leaf layer
 }
 
 impl Position {
@@ -14,6 +20,7 @@ impl Position {
     }
 }
 
+/// Template for trees with a given Height (H) using Poseidon Hashing
 pub trait AppendTree<const H: usize> {
     type F: PrimeField + PoseidonParams<Field = Self::F>;
 
@@ -23,6 +30,7 @@ pub trait AppendTree<const H: usize> {
     fn update_node(&mut self, position: Position, new_node: Self::F);
     fn update_root(&mut self, new_node: Self::F);
     fn insert_node(&mut self, position: Position, new_node: Self::F);
+    fn leaf_count(&self) -> u64;
 
     fn move_up(position: Position) -> Position {
         Position::new(position.index / 2, position.height + 1)
