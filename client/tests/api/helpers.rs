@@ -19,6 +19,7 @@ use wiremock::MockServer;
 pub mod circuits;
 pub mod keys;
 pub mod mint;
+pub mod sequencer;
 
 pub struct TestApp {
     pub address: String,
