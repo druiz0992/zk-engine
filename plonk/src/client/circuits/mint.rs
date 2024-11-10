@@ -15,7 +15,6 @@ use crate::{
     primitives::circuits::kem_dem::KemDemParams,
 };
 use common::crypto::poseidon::constants::PoseidonParams;
-use common::keypair::PublicKey;
 
 use zk_macros::client_circuit;
 
@@ -38,16 +37,6 @@ impl<const C: usize> MintCircuit<C> {
         get_circuit_id_from_params(C, 0)
     }
 
-    #[client_circuit]
-    pub fn build_new_inputs<P, V, VSW>(
-        &self,
-        values: Vec<V::ScalarField>,
-        ids: Vec<V::ScalarField>,
-        salts: Vec<V::ScalarField>,
-        owners: Vec<PublicKey<P>>,
-    ) -> Result<CircuitInputs<P>, CircuitError> {
-        utils::build_inputs::<P, V, VSW, C>(values, ids, salts, owners)
-    }
     #[client_circuit]
     pub fn as_circuit<P, V, VSW>(self) -> Box<dyn ClientPlonkCircuit<P, V, VSW>> {
         Box::new(self)
