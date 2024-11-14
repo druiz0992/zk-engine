@@ -62,7 +62,7 @@ impl<P, V, VSW, const C: usize, const N: usize, const D: usize> ClientPlonkCircu
         transfer_circuit::<P, V, C, N, D>(circuit_inputs)
     }
     fn generate_random_inputs(&self) -> Result<CircuitInputs<P>, CircuitError> {
-        utils::build_random_inputs::<P, V, VSW, C, N, D>()
+        utils::build_random_inputs::<P, V, VSW, C, N, D>(None)
     }
     fn get_circuit_id(&self) -> CircuitId {
         self.get_circuit_id()
@@ -131,6 +131,8 @@ where
 
 #[cfg(test)]
 mod test {
+    use crate::client::PlonkCircuitParams;
+
     use super::*;
     use curves::pallas::PallasConfig;
     use curves::vesta::VestaConfig;
@@ -167,15 +169,10 @@ mod test {
 
     fn transfer_test_helper<const C: usize, const N: usize, const D: usize>(
     ) -> Result<(), CircuitError> {
-        let inputs =
-            utils::build_random_inputs::<PallasConfig, VestaConfig, _, C, N, D>().expect(&format!(
-                "Error generating random inputs for transfer circuit with C:{C}, N:{N}, D:{D}"
-            ));
-        let transfer_circuit =
-            TransferCircuit::<C, N, D>::new().as_circuit::<PallasConfig, VestaConfig, _>();
-
-        let plonk_circuit = transfer_circuit
-            .to_plonk_circuit(inputs.clone())
+        let PlonkCircuitParams {
+            circuit: plonk_circuit,
+            public_inputs: _,
+        } = utils::transfer_with_random_inputs::<PallasConfig, VestaConfig, _, C, N, D>(None)
             .expect(&format!(
                 "Error building plonk mint circuit from transfer inputs with C:{C}, N:{N}, D:{D}"
             ));

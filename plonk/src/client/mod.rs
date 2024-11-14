@@ -1,3 +1,4 @@
+use crate::client::structs::ClientPubInputs;
 use crate::primitives::circuits::kem_dem::KemDemParams;
 use ark_ec::{
     pairing::Pairing,
@@ -22,6 +23,10 @@ use zk_macros::client_circuit;
 pub mod circuits;
 pub mod structs;
 
+pub struct PlonkCircuitParams<F: PrimeField> {
+    pub circuit: PlonkCircuit<F>,
+    pub public_inputs: ClientPubInputs<F>,
+}
 // P: SWCurveConfig,
 // <P as CurveConfig>::BaseField: PrimeField + PoseidonParams<Field = V::ScalarField>,
 
@@ -51,15 +56,6 @@ pub trait ClientPlonkCircuit<P, V, VSW>: Send + Sync + 'static {
     fn generate_random_inputs(&self) -> Result<CircuitInputs<P>, CircuitError>;
     fn get_circuit_id(&self) -> CircuitId;
     fn get_commitment_and_nullifier_count(&self) -> (usize, usize);
-}
-
-#[client_circuit]
-pub fn build<P, V, VSW>(circuit_type: &str) -> Box<dyn ClientPlonkCircuit<P, V, VSW>> {
-    match circuit_type {
-        "mint" => Box::new(circuits::mint::MintCircuit::<1>::new()),
-        "transfer" => Box::new(circuits::transfer::TransferCircuit::<2, 2, 2>::new()),
-        _ => panic!("Not"),
-    }
 }
 
 #[client_circuit]

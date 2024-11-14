@@ -12,7 +12,7 @@ use jf_plonk::nightfall::ipa_structs::VerifyingKey;
 use jf_primitives::rescue::RescueParameter;
 use jf_relation::gadgets::ecc::SWToTEConParam;
 use jf_utils::field_switching;
-use plonk_prover::rollup::circuits::base::ClientInput;
+use plonk_prover::rollup::circuits::client_input::ClientInput;
 use trees::{
     membership_tree::{MembershipTree, Tree},
     non_membership_tree::{IndexedMerkleTree, IndexedNode, NonMembershipTree},
@@ -139,7 +139,7 @@ where
     let client_inputs: Vec<_> = transactions
         .into_iter()
         .enumerate()
-        .map(|(i, t)| ClientInput::<V, 1, 1> {
+        .map(|(i, t)| ClientInput::<V, 1, 1, 8> {
             proof: t.proof,
             nullifiers: t
                 .nullifiers

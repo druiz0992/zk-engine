@@ -17,8 +17,9 @@ use plonk_prover::primitives::circuits::kem_dem::KemDemParams;
 use zk_macros::client_circuit;
 
 const DEPTH: usize = 8;
+
 #[client_circuit]
-pub fn init_client_circuits<P, V, VSW, PR: Prover<P, V, VSW>>(prover: &mut PR) -> Result<()> {
+pub fn select_client_circuits<P, V, VSW>() -> Vec<Box<dyn ClientPlonkCircuit<P, V, VSW>>> {
     let circuit_info: Vec<Box<dyn ClientPlonkCircuit<P, V, VSW>>> = vec![
         Box::new(MintCircuit::<1>::new()),
         Box::new(MintCircuit::<2>::new()),
@@ -27,7 +28,12 @@ pub fn init_client_circuits<P, V, VSW, PR: Prover<P, V, VSW>>(prover: &mut PR) -
         Box::new(TransferCircuit::<2, 2, DEPTH>::new()),
         Box::new(TransferCircuit::<2, 3, DEPTH>::new()),
     ];
+    circuit_info
+}
 
+#[client_circuit]
+pub fn init_client_circuits<P, V, VSW, PR: Prover<P, V, VSW>>(prover: &mut PR) -> Result<()> {
+    let circuit_info = select_client_circuits::<P, V, VSW>();
     for c in circuit_info {
         let keys = c
             .generate_keys()

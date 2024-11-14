@@ -1,2 +1,2 @@
-pub mod bench_utils;
+pub mod bench;
 pub mod poseidon_utils;

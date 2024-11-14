@@ -19,11 +19,11 @@ use common::crypto::poseidon::constants::PoseidonParams;
 use zk_macros::client_circuit;
 
 pub mod circuit;
-mod constants;
+pub mod constants;
 pub mod utils;
 
 pub use circuit::*;
-pub use utils::build_random_inputs;
+pub use utils::{build_random_inputs, mint_with_random_inputs};
 
 const CIRCUIT_ID: &str = "MINT";
 pub struct MintCircuit<const C: usize>;
@@ -63,7 +63,7 @@ impl<P, V, VSW, const C: usize> ClientPlonkCircuit<P, V, VSW> for MintCircuit<C>
         mint_circuit::<P, V, VSW, C>(circuit_inputs)
     }
     fn generate_random_inputs(&self) -> Result<CircuitInputs<P>, CircuitError> {
-        utils::build_random_inputs::<P, V, VSW, C>()
+        utils::build_random_inputs::<P, V, VSW, C>(None)
     }
     fn get_circuit_id(&self) -> CircuitId {
         self.get_circuit_id()
@@ -104,6 +104,8 @@ where
 
 #[cfg(test)]
 mod test {
+    use crate::client::PlonkCircuitParams;
+
     use super::*;
     use curves::pallas::PallasConfig;
     use curves::vesta::VestaConfig;
@@ -134,16 +136,12 @@ mod test {
     }
 
     fn mint_test_helper_random<const C: usize>() -> Result<(), CircuitError> {
-        let inputs = utils::build_random_inputs::<PallasConfig, VestaConfig, _, C>().expect(
-            &format!("Error generating random inputs for mint circuit with C:{C}"),
-        );
-        let mint_circuit = MintCircuit::<C>::new().as_circuit::<PallasConfig, VestaConfig, _>();
-
-        let plonk_circuit = mint_circuit
-            .to_plonk_circuit(inputs.clone())
-            .expect(&format!(
-                "Error building plonk mint circuit from random inputs with C:{C}"
-            ));
+        let PlonkCircuitParams {
+            circuit: plonk_circuit,
+            public_inputs: _,
+        } = mint_with_random_inputs::<PallasConfig, VestaConfig, _, C>(None).expect(&format!(
+            "Error during Mint transaction from random inputs with C:{C}"
+        ));
 
         assert!(plonk_circuit
             .check_circuit_satisfiability(&plonk_circuit.public_input().unwrap())

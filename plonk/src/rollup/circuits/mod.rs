@@ -1,6 +1,7 @@
 pub mod base;
 pub mod bounce;
 pub mod bounce_merge;
+pub mod client_input;
 pub mod merge;
 pub mod structs;
 

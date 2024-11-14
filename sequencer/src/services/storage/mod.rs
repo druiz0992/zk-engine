@@ -1,79 +1,55 @@
-pub mod in_mem_sequencer_storage {
-    use crate::ports::storage::{BlockStorage, GlobalStateStorage, TransactionStorage};
-    use common::structs::{Block, Transaction};
-    use curves::pallas::Fr;
-    use curves::vesta::VestaConfig;
-    use trees::membership_tree::Tree;
-    use trees::non_membership_tree::IndexedMerkleTree;
+use crate::ports::storage::GlobalStateStorage;
+use ark_ec::pairing::Pairing;
+use ark_ec::short_weierstrass::{Affine, SWCurveConfig};
+use ark_ec::CurveGroup;
+use common::crypto::poseidon::constants::PoseidonParams;
+use common::crypto::poseidon::Poseidon;
+use jf_plonk::nightfall::ipa_structs::VerifyingKey;
+use jf_plonk::proof_system::structs::VK;
+use trees::MembershipTree;
+use trees::{membership_tree::Tree, tree::AppendTree};
 
-    #[derive(Clone, Default)]
-    pub struct InMemStorage {
-        pub blocks: Vec<Block<curves::vesta::Fr>>,
-        pub mempool: Vec<Transaction<VestaConfig>>,
-        pub past_txs: Vec<Transaction<VestaConfig>>,
-        pub nullifier_tree: IndexedMerkleTree<Fr, 32>,
-        pub commitment_tree: Tree<Fr, 8>,
-        pub vk_tree: Tree<Fr, 2>,
-    }
+pub mod in_mem_sequencer_storage;
 
-    impl InMemStorage {
-        pub fn new() -> Self {
-            Default::default()
-        }
-    }
+pub fn generate_and_store_vk_tree<V, Storage, const H: usize>(
+    db: &mut Storage,
+    vks: Vec<VerifyingKey<V>>,
+) where
+    V: Pairing<G1Affine = Affine<<<V as Pairing>::G1 as CurveGroup>::Config>>,
+    <V as Pairing>::BaseField: PoseidonParams<Field = V::BaseField>,
+    <<V as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = V::BaseField>,
+    Storage: GlobalStateStorage,
+    Storage::VkTree: MembershipTree<H> + AppendTree<H> + From<Tree<<V as Pairing>::BaseField, H>>,
+{
+    let poseidon: Poseidon<<V as Pairing>::BaseField> = Poseidon::new();
+    let vk_hashes = vks
+        .iter()
+        .map(|vk| {
+            let vk_sigmas = vk.sigma_comms();
+            let vk_selectors = vk.selector_comms();
+            let vk_sigma_hashes = vk_sigmas
+                .iter()
+                .map(|v| poseidon.hash_unchecked(vec![v.0.x, v.0.y]));
+            let vk_selector_hashes = vk_selectors
+                .iter()
+                .map(|v| poseidon.hash_unchecked(vec![v.0.x, v.0.y]));
+            let vk_hashes = vk_sigma_hashes
+                .chain(vk_selector_hashes)
+                .collect::<Vec<_>>();
+            let outlier_pair = vk_hashes[0..2].to_vec();
+            let mut total_leaves = vk_hashes[2..].to_vec();
+            for _ in 0..4 {
+                let lefts = total_leaves.iter().step_by(2);
+                let rights = total_leaves.iter().skip(1).step_by(2);
+                let pairs = lefts.zip(rights);
+                total_leaves = pairs
+                    .map(|(&x, &y)| poseidon.hash_unchecked(vec![x, y]))
+                    .collect::<Vec<_>>();
+            }
+            poseidon.hash_unchecked(vec![outlier_pair[0], outlier_pair[1], total_leaves[0]])
+        })
+        .collect::<Vec<_>>();
 
-    impl TransactionStorage<VestaConfig> for InMemStorage {
-        fn get_transaction(&self) -> Option<Transaction<VestaConfig>> {
-            todo!()
-        }
-
-        fn insert_transaction(&mut self, transaction: Transaction<VestaConfig>) {
-            self.mempool.push(transaction);
-        }
-
-        fn get_mempool_transactions(&self) -> Vec<Transaction<VestaConfig>> {
-            self.mempool.clone()
-        }
-
-        fn get_block_transaction(&self) -> Vec<Transaction<VestaConfig>> {
-            todo!()
-        }
-        fn get_all_transactions(&self) -> Vec<Transaction<VestaConfig>> {
-            let past_txs = self.past_txs.clone();
-            let mempool_txs = self.mempool.clone();
-            past_txs.into_iter().chain(mempool_txs).collect()
-        }
-    }
-
-    impl BlockStorage<curves::vesta::Fr> for InMemStorage {
-        fn get_block(&self, _blocknumber: u64) -> Option<Block<curves::vesta::Fr>> {
-            todo!()
-        }
-
-        fn insert_block(&mut self, _block: Block<curves::vesta::Fr>) {
-            todo!()
-        }
-
-        fn get_block_count(&self) -> u32 {
-            todo!()
-        }
-    }
-
-    impl GlobalStateStorage for InMemStorage {
-        type CommitmentTree = Tree<Fr, 8>;
-        type VkTree = Tree<Fr, 2>;
-        type NullifierTree = IndexedMerkleTree<Fr, 32>;
-        fn get_global_commitment_tree(&self) -> Self::CommitmentTree {
-            self.commitment_tree.clone()
-        }
-        fn get_global_nullifier_tree(&self) -> Self::NullifierTree {
-            self.nullifier_tree.clone()
-        }
-        fn get_vk_tree(&self) -> Self::VkTree {
-            self.vk_tree.clone()
-        }
-        fn store_vk_tree(&mut self, vk_tree: Self::VkTree) {
-            self.vk_tree = vk_tree;
-        }
-    }
+    let vk_tree = Tree::<<V as Pairing>::BaseField, H>::from_leaves(vk_hashes).into();
+    db.store_vk_tree(vk_tree);
 }

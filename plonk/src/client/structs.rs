@@ -19,13 +19,20 @@ impl<F: Field> ClientPubInputs<F> {
         if value.len() != c + std::cmp::max(2, 2 * n) + 6 {
             return Err("Invalid number of inputs");
         }
+        let commitment_root_count = std::cmp::max(1, n);
+        let nullifier_count = std::cmp::max(1, n);
+
+        let nullifier_offset = 1 + commitment_root_count;
+        let commitment_offset = nullifier_offset + nullifier_count;
+        let eph_offset = commitment_offset + c;
+        let ciph_offset = eph_offset + 2;
         Ok(Self {
             swap_field: value[0] == F::one(),
-            commitment_root: value[1..n + 1].to_vec(),
-            nullifiers: value[n + 1..2 * c + 1].to_vec(),
-            commitments: value[2 * n + 1..2 * n + c + 1].to_vec(),
-            ephemeral_public_key: value[2 * n + c + 1..2 * n + c + 3].to_vec(),
-            ciphertexts: value[2 * n + c + 3..].to_vec(),
+            commitment_root: value[1..nullifier_offset].to_vec(),
+            nullifiers: value[nullifier_offset..commitment_offset].to_vec(),
+            commitments: value[commitment_offset..eph_offset].to_vec(),
+            ephemeral_public_key: value[eph_offset..ciph_offset].to_vec(),
+            ciphertexts: value[ciph_offset..ciph_offset + 3].to_vec(),
         })
     }
 }

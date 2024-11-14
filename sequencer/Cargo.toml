@@ -5,6 +5,13 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+path = "src/main.rs"
+name = "sequencer"
+
 [dependencies]
 ark-ec="0.4.2"
 ark-ff="0.4.2"
@@ -27,6 +34,7 @@ curves = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test"}
 common = {path = "../common"}
 trees = {path = "../trees"}
 plonk-prover = { path="../plonk"}
+zk-macros = { path="../macros"}
 
 tokio = {version = "1.29.1", features = ["full"]}
 axum = { version = "0.6.20", features = ["json"]}
@@ -41,4 +49,5 @@ serde-hex = "0.1.0"
 reqwest = {version = "0.11.22", features = ["json"]}
 rand = { version = "0.8.5", features = ["std"]}
 rand_chacha = "0.3.1"
+anyhow = "1"
 
