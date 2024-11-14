@@ -5,8 +5,6 @@ use ark_ec::short_weierstrass::{Affine, Projective, SWCurveConfig};
 use ark_ec::{CurveConfig, CurveGroup};
 use ark_ff::PrimeField;
 use common::crypto::poseidon::constants::PoseidonParams;
-use curves::pallas::PallasConfig;
-use curves::vesta::VestaConfig;
 use jf_plonk::nightfall::ipa_structs::VerifyingKey;
 use jf_plonk::nightfall::PlonkIpaSnark;
 use jf_plonk::proof_system::UniversalSNARK;
@@ -17,41 +15,28 @@ use plonk_prover::client::ClientPlonkCircuit;
 use plonk_prover::primitives::circuits::kem_dem::KemDemParams;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+use zk_macros::sequencer_circuit;
 
 pub mod in_mem_sequencer_prover;
 
-pub fn generate_and_store_cks<P, V, SW, Prover>(prover: &mut Prover)
+#[sequencer_circuit]
+pub fn generate_and_store_cks<V, VSW, P, SW, Prover>(prover: &mut Prover)
 where
-    V: Pairing<G1Affine = Affine<<<V as Pairing>::G1 as CurveGroup>::Config>>,
-    <<V as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = V::BaseField>,
-    <V as Pairing>::BaseField:
-        PrimeField + PoseidonParams<Field = P::ScalarField> + RescueParameter + SWToTEConParam,
-
-    <V as Pairing>::ScalarField:
-        PrimeField + PoseidonParams<Field = P::BaseField> + RescueParameter + SWToTEConParam,
-    P: Pairing<BaseField = V::ScalarField, ScalarField = V::BaseField>,
-
-    P: Pairing<G1Affine = Affine<SW>, G1 = Projective<SW>>,
-    V: Pairing,
-    <<V as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = V::BaseField>,
-    SW: SWCurveConfig<BaseField = V::ScalarField, ScalarField = V::BaseField>,
-    Prover: SequencerProver<V, P, SW>,
+    Prover: SequencerProver<V, VSW, P, SW>,
 {
     let mut rng = ChaChaRng::from_entropy();
-    let vesta_srs =
-        <PlonkIpaSnark<VestaConfig> as UniversalSNARK<VestaConfig>>::universal_setup_for_testing(
-            2usize.pow(20),
-            &mut rng,
-        )
-        .unwrap();
+    let vesta_srs = <PlonkIpaSnark<V> as UniversalSNARK<V>>::universal_setup_for_testing(
+        2usize.pow(20),
+        &mut rng,
+    )
+    .unwrap();
     let (vesta_commit_key, _) = vesta_srs.trim(2usize.pow(20)).unwrap();
 
-    let pallas_srs =
-        <PlonkIpaSnark<PallasConfig> as UniversalSNARK<PallasConfig>>::universal_setup_for_testing(
-            2usize.pow(20),
-            &mut rng,
-        )
-        .unwrap();
+    let pallas_srs = <PlonkIpaSnark<P> as UniversalSNARK<P>>::universal_setup_for_testing(
+        2usize.pow(20),
+        &mut rng,
+    )
+    .unwrap();
     let (pallas_commit_key, _) = pallas_srs.trim(2usize.pow(20)).unwrap();
     let rollup_commit_keys = RollupCommitKeys {
         pallas_commit_key,
@@ -93,7 +78,7 @@ where
         BaseField = <V as Pairing>::BaseField,
         ScalarField = <V as Pairing>::ScalarField,
     >,
-    Prover: SequencerProver<V, P, SW>,
+    Prover: SequencerProver<V, VSW, P, SW>,
 {
     circuit_info
         .into_iter()
