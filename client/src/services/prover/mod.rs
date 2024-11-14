@@ -188,9 +188,10 @@ mod tests {
 
         let mut prover: InMemProver<PallasConfig, VestaConfig, _> = InMemProver::default();
         let mint_circuit = MintCircuit::<C>::new().as_circuit::<PallasConfig, VestaConfig, _>();
-        let inputs = mint::utils::build_random_inputs::<PallasConfig, VestaConfig, _, C>().expect(
-            &format!("Error generating random inputs for mint circuit with C:{C}, N:{N}, D:{D}"),
-        );
+        let inputs = mint::utils::build_random_inputs::<PallasConfig, VestaConfig, _, C>(None)
+            .expect(&format!(
+                "Error generating random inputs for mint circuit with C:{C}, N:{N}, D:{D}"
+            ));
         let (pk, vk) = mint_circuit.generate_keys().expect(&format!(
             "Error generating key for mint circuit from random inputs with C:{C}, N:{N}, D:{D}"
         ));
@@ -251,7 +252,7 @@ mod tests {
 
         let transfer_circuit =
             TransferCircuit::<C, N, D>::new().as_circuit::<PallasConfig, VestaConfig, _>();
-        let inputs = transfer::build_random_inputs::<PallasConfig, VestaConfig, _, C, N, D>()
+        let inputs = transfer::build_random_inputs::<PallasConfig, VestaConfig, _, C, N, D>(None)
             .expect(&format!(
                 "Error generating random inputs for transfer circuit with C:{C}, N:{N}, D:{D}"
             ));

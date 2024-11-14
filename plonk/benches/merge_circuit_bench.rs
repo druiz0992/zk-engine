@@ -7,7 +7,7 @@ use jf_plonk::{
 use jf_relation::{Arithmetization, Circuit};
 use jf_utils::test_rng;
 use plonk_prover::{
-    rollup::circuits::merge::merge_circuit, utils::bench_utils::bounce_circuit_helper_generator,
+    rollup::circuits::merge::merge_circuit, utils::bench::bounce::bounce_circuit_helper_generator,
 };
 
 pub fn benchmark_merge<const I: usize, const N: usize, const C: usize, const D: usize>(

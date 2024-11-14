@@ -9,7 +9,7 @@ use common::crypto::poseidon::constants::PoseidonParams;
 use jf_plonk::nightfall::ipa_structs::{Proof, VerifyingKey};
 use jf_primitives::rescue::RescueParameter;
 use jf_relation::{errors::CircuitError, gadgets::ecc::SWToTEConParam};
-use plonk_prover::rollup::circuits::base::ClientInput;
+use plonk_prover::rollup::circuits::client_input::ClientInput;
 
 use crate::domain::{RollupCommitKeys, RollupProvingKeys};
 use plonk_prover::client::circuits::structs::CircuitId;
@@ -32,7 +32,7 @@ where
 {
     #[allow(clippy::too_many_arguments)]
     fn rollup_proof(
-        client_inputs: [ClientInput<V, 1, 1>; 2],
+        client_inputs: [ClientInput<V, 1, 1, 8>; 2],
         global_vk_root: P::ScalarField,
         global_nullifier_root: P::ScalarField,
         global_nullifier_leaf_count: P::ScalarField,

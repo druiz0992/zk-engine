@@ -7,7 +7,7 @@ use ark_ff::{PrimeField, UniformRand};
 
 use jf_primitives::rescue::RescueParameter;
 use jf_relation::errors::CircuitError;
-use jf_relation::gadgets::ecc::SWToTEConParam;
+use jf_relation::{gadgets::ecc::SWToTEConParam, Circuit};
 
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -16,6 +16,9 @@ use super::check_inputs;
 use super::constants::*;
 use crate::client::circuits::circuit_inputs::CircuitInputs;
 use crate::client::circuits::mint;
+use crate::client::circuits::transfer::TransferCircuit;
+use crate::client::structs::ClientPubInputs;
+use crate::client::PlonkCircuitParams;
 use crate::primitives::circuits::kem_dem::KemDemParams;
 use crate::utils::poseidon_utils::build_commitment_hash;
 use common::crypto::poseidon::constants::PoseidonParams;
@@ -26,9 +29,10 @@ use zk_macros::client_circuit;
 
 #[client_circuit]
 pub fn build_random_inputs<P, V, VSW, const C: usize, const N: usize, const D: usize>(
+    token_id: Option<V::ScalarField>,
 ) -> Result<CircuitInputs<P>, CircuitError> {
     let mut rng = ChaChaRng::from_entropy();
-    let mint_inputs = mint::utils::build_random_inputs::<P, V, _, N>()?;
+    let mint_inputs = mint::utils::build_random_inputs::<P, V, _, N>(token_id)?;
     let mut mint_commitment_hashes = Vec::with_capacity(N);
     let mut total_value = V::ScalarField::from(ZERO);
     let mut indices = Vec::<V::ScalarField>::with_capacity(N);
@@ -85,6 +89,27 @@ pub fn build_random_inputs<P, V, VSW, const C: usize, const N: usize, const D: u
     Ok(circuit_inputs)
 }
 
+#[client_circuit]
+pub fn transfer_with_random_inputs<P, V, VSW, const C: usize, const N: usize, const D: usize>(
+    token_id: Option<V::ScalarField>,
+) -> Result<PlonkCircuitParams<<P as CurveConfig>::BaseField>, CircuitError> {
+    let inputs = build_random_inputs::<P, V, _, C, N, D>(token_id)?;
+    let transfer_circuit = TransferCircuit::<C, N, D>::new().as_circuit::<P, V, _>();
+
+    let circuit = transfer_circuit.to_plonk_circuit(inputs)?;
+
+    let public_inputs = ClientPubInputs::new(
+        circuit.public_input()?,
+        transfer_circuit.get_commitment_and_nullifier_count(),
+    )
+    .map_err(|e| CircuitError::ParameterError(e.to_string()))?;
+
+    Ok(PlonkCircuitParams {
+        circuit,
+        public_inputs,
+    })
+}
+
 fn split_total_value<F, const C: usize>(total: F) -> Result<Vec<F>, String>
 where
     F: PrimeField,
@@ -94,9 +119,24 @@ where
             "Incorrect number of output commitments when generating new transfer".to_string(),
         );
     }
+    if C == 1 {
+        return Ok(vec![total]);
+    }
+    let mut rng = ChaChaRng::from_entropy();
+    let mut cuts: Vec<F> = (0..C - 1)
+        .map(|_| loop {
+            let n = u32::rand(&mut rng);
+            let n_f = F::from(n);
+            if n_f < total {
+                break n_f;
+            }
+        })
+        .collect();
+    cuts.push(F::from(0u32));
+    cuts.push(total);
+    cuts.sort_unstable();
 
-    let mut value = vec![F::from(1_u64); C - 1];
-    value.push(total - F::from((C - 1) as u64));
+    let value = cuts.windows(2).map(|w| w[1] - w[0]).collect();
 
     Ok(value)
 }
