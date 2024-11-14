@@ -19,6 +19,7 @@ use trees::{
     tree::AppendTree,
     MembershipPath,
 };
+use zk_macros::sequencer_circuit;
 
 use crate::{
     domain::{RollupCommitKeys, RollupProvingKeys},
@@ -47,47 +48,33 @@ use crate::{
 //     ciphertext: [V::ScalarField; 3],
 // }
 //
-pub fn build_block<F, P, V, T, Prover, SW>(
+
+#[sequencer_circuit]
+pub fn build_block<P, V, T, Prover, SW, VSW>(
     transactions: Vec<Transaction<V>>,
     vks: Vec<VerifyingKey<V>>,
     vks_indices: Vec<usize>,
     global_state_trees: T,
-    commit_keys: RollupCommitKeys,
-    proving_keys: Option<RollupProvingKeys>,
+    commit_keys: RollupCommitKeys<V, VSW, P, SW>,
+    proving_keys: Option<RollupProvingKeys<V, VSW, P, SW>>,
 ) -> Result<Block<V::ScalarField>, &'static str>
 where
-    F: PrimeField + PoseidonParams<Field = F> + RescueParameter + SWToTEConParam,
-    V: Pairing<BaseField = F, G1Affine = Affine<<<V as Pairing>::G1 as CurveGroup>::Config>>,
-    <<V as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = V::BaseField>,
-    <V as Pairing>::BaseField:
-        PrimeField + PoseidonParams<Field = P::ScalarField> + RescueParameter + SWToTEConParam,
-
-    <V as Pairing>::ScalarField:
-        PrimeField + PoseidonParams<Field = P::BaseField> + RescueParameter + SWToTEConParam,
-    P: Pairing<BaseField = V::ScalarField, ScalarField = V::BaseField>,
-
-    P: Pairing<G1Affine = Affine<SW>, G1 = Projective<SW>>,
-    V: Pairing,
-    <<V as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = V::BaseField>,
-    SW: SWCurveConfig<BaseField = V::ScalarField, ScalarField = V::BaseField>,
-
     T: GlobalStateStorage<
-        CommitmentTree = Tree<F, 8>,
-        VkTree = Tree<F, 2>,
-        NullifierTree = IndexedMerkleTree<F, 32>,
+        CommitmentTree = Tree<V::BaseField, 8>,
+        VkTree = Tree<V::BaseField, 2>,
+        NullifierTree = IndexedMerkleTree<V::BaseField, 32>,
     >,
-
-    Prover: SequencerProver<V, P, SW>,
+    Prover: SequencerProver<V, VSW, P, SW>,
 {
     ark_std::println!("vk_paths");
-    let vk_paths: Vec<MembershipPath<F>> = vks_indices
+    let vk_paths: Vec<MembershipPath<V::BaseField>> = vks_indices
         .iter()
         .map(|vk| global_state_trees.get_vk_tree().membership_witness(*vk))
         .collect::<Option<Vec<MembershipPath<_>>>>()
         .ok_or("Invalid vk index")?;
 
     ark_std::println!("low nullifier path");
-    let low_nullifier_path: Vec<MembershipPath<F>> = transactions
+    let low_nullifier_path: Vec<MembershipPath<V::BaseField>> = transactions
         .iter()
         .flat_map(|tx| {
             tx.nullifiers
@@ -105,7 +92,7 @@ where
         .collect::<Result<Vec<_>, _>>()?;
 
     ark_std::println!("low nulliifer");
-    let low_nullifier: Vec<IndexedNode<F>> = transactions
+    let low_nullifier: Vec<IndexedNode<V::BaseField>> = transactions
         .iter()
         .flat_map(|tx| {
             tx.nullifiers
@@ -157,24 +144,25 @@ where
                 .unwrap_or([V::ScalarField::from(0u8); 1]),
             commitment_tree_root: [V::ScalarField::from(0u8); 1],
             path_comm_tree_root_to_global_tree_root: [[V::BaseField::from(0u8); 8]],
-            path_comm_tree_index: [F::zero()],
+            //path_comm_tree_index: [F::zero()],
+            path_comm_tree_index: [V::BaseField::from(0u32)],
             low_nullifier: low_nullifier
                 .clone()
                 .try_into()
                 .unwrap_or([Default::default(); 1]),
-            low_nullifier_indices: [F::zero()],
+            low_nullifier_indices: [V::BaseField::zero()],
             low_nullifier_mem_path: low_nullifier_path
                 .clone()
                 .into_iter()
-                .map(|p| p.try_into().unwrap_or([F::zero(); 32]))
+                .map(|p| p.try_into().unwrap_or([V::BaseField::zero(); 32]))
                 .collect::<Vec<_>>()
                 .try_into()
-                .unwrap_or([[F::zero(); 32]; 1]),
+                .unwrap_or([[V::BaseField::from(0u32); 32]; 1]),
             vk_paths: vk_paths[i].clone().try_into().unwrap(),
-            vk_path_index: F::from(vks_indices[i] as u64),
+            vk_path_index: V::BaseField::from(vks_indices[i] as u64),
             vk: vks[i].clone(),
             ciphertext: [V::ScalarField::from(0u8); 3],
-            eph_pub_key: [F::from(0u8); 2],
+            eph_pub_key: [V::BaseField::from(0u8); 2],
             swap_field: t.swap_field,
         })
         .collect::<Vec<_>>();
@@ -192,7 +180,7 @@ where
         client_inputs.try_into().unwrap(),
         global_state_trees.get_vk_tree().root(),
         global_state_trees.get_global_nullifier_tree().root(),
-        F::from(global_state_trees.get_global_nullifier_tree().leaf_count()),
+        V::BaseField::from(global_state_trees.get_global_nullifier_tree().leaf_count()),
         global_state_trees.get_global_commitment_tree().root(),
         [Default::default(), Default::default()],
         commit_keys,

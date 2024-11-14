@@ -31,7 +31,8 @@ pub mod sequencer_api {
     use common::serialize::{ark_de_std, vec_ark_de};
 
     type SequencerDB = Arc<Mutex<InMemStorage>>;
-    type SequenceProve = Arc<Mutex<InMemProver>>;
+    type SequenceProve =
+        Arc<Mutex<InMemProver<VestaConfig, VestaConfig, PallasConfig, PallasConfig>>>;
     #[derive(Clone)]
     pub struct SequencerState {
         pub state_db: SequencerDB,
@@ -116,7 +117,14 @@ pub mod sequencer_api {
         let proving_keys = prover.get_pks();
         ark_std::println!("Preparing block");
 
-        let block = build_block::<_, PallasConfig, VestaConfig, InMemStorage, InMemProver, _>(
+        let block = build_block::<
+            PallasConfig,
+            VestaConfig,
+            InMemStorage,
+            InMemProver<VestaConfig, VestaConfig, PallasConfig, PallasConfig>,
+            _,
+            VestaConfig,
+        >(
             transactions,
             vks,
             vec![0, 1],

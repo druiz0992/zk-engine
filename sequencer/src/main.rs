@@ -22,7 +22,7 @@ use plonk_prover::client::ClientPlonkCircuit;
 
 fn main() {
     let mut db: InMemStorage = InMemStorage::new();
-    let mut prover: InMemProver = InMemProver::new();
+    let mut prover = InMemProver::<VestaConfig, VestaConfig, PallasConfig, PallasConfig>::new();
 
     let client_circuit_info: Vec<
         Box<dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>>,
