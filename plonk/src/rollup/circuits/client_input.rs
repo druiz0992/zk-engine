@@ -8,52 +8,64 @@ use trees::{non_membership_tree::IndexedNode, IndexedMerkleTree};
 
 use crate::client::circuits::mint::constants::{CIPHERTEXT_LEN, EPHEMERAL_KEY_LEN};
 
+/*
+nullifiers: [E::ScalarField; N], // List of nullifiers in transaction
+commitments: [E::ScalarField; C], // List of commitments in transaction
+commitment_tree_root: [E::ScalarField; N], // Tree root for comm membership
+path_comm_tree_root_to_global_tree_root: [[E::BaseField; D]; N],
+path_comm_tree_index: [E::BaseField; N],
+low_nullifier: [IndexedNode<E::BaseField>; N],
+low_nullifier_indices: [E::BaseField; N],
+low_nullifier_mem_path: [[E::BaseField; H]; N], // Path for nullifier non membership
+vk_paths: [E::BaseField; VK_PATHS_LEN],
+*/
+
 const H: usize = 32;
-const VK_PATHS_LEN: usize = 2;
+const VK_PATHS_LEN: usize = 8;
 // Fixed constants - I: Number of Input proofs (assume 2)
 // C: number of commitments (1) , N: number of nullifiers(1)
 // if swap_field, C = 2, N = 1
 #[derive(Debug, Clone)]
-pub struct ClientInput<E, const C: usize, const N: usize, const D: usize>
+pub struct ClientInput<E, const D: usize>
 where
     E: Pairing,
     <<E as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = E::BaseField>,
 {
     pub proof: Proof<E>,
     pub swap_field: bool,
-    pub nullifiers: [E::ScalarField; N], // List of nullifiers in transaction
-    pub commitments: [E::ScalarField; C], // List of commitments in transaction
-    pub commitment_tree_root: [E::ScalarField; N], // Tree root for comm membership
-    pub path_comm_tree_root_to_global_tree_root: [[E::BaseField; D]; N],
-    pub path_comm_tree_index: [E::BaseField; N],
-    pub low_nullifier: [IndexedNode<E::BaseField>; N],
-    pub low_nullifier_indices: [E::BaseField; N],
-    pub low_nullifier_mem_path: [[E::BaseField; H]; N], // Path for nullifier non membership
-    pub vk_paths: [E::BaseField; VK_PATHS_LEN],
+    pub nullifiers: Vec<E::ScalarField>, // List of nullifiers in transaction
+    pub commitments: Vec<E::ScalarField>, // List of commitments in transaction
+    pub commitment_tree_root: Vec<E::ScalarField>, // Tree root for comm membership
+    pub path_comm_tree_root_to_global_tree_root: Vec<[E::BaseField; D]>,
+    pub path_comm_tree_index: Vec<E::BaseField>,
+    pub low_nullifier: Vec<IndexedNode<E::BaseField>>,
+    pub low_nullifier_indices: Vec<E::BaseField>,
+    pub low_nullifier_mem_path: Vec<[E::BaseField; H]>, // Path for nullifier non membership
+    pub vk_paths: Vec<E::BaseField>,
     pub vk_path_index: E::BaseField,
     pub vk: VerifyingKey<E>,
     pub eph_pub_key: [E::BaseField; EPHEMERAL_KEY_LEN], // we just set x and y public
     pub ciphertext: [E::ScalarField; CIPHERTEXT_LEN],
 }
 
-impl<E, const C: usize, const N: usize, const D: usize> ClientInput<E, C, N, D>
+impl<E, const D: usize> ClientInput<E, D>
 where
     E: Pairing,
     <<E as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = E::BaseField>,
 {
-    pub fn new(proof: Proof<E>, vk: VerifyingKey<E>) -> Self {
+    pub fn new(proof: Proof<E>, vk: VerifyingKey<E>, C: usize, N: usize) -> Self {
         ClientInput {
             proof,
             swap_field: false,
-            nullifiers: [E::ScalarField::from(0u32); N],
-            commitments: [E::ScalarField::from(0u32); C],
-            commitment_tree_root: [E::ScalarField::from(0u32); N],
-            path_comm_tree_root_to_global_tree_root: [[E::BaseField::from(0u32); D]; N],
-            path_comm_tree_index: [E::BaseField::from(0u32); N],
-            low_nullifier: [Default::default(); N],
-            low_nullifier_indices: [E::BaseField::from(1u32); N],
-            low_nullifier_mem_path: [[E::BaseField::from(0u32); H]; N],
-            vk_paths: [E::BaseField::from(0u32); 2], // filled later
+            nullifiers: vec![E::ScalarField::from(0u32); N],
+            commitments: vec![E::ScalarField::from(0u32); C],
+            commitment_tree_root: vec![E::ScalarField::from(0u32); N],
+            path_comm_tree_root_to_global_tree_root: vec![[E::BaseField::from(0u32); D]; N],
+            path_comm_tree_index: vec![E::BaseField::from(0u32); N],
+            low_nullifier: vec![Default::default(); N],
+            low_nullifier_indices: vec![E::BaseField::from(1u32); N],
+            low_nullifier_mem_path: vec![[E::BaseField::from(0u32); H]; N],
+            vk_paths: vec![E::BaseField::from(0u32); 2], // filled later
             vk_path_index: E::BaseField::from(0u64),
             vk,
             eph_pub_key: [E::BaseField::from(0u32); EPHEMERAL_KEY_LEN],
@@ -66,28 +78,31 @@ where
         self
     }
 
-    pub fn set_nullifiers(&mut self, nullifiers: [E::ScalarField; N]) -> &mut Self {
-        self.nullifiers = nullifiers;
+    pub fn set_nullifiers(&mut self, nullifiers: &[E::ScalarField]) -> &mut Self {
+        self.nullifiers = nullifiers.to_vec();
         self
     }
 
-    pub fn set_commitments(&mut self, commitments: [E::ScalarField; C]) -> &mut Self {
-        self.commitments = commitments;
+    pub fn set_commitments(&mut self, commitments: &[E::ScalarField]) -> &mut Self {
+        self.commitments = commitments.to_vec();
         self
     }
-    pub fn set_commitment_tree_root(&mut self, root: [E::ScalarField; N]) -> &mut Self {
-        self.commitment_tree_root = root;
+    pub fn set_commitment_tree_root(&mut self, root: &[E::ScalarField]) -> &mut Self {
+        self.commitment_tree_root = root.to_vec();
         self
     }
     pub fn set_low_nullifier_info(
         &mut self,
-        low_nullifier: [IndexedNode<E::BaseField>; N],
-        low_nullifier_indices: [E::BaseField; N],
-        low_nullifier_mem_path: [[E::BaseField; H]; N],
-    ) -> &mut Self {
-        self.low_nullifier = low_nullifier;
-        self.low_nullifier_indices = low_nullifier_indices;
-        self.low_nullifier_mem_path = low_nullifier_mem_path;
+        low_nullifier_info: &LowNullifierInfo<E, H>,
+    ) -> &mut Self
+    where
+        E: Pairing,
+        <<E as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = E::BaseField>,
+        <E as Pairing>::BaseField: PrimeField + PoseidonParams<Field = E::BaseField>,
+    {
+        self.low_nullifier = low_nullifier_info.nullifiers.to_vec();
+        self.low_nullifier_indices = low_nullifier_info.indices.to_vec();
+        self.low_nullifier_mem_path = low_nullifier_info.paths.to_vec();
         self
     }
 
@@ -105,76 +120,31 @@ where
 #[allow(dead_code)]
 pub struct ClientInputError(String);
 
-pub struct ClientInputBuilder<E, const C: usize, const N: usize, const D: usize>
-where
-    E: Pairing,
-    <<E as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = E::BaseField>,
-    <E as Pairing>::BaseField: PrimeField + PoseidonParams<Field = E::BaseField>,
-{
-    _phantom: std::marker::PhantomData<E>,
-}
-pub struct LowNullifierInfo<E, const N: usize, const H: usize>
-where
-    E: Pairing,
-    <<E as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = E::BaseField>,
-    <E as Pairing>::BaseField: PrimeField + PoseidonParams<Field = E::BaseField>,
-{
-    pub nullifiers: [IndexedNode<E::BaseField>; N],
+/*
+    pub nullifiers: vec![IndexedNode<E::BaseField>; N],
     pub indices: [E::BaseField; N],
     pub paths: [[E::BaseField; H]; N],
-}
-
-impl<E, const C: usize, const N: usize, const D: usize> Default for ClientInputBuilder<E, C, N, D>
+*/
+pub struct LowNullifierInfo<E, const H: usize>
 where
     E: Pairing,
     <<E as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = E::BaseField>,
     <E as Pairing>::BaseField: PrimeField + PoseidonParams<Field = E::BaseField>,
 {
-    fn default() -> Self {
-        Self::new()
-    }
+    pub nullifiers: Vec<IndexedNode<E::BaseField>>,
+    pub indices: Vec<E::BaseField>,
+    pub paths: Vec<[E::BaseField; H]>,
 }
 
-impl<E, const C: usize, const N: usize, const D: usize> ClientInputBuilder<E, C, N, D>
+pub fn to_eph_key_array<E>(
+    eph_key: Vec<E::ScalarField>,
+) -> Result<[E::BaseField; EPHEMERAL_KEY_LEN], ClientInputError>
 where
     E: Pairing,
     <<E as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = E::BaseField>,
     <E as Pairing>::BaseField: PrimeField + PoseidonParams<Field = E::BaseField>,
 {
-    pub fn new() -> Self {
-        Self {
-            _phantom: std::marker::PhantomData,
-        }
-    }
-    pub fn to_commitments_array(
-        &self,
-        commitments: Vec<E::ScalarField>,
-    ) -> Result<[E::ScalarField; C], ClientInputError> {
-        let commitments: [E::ScalarField; C] = commitments.try_into().map_err(|_| {
-            ClientInputError(format!(
-                "Error converting commitments into ClientInputs. Expected: {C}",
-            ))
-        })?;
-        Ok(commitments)
-    }
-
-    pub fn to_commitments_tree_root_array(
-        &self,
-        root: Vec<E::ScalarField>,
-    ) -> Result<[E::ScalarField; N], ClientInputError> {
-        let root: [E::ScalarField; N] = root.try_into().map_err(|_| {
-            ClientInputError(format!(
-                "Error converting commitments roots into ClientInputs. Expected: {N}"
-            ))
-        })?;
-        Ok(root)
-    }
-
-    pub fn to_eph_key_array(
-        &self,
-        eph_key: Vec<E::ScalarField>,
-    ) -> Result<[E::BaseField; EPHEMERAL_KEY_LEN], ClientInputError> {
-        let eph_key: [E::BaseField; EPHEMERAL_KEY_LEN] = eph_key
+    let eph_key: [E::BaseField; EPHEMERAL_KEY_LEN] = eph_key
             .into_iter()
             .map(|key| field_switching(&key))
             .collect::<Vec<_>>()
@@ -182,60 +152,56 @@ where
             .map_err(|_| {
                 ClientInputError(format!("Error converting ephermeral key into ClientInputs. Expected len: {EPHEMERAL_KEY_LEN}"))
             })?;
-        Ok(eph_key)
-    }
-    pub fn to_ciphertext_array(
-        &self,
-        ciphertext: Vec<E::ScalarField>,
-    ) -> Result<[E::ScalarField; CIPHERTEXT_LEN], ClientInputError> {
-        let ciphertext: [E::ScalarField; CIPHERTEXT_LEN] = ciphertext.try_into().map_err(|_| {
-            ClientInputError(format!(
-                "Error converting ciphertext into ClientInputs. Expected len {CIPHERTEXT_LEN}"
-            ))
-        })?;
-        Ok(ciphertext)
-    }
+    Ok(eph_key)
+}
+pub fn to_ciphertext_array<E>(
+    ciphertext: Vec<E::ScalarField>,
+) -> Result<[E::ScalarField; CIPHERTEXT_LEN], ClientInputError>
+where
+    E: Pairing,
+    <<E as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = E::BaseField>,
+    <E as Pairing>::BaseField: PrimeField + PoseidonParams<Field = E::BaseField>,
+{
+    let ciphertext: [E::ScalarField; CIPHERTEXT_LEN] = ciphertext.try_into().map_err(|_| {
+        ClientInputError(format!(
+            "Error converting ciphertext into ClientInputs. Expected len {CIPHERTEXT_LEN}"
+        ))
+    })?;
+    Ok(ciphertext)
+}
 
-    pub fn to_nullifiers_array(
-        &self,
-        nullifiers: Vec<E::ScalarField>,
-    ) -> Result<[E::ScalarField; N], ClientInputError> {
-        let nullifiers: [E::ScalarField; N] = nullifiers.try_into().map_err(|_| {
-            ClientInputError(format!(
-                "Error converting nullifiers into ClientInputs. Expected {N}"
-            ))
-        })?;
-        Ok(nullifiers)
+pub fn update_nullifier_tree<E, const H: usize>(
+    nullifier_tree: &mut IndexedMerkleTree<E::BaseField, H>,
+    nullifiers: &[E::ScalarField],
+) -> LowNullifierInfo<E, H>
+where
+    E: Pairing,
+    <<E as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = E::BaseField>,
+    <E as Pairing>::BaseField: PrimeField + PoseidonParams<Field = E::BaseField>,
+{
+    let N = nullifiers.len();
+    let lifted_nullifiers = nullifiers
+        .iter()
+        .map(field_switching::<E::ScalarField, E::BaseField>)
+        .collect::<Vec<_>>();
+    let mut low_nullifiers: Vec<IndexedNode<E::BaseField>> =
+        vec![IndexedNode::new(E::BaseField::from(0u32), 0, E::BaseField::from(0u32)); N];
+    let mut low_indices: Vec<E::BaseField> = vec![E::BaseField::from(0u32); N];
+    let mut low_paths: Vec<[E::BaseField; H]> = vec![[E::BaseField::from(0u32); H]; N];
+    for (j, null) in lifted_nullifiers.iter().enumerate() {
+        let low_null = nullifier_tree.find_predecessor(*null);
+        low_nullifiers[j] = low_null.node;
+        low_paths[j] = nullifier_tree
+            .non_membership_witness(*null)
+            .unwrap()
+            .try_into()
+            .unwrap();
+        low_indices[j] = E::BaseField::from(low_null.tree_index as u32);
+        nullifier_tree.update_low_nullifier(*null);
     }
-
-    pub fn update_nullifier_tree<const H: usize>(
-        &self,
-        nullifier_tree: &mut IndexedMerkleTree<E::BaseField, H>,
-        nullifiers: [E::ScalarField; N],
-    ) -> LowNullifierInfo<E, N, H> {
-        let lifted_nullifiers = nullifiers
-            .iter()
-            .map(field_switching::<E::ScalarField, E::BaseField>)
-            .collect::<Vec<_>>();
-        let mut low_nullifiers: [IndexedNode<E::BaseField>; N] =
-            [IndexedNode::new(E::BaseField::from(0u32), 0, E::BaseField::from(0u32)); N];
-        let mut low_indices: [E::BaseField; N] = [E::BaseField::from(0u32); N];
-        let mut low_paths: [[E::BaseField; H]; N] = [[E::BaseField::from(0u32); H]; N];
-        for (j, null) in lifted_nullifiers.iter().enumerate() {
-            let low_null = nullifier_tree.find_predecessor(*null);
-            low_nullifiers[j] = low_null.node;
-            low_paths[j] = nullifier_tree
-                .non_membership_witness(*null)
-                .unwrap()
-                .try_into()
-                .unwrap();
-            low_indices[j] = E::BaseField::from(low_null.tree_index as u32);
-            nullifier_tree.update_low_nullifier(*null);
-        }
-        LowNullifierInfo {
-            nullifiers: low_nullifiers,
-            indices: low_indices,
-            paths: low_paths,
-        }
+    LowNullifierInfo {
+        nullifiers: low_nullifiers,
+        indices: low_indices,
+        paths: low_paths,
     }
 }

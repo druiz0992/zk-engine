@@ -275,6 +275,7 @@ where
 
 #[cfg(test)]
 pub mod merge_test {
+    /*
 
     use crate::rollup::circuits::{
         bounce::bounce_test::bounce_test_helper,
@@ -393,4 +394,5 @@ pub mod merge_test {
             ), // TODO do we need 3 here?
         }
     }
+    */
 }

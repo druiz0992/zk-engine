@@ -20,7 +20,7 @@ use jf_relation::{
 use jf_utils::{field_switching, fr_to_fq};
 
 #[allow(dead_code)]
-pub(super) enum BasePublicVarIndex {
+pub enum BasePublicVarIndex {
     GlobalCommitmentRoot = 0,
     GlobaVkRoot = 1,
     GlobalNullifierRoot = 2,
@@ -34,14 +34,9 @@ pub(super) enum BasePublicVarIndex {
     AccumulatorInstancePoint = 10,
 }
 
-pub(super) fn create_initial_low_nullifier_vars<
-    C1,
-    const C: usize,
-    const N: usize,
-    const D: usize,
->(
+pub(super) fn create_initial_low_nullifier_vars<C1, const D: usize>(
     circuit: &mut PlonkCircuit<<C1 as Pairing>::BaseField>,
-    client_inputs: &ClientInput<C1, C, N, D>,
+    client_inputs: &ClientInput<C1, D>,
 ) -> Result<[usize; 3], CircuitError>
 where
     C1: Pairing<G1Affine = Affine<<<C1 as Pairing>::G1 as CurveGroup>::Config>>,
@@ -60,7 +55,7 @@ where
     ])
 }
 
-pub(super) fn hash_verification_key<C1, C2, const C: usize, const N: usize, const D: usize>(
+pub(super) fn hash_verification_key<C1, C2, const D: usize>(
     circuit: &mut PlonkCircuit<<C1 as Pairing>::BaseField>,
     vk: &VerifyingKey<C1>,
 ) -> Result<(SWVerifyingKeyVar<C1>, usize), CircuitError>
@@ -124,9 +119,10 @@ where
     Ok((verifying_key_var, vk_var_hash))
 }
 
-pub(super) fn poseidon_gadget<C1, C2, const C: usize>(
+pub(super) fn poseidon_gadget<C1, C2>(
     circuit: &mut PlonkCircuit<<C1 as Pairing>::BaseField>,
     inputs: &[Variable],
+    C: usize,
 ) -> Result<usize, CircuitError>
 where
     C1: Pairing<G1Affine = Affine<<<C1 as Pairing>::G1 as CurveGroup>::Config>>,
@@ -151,15 +147,9 @@ where
     Ok(hash)
 }
 
-pub(super) fn client_commitment_membership_check<
-    C1,
-    C2,
-    const C: usize,
-    const N: usize,
-    const D: usize,
->(
+pub(super) fn client_commitment_membership_check<C1, C2, const D: usize>(
     circuit: &mut PlonkCircuit<<C1 as Pairing>::BaseField>,
-    input: &ClientInput<C1, C, N, D>,
+    input: &ClientInput<C1, D>,
     global_commitment_root_var: usize,
     idx: usize,
 ) -> Result<(usize, usize), CircuitError>

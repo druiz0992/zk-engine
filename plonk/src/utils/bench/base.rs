@@ -1,7 +1,7 @@
-use super::tree::tree_generator;
+use super::tree::tree_generator_from_client_inputs;
 use crate::client::circuits::transfer;
 use crate::client::PlonkCircuitParams;
-use crate::rollup::circuits::client_input::{ClientInputBuilder, LowNullifierInfo};
+use crate::rollup::circuits::client_input::LowNullifierInfo;
 use crate::rollup::circuits::{
     base::base_rollup_circuit,
     client_input::ClientInput,
@@ -26,7 +26,7 @@ use rand_chacha::ChaChaRng;
 use trees::{
     membership_tree::MembershipTree, non_membership_tree::IndexedMerkleTree, tree::AppendTree,
 };
-
+/*
 pub fn base_circuit_helper_generator<
     const I: usize,
     const C: usize,
@@ -209,3 +209,4 @@ pub fn base_circuit_helper_generator<
         pi_stars: (Default::default(), pi_star),
     }
 }
+    */

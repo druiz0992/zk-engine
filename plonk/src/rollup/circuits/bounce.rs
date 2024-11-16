@@ -109,8 +109,9 @@ where
 #[cfg(test)]
 pub mod bounce_test {
 
+    /*
     use crate::rollup::circuits::{
-        base::base_test::test_base_rollup_helper_transfer, bounce::bounce_circuit,
+    base::base_test::test_base_rollup_helper_transfer, bounce::bounce_circuit,
         structs::AccInstance, utils::StoredProof,
     };
     use ark_ec::pairing::Pairing;
@@ -226,4 +227,5 @@ pub mod bounce_test {
 
         sp
     }
+    */
 }

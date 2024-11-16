@@ -1,3 +1,4 @@
+/*
 use super::bounce::bounce_circuit_helper_generator;
 use crate::rollup::circuits::{
     merge::merge_circuit,
@@ -102,3 +103,4 @@ pub fn merge_circuit_helper_generator<
         ), // TODO do we need 3 here?
     }
 }
+*/

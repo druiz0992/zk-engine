@@ -1,3 +1,4 @@
+/*
 use super::base::base_circuit_helper_generator;
 use crate::rollup::circuits::{bounce::bounce_circuit, structs::AccInstance, utils::StoredProof};
 use ark_ec::pairing::Pairing;
@@ -92,3 +93,4 @@ pub fn bounce_circuit_helper_generator<
         ),
     }
 }
+*/

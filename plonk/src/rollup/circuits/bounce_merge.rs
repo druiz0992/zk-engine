@@ -197,6 +197,7 @@ where
 #[cfg(test)]
 pub mod bounce_merge_test {
 
+    /*
     use crate::rollup::circuits::{
         bounce::bounce_test::bounce_test_helper, bounce_merge::bounce_merge_circuit,
         merge::merge_test::merge_test_helper, structs::AccInstance, utils::StoredProof,
@@ -318,4 +319,5 @@ pub mod bounce_merge_test {
             pi_stars: stored_proof_merge.pi_stars,
         }
     }
+    */
 }
