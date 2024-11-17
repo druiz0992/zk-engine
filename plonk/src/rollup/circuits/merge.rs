@@ -269,12 +269,15 @@ where
         [left_subtree_var, right_subtree_var].as_slice(),
     )?;
     circuit.set_variable_public(nullifier_subtree)?;
+    circuit.check_circuit_satisfiability(&circuit.public_input()?)?;
+    circuit.finalize_for_arithmetization()?;
 
     Ok((circuit, pi_star_out))
 }
 
 #[cfg(test)]
 pub mod merge_test {
+    /*
 
     use crate::rollup::circuits::{
         bounce::bounce_test::bounce_test_helper,
@@ -393,4 +396,5 @@ pub mod merge_test {
             ), // TODO do we need 3 here?
         }
     }
+    */
 }

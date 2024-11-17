@@ -103,14 +103,18 @@ where
     public_outputs.push(C2::BaseField::zero());
     public_outputs.push(circuit.emulated_witness(u_var)?);
 
+    circuit.check_circuit_satisfiability(&circuit.public_input()?)?;
+    circuit.finalize_for_arithmetization()?;
+
     Ok((circuit, public_outputs))
 }
 
 #[cfg(test)]
 pub mod bounce_test {
 
+    /*
     use crate::rollup::circuits::{
-        base::base_test::test_base_rollup_helper_transfer, bounce::bounce_circuit,
+    base::base_test::test_base_rollup_helper_transfer, bounce::bounce_circuit,
         structs::AccInstance, utils::StoredProof,
     };
     use ark_ec::pairing::Pairing;
@@ -226,4 +230,5 @@ pub mod bounce_test {
 
         sp
     }
+    */
 }

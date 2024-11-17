@@ -126,39 +126,22 @@ where
     let client_inputs: Vec<_> = transactions
         .into_iter()
         .enumerate()
-        .map(|(i, t)| ClientInput::<V, 1, 1, 8> {
+        .map(|(i, t)| ClientInput::<V, 8> {
             proof: t.proof,
-            nullifiers: t
-                .nullifiers
-                .iter()
-                .map(|n| n.0)
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap_or([V::ScalarField::from(0u8); 1]),
-            commitments: t
-                .commitments
-                .iter()
-                .map(|c| c.0)
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap_or([V::ScalarField::from(0u8); 1]),
-            commitment_tree_root: [V::ScalarField::from(0u8); 1],
-            path_comm_tree_root_to_global_tree_root: [[V::BaseField::from(0u8); 8]],
+            nullifiers: t.nullifiers.iter().map(|n| n.0).collect::<Vec<_>>(),
+            commitments: t.commitments.iter().map(|c| c.0).collect::<Vec<_>>(),
+            commitment_tree_root: vec![V::ScalarField::from(0u8); 1],
+            path_comm_tree_root_to_global_tree_root: vec![[V::BaseField::from(0u8); 8]],
             //path_comm_tree_index: [F::zero()],
-            path_comm_tree_index: [V::BaseField::from(0u32)],
-            low_nullifier: low_nullifier
-                .clone()
-                .try_into()
-                .unwrap_or([Default::default(); 1]),
-            low_nullifier_indices: [V::BaseField::zero()],
+            path_comm_tree_index: vec![V::BaseField::from(0u32)],
+            low_nullifier: low_nullifier.clone(),
+            low_nullifier_indices: vec![V::BaseField::zero()],
             low_nullifier_mem_path: low_nullifier_path
                 .clone()
                 .into_iter()
                 .map(|p| p.try_into().unwrap_or([V::BaseField::zero(); 32]))
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap_or([[V::BaseField::from(0u32); 32]; 1]),
-            vk_paths: vk_paths[i].clone().try_into().unwrap(),
+                .collect::<Vec<_>>(),
+            vk_paths: vk_paths[i].clone().as_vec(),
             vk_path_index: V::BaseField::from(vks_indices[i] as u64),
             vk: vks[i].clone(),
             ciphertext: [V::ScalarField::from(0u8); 3],
@@ -177,12 +160,12 @@ where
     // commit_key: CommitKey<V>,
 
     let res = Prover::rollup_proof(
-        client_inputs.try_into().unwrap(),
+        client_inputs,
         global_state_trees.get_vk_tree().root(),
         global_state_trees.get_global_nullifier_tree().root(),
         V::BaseField::from(global_state_trees.get_global_nullifier_tree().leaf_count()),
         global_state_trees.get_global_commitment_tree().root(),
-        [Default::default(), Default::default()],
+        vec![Default::default()],
         commit_keys,
         proving_keys,
     );

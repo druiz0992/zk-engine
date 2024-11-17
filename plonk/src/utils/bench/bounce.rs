@@ -1,30 +1,23 @@
-use super::base::base_circuit_helper_generator;
+use super::base::{self, TransactionType};
 use crate::rollup::circuits::{bounce::bounce_circuit, structs::AccInstance, utils::StoredProof};
-use ark_ec::pairing::Pairing;
+use crate::utils::bench;
 use ark_ff::Zero;
 use curves::{
     pallas::{Fr, PallasConfig},
     vesta::VestaConfig,
 };
-use jf_plonk::{
-    nightfall::PlonkIpaSnark, proof_system::UniversalSNARK, transcript::RescueTranscript,
-};
-use jf_relation::{gadgets::ecc::short_weierstrass::SWPoint, Arithmetization, Circuit};
-use jf_utils::{field_switching, test_rng};
+use jf_relation::gadgets::ecc::short_weierstrass::SWPoint;
+use jf_utils::field_switching;
 
-pub fn bounce_circuit_helper_generator<
-    const I: usize,
-    const N: usize,
-    const C: usize,
-    const D: usize,
->() -> StoredProof<VestaConfig, PallasConfig> {
+pub fn bounce_circuit_helper_generator<const D: usize>(
+    transaction_sequence: &[TransactionType],
+) -> StoredProof<VestaConfig, PallasConfig> {
     // Below taken from bounce_test_helper
-    let mut rng = test_rng();
     ark_std::println!("Creating Bounce Circuit");
-    let stored_proof_base = base_circuit_helper_generator::<I, C, N, D>();
+    let stored_proof_base = base::base_circuit_helper_generator::<D>(transaction_sequence);
     let (global_public_inputs, subtree_public_inputs, passthrough_instance, _) =
         stored_proof_base.pub_inputs;
-    let (mut bounce_circuit, public_outputs) = bounce_circuit::<PallasConfig, VestaConfig>(
+    let (bounce_circuit, public_outputs) = bounce_circuit::<PallasConfig, VestaConfig>(
         stored_proof_base.vk,
         global_public_inputs.clone(),
         subtree_public_inputs.clone(),
@@ -32,26 +25,14 @@ pub fn bounce_circuit_helper_generator<
         passthrough_instance,
     )
     .unwrap();
-    bounce_circuit
-        .check_circuit_satisfiability(&bounce_circuit.public_input().unwrap())
-        .unwrap();
-    bounce_circuit.finalize_for_arithmetization().unwrap();
-    let bounce_ipa_srs =
-        <PlonkIpaSnark<VestaConfig> as UniversalSNARK<VestaConfig>>::universal_setup_for_testing(
-            bounce_circuit.srs_size().unwrap(),
-            &mut rng,
+
+    let bounce_artifacts =
+        bench::generate_rollup_circuit_artifacts_and_verify::<VestaConfig, PallasConfig, _, _>(
+            &bounce_circuit,
+            true,
         )
         .unwrap();
-    let (bounce_ipa_pk, bounce_ipa_vk) =
-        PlonkIpaSnark::<VestaConfig>::preprocess(&bounce_ipa_srs, &bounce_circuit).unwrap();
-    let (bounce_ipa_proof, g_poly, _) = PlonkIpaSnark::<VestaConfig>::prove_for_partial::<
-        _,
-        _,
-        RescueTranscript<<VestaConfig as Pairing>::BaseField>,
-    >(&mut rng, &bounce_circuit, &bounce_ipa_pk, None)
-    .unwrap();
-    ark_std::println!("Created Bounce Proof");
-    // This is the Vesta acc calculated in base
+
     let passthrough = AccInstance {
         comm: SWPoint(
             public_outputs[7],
@@ -76,16 +57,16 @@ pub fn bounce_circuit_helper_generator<
     };
 
     StoredProof::<VestaConfig, PallasConfig> {
-        proof: bounce_ipa_proof,
+        proof: bounce_artifacts.proof,
         pub_inputs: (
             global_public_inputs,
             subtree_public_inputs,
             instance,
             vec![passthrough],
         ),
-        vk: bounce_ipa_vk,
+        vk: bounce_artifacts.vk,
         commit_key: stored_proof_base.commit_key,
-        g_poly,
+        g_poly: bounce_artifacts.g_poly,
         pi_stars: (
             [stored_proof_base.g_poly].to_vec(),
             stored_proof_base.pi_stars.1,
