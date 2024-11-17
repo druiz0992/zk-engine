@@ -269,6 +269,8 @@ where
         [left_subtree_var, right_subtree_var].as_slice(),
     )?;
     circuit.set_variable_public(nullifier_subtree)?;
+    circuit.check_circuit_satisfiability(&circuit.public_input()?)?;
+    circuit.finalize_for_arithmetization()?;
 
     Ok((circuit, pi_star_out))
 }

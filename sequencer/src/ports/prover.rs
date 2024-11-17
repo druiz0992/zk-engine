@@ -19,12 +19,12 @@ use plonk_prover::client::circuits::structs::CircuitId;
 pub trait SequencerProver<V, VSW, P, SW> {
     #[allow(clippy::too_many_arguments)]
     fn rollup_proof(
-        client_inputs: [ClientInput<V, 1, 1, 8>; 2],
+        client_inputs: Vec<ClientInput<V, 8>>,
         global_vk_root: P::ScalarField,
         global_nullifier_root: P::ScalarField,
         global_nullifier_leaf_count: P::ScalarField,
         global_commitment_root: P::ScalarField,
-        g_polys: [DensePolynomial<P::BaseField>; 2],
+        g_polys: Vec<DensePolynomial<<V as Pairing>::ScalarField>>,
         commit_keys: RollupCommitKeys<V, VSW, P, SW>,
         proving_keys: Option<RollupProvingKeys<V, VSW, P, SW>>,
     ) -> Result<Proof<P>, CircuitError>;

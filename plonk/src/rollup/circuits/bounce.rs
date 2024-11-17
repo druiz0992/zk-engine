@@ -103,6 +103,9 @@ where
     public_outputs.push(C2::BaseField::zero());
     public_outputs.push(circuit.emulated_witness(u_var)?);
 
+    circuit.check_circuit_satisfiability(&circuit.public_input()?)?;
+    circuit.finalize_for_arithmetization()?;
+
     Ok((circuit, public_outputs))
 }
 

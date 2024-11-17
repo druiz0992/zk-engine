@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use crate::primitives::circuits::{
     merkle_tree::BinaryMerkleTreeGadget,
     poseidon::{PoseidonGadget, PoseidonStateVar},

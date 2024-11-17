@@ -45,7 +45,7 @@ where
     prover.store_cks(rollup_commit_keys);
 }
 
-pub fn generate_and_store_vks<P, V, SW, VSW, Prover>(
+pub fn generate_and_store_client_circuit_vks<P, V, SW, VSW, Prover>(
     prover: &mut Prover,
     circuit_info: Vec<Box<dyn ClientPlonkCircuit<P, V, VSW>>>,
 ) -> Vec<VerifyingKey<V>>

@@ -12,18 +12,17 @@ use trees::{membership_tree::Tree, non_membership_tree::IndexedMerkleTree, tree:
 
 const VK_PATHS_LEN: usize = 8;
 
+pub struct ZkTrees {
+    pub vk_tree: Tree<Fr, VK_PATHS_LEN>,
+    pub commitment_tree: Tree<Fq, 8>,
+    pub nullifier_tree: IndexedMerkleTree<Fr, 32>,
+    pub global_root_tree: Tree<Fr, 8>,
+}
+
 pub fn tree_generator_from_client_inputs<const D: usize>(
-    inputs: &mut Vec<ClientInput<VestaConfig, D>>,
+    inputs: &mut [ClientInput<VestaConfig, D>],
     global_comm_roots: Vec<Fr>,
-) -> Result<
-    (
-        Tree<Fr, VK_PATHS_LEN>,
-        Tree<Fq, 8>,
-        IndexedMerkleTree<Fr, 32>,
-        Tree<Fr, 8>,
-    ),
-    String,
-> {
+) -> Result<ZkTrees, String> {
     let global_comm_roots_empty = global_comm_roots.is_empty();
     let vk_tree = build_vk_tree(inputs)?;
     let commitment_tree = build_commitments_tree(inputs);
@@ -35,11 +34,16 @@ pub fn tree_generator_from_client_inputs<const D: usize>(
         update_inputs_global_path(inputs, &global_root_tree);
     }
 
-    Ok((vk_tree, commitment_tree, nullifier_tree, global_root_tree))
+    Ok(ZkTrees {
+        vk_tree,
+        commitment_tree,
+        nullifier_tree,
+        global_root_tree,
+    })
 }
 
 pub fn build_vk_tree<const D: usize>(
-    inputs: &mut Vec<ClientInput<VestaConfig, D>>,
+    inputs: &mut [ClientInput<VestaConfig, D>],
 ) -> Result<Tree<Fr, VK_PATHS_LEN>, String> {
     if inputs.len() > VK_PATHS_LEN {
         return Err(format!(
@@ -84,7 +88,7 @@ pub fn build_vk_tree<const D: usize>(
 }
 
 pub fn build_commitments_tree<const D: usize>(
-    inputs: &mut Vec<ClientInput<VestaConfig, D>>,
+    inputs: &mut [ClientInput<VestaConfig, D>],
 ) -> Tree<Fq, 8> {
     // commitment trees
     let comms = inputs
@@ -98,7 +102,7 @@ pub fn build_commitments_tree<const D: usize>(
 }
 
 pub fn build_nullifier_tree<const D: usize>(
-    inputs: &mut Vec<ClientInput<VestaConfig, D>>,
+    inputs: &mut [ClientInput<VestaConfig, D>],
 ) -> IndexedMerkleTree<Fr, 32> {
     // nullifier trees
     let nullifiers = inputs
@@ -123,19 +127,19 @@ pub fn build_global_root_tree<const D: usize>(global_comm_roots: Vec<Fr>) -> Tre
     global_root_tree
 }
 
+#[allow(non_snake_case)]
 pub fn update_inputs_global_path<const D: usize>(
-    inputs: &mut Vec<ClientInput<VestaConfig, D>>,
+    inputs: &mut [ClientInput<VestaConfig, D>],
     global_comm_tree: &Tree<Fr, 8>,
 ) {
     let mut commitment_index = 0;
     for ci in inputs.iter_mut() {
         let N = ci.nullifiers.len();
-        let C: usize = ci.commitments.len();
-        let n_leaves = global_comm_tree.leaf_count();
-        let comm = ci.commitments.clone();
-        let null = ci.nullifiers.clone();
-        dbg!(N, C, commitment_index, n_leaves, comm, &null);
+        let null = &ci.nullifiers;
         if !null[0].is_zero() {
+            if ci.swap_field {
+                commitment_index = 0;
+            }
             let global_root_path: [Fr; D] = global_comm_tree
                 .membership_witness(commitment_index)
                 .unwrap()
@@ -148,7 +152,7 @@ pub fn update_inputs_global_path<const D: usize>(
     }
 }
 pub fn update_inputs_vk<const D: usize>(
-    inputs: &mut Vec<ClientInput<VestaConfig, D>>,
+    inputs: &mut [ClientInput<VestaConfig, D>],
     vk_tree: &Tree<Fr, VK_PATHS_LEN>,
 ) {
     for (idx, ci) in inputs.iter_mut().enumerate() {

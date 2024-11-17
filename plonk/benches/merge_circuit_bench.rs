@@ -1,27 +1,21 @@
-use ark_ec::pairing::Pairing;
 use criterion::{criterion_group, criterion_main, Criterion};
 use curves::{pallas::PallasConfig, vesta::VestaConfig};
-use jf_plonk::{
-    nightfall::PlonkIpaSnark, proof_system::UniversalSNARK, transcript::RescueTranscript,
-};
-use jf_relation::{Arithmetization, Circuit};
-use jf_utils::test_rng;
+use plonk_prover::utils::bench;
+use plonk_prover::utils::bench::base::TransactionType;
 use plonk_prover::{
     rollup::circuits::merge::merge_circuit, utils::bench::bounce::bounce_circuit_helper_generator,
 };
 
-pub fn benchmark_merge<const I: usize, const N: usize, const C: usize, const D: usize>(
-    c: &mut Criterion,
-) {
+pub fn benchmark_merge<const D: usize>(c: &mut Criterion) {
     // Below taken from merge_test_helper
-    let mut rng = test_rng();
-    let stored_bounce = bounce_circuit_helper_generator::<I, C, N, D>();
+    let transaction_sequence = [TransactionType::Transfer, TransactionType::Transfer];
+    let stored_bounce = bounce_circuit_helper_generator::<D>(&transaction_sequence);
     let stored_bounce_2 = stored_bounce.clone();
     let (global_public_inputs, subtree_pi_1, passthrough_instance_1, instance_1) =
         stored_bounce.pub_inputs;
     let (_, subtree_pi_2, passthrough_instance_2, instance_2) = stored_bounce_2.pub_inputs;
 
-    let (mut merge_circuit, _) = merge_circuit::<VestaConfig, PallasConfig>(
+    let (merge_circuit, _) = merge_circuit::<VestaConfig, PallasConfig>(
         stored_bounce.vk,
         global_public_inputs.clone(),
         [subtree_pi_1, subtree_pi_2],
@@ -36,29 +30,25 @@ pub fn benchmark_merge<const I: usize, const N: usize, const C: usize, const D: 
         [stored_bounce.pi_stars.1, stored_bounce_2.pi_stars.1],
     )
     .unwrap();
-    merge_circuit
-        .check_circuit_satisfiability(&merge_circuit.public_input().unwrap())
-        .unwrap();
-    merge_circuit.finalize_for_arithmetization().unwrap();
-    let merge_ipa_srs =
-        <PlonkIpaSnark<PallasConfig> as UniversalSNARK<PallasConfig>>::universal_setup_for_testing(
-            merge_circuit.srs_size().unwrap(),
-            &mut rng,
-        )
-        .unwrap();
-    let (merge_ipa_pk, _) =
-        PlonkIpaSnark::<PallasConfig>::preprocess(&merge_ipa_srs, &merge_circuit).unwrap();
-    c.bench_function("Merge - Output: Proof Generation", |b| {
-        b.iter(|| {
-            let _ = PlonkIpaSnark::<PallasConfig>::prove::<
-                _,
-                _,
-                RescueTranscript<<PallasConfig as Pairing>::BaseField>,
-            >(&mut rng, &merge_circuit, &merge_ipa_pk, None)
+
+    let (merge_ipa_pk, merge_ipa_vk) =
+        bench::generate_rollup_circuit_pks::<PallasConfig, VestaConfig, _, _>(&merge_circuit)
             .unwrap();
-        })
-    });
+    c.bench_function(
+        &format!("Merge {:?}- Output: Proof Generation", transaction_sequence),
+        |b| {
+            b.iter(|| {
+                bench::rollup_circuit_proof_and_verify::<PallasConfig, VestaConfig, _, _>(
+                    &merge_circuit,
+                    &merge_ipa_pk,
+                    &merge_ipa_vk,
+                    false,
+                )
+                .unwrap();
+            })
+        },
+    );
 }
 
-criterion_group! {name = benches; config = Criterion::default().significance_level(0.1).sample_size(10);targets = benchmark_merge::<2, 2, 2, 8>,}
+criterion_group! {name = benches; config = Criterion::default().significance_level(0.1).sample_size(10);targets = benchmark_merge::<8>,}
 criterion_main!(benches);

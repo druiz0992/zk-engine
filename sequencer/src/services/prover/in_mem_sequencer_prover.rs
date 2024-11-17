@@ -54,16 +54,16 @@ impl<V, VSW, P, SW> Default for InMemProver<V, VSW, P, SW> {
 #[sequencer_circuit]
 impl<V, VSW, P, SW> SequencerProver<V, VSW, P, SW> for InMemProver<V, VSW, P, SW> {
     fn rollup_proof(
-        client_inputs: [ClientInput<V, 1, 1, 8>; 2],
+        client_inputs: Vec<ClientInput<V, 8>>,
         global_vk_root: <V as Pairing>::BaseField,
         global_nullifier_root: <V as Pairing>::BaseField,
         global_nullifier_leaf_count: <V as Pairing>::BaseField,
         global_commitment_root: <V as Pairing>::BaseField,
-        g_polys: [DensePolynomial<<V as Pairing>::ScalarField>; 2],
+        g_polys: Vec<DensePolynomial<<V as Pairing>::ScalarField>>,
         commit_key: RollupCommitKeys<V, VSW, P, SW>,
         proving_keys: Option<RollupProvingKeys<V, VSW, P, SW>>,
     ) -> Result<Proof<P>, CircuitError> {
-        let (mut circuit, _pi_star) = base_rollup_circuit::<V, P, 2, 1, 1, 8>(
+        let (mut circuit, _pi_star) = base_rollup_circuit::<V, P, 8>(
             client_inputs,
             global_vk_root,
             global_nullifier_root,

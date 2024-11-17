@@ -6,17 +6,12 @@ pub mod merge;
 pub mod structs;
 
 pub mod utils {
-    use std::fs::File;
-
-    use ark_ec::{pairing::Pairing, short_weierstrass::SWCurveConfig, CurveGroup};
-
+    use super::structs::{AccInstance, GlobalPublicInputs, SubTrees};
     use crate::rollup::circuits::base::BasePublicVarIndex;
+    use ark_ec::{pairing::Pairing, short_weierstrass::SWCurveConfig, CurveGroup};
     use ark_poly::univariate::DensePolynomial;
     use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
-    use curves::{
-        pallas::{self, PallasConfig},
-        vesta::VestaConfig,
-    };
+    use curves::{pallas::PallasConfig, vesta::VestaConfig};
     use jf_plonk::nightfall::ipa_structs::{CommitKey, Proof, VerifyingKey};
     use jf_relation::{
         errors::CircuitError,
@@ -26,8 +21,7 @@ pub mod utils {
     };
     use jf_utils::field_switching;
     use serde::{Deserialize, Serialize};
-
-    use super::structs::{AccInstance, GlobalPublicInputs, SubTrees};
+    use std::fs::File;
 
     // This is a helper to serialize
     pub fn ark_se<S, A: CanonicalSerialize>(a: &A, s: S) -> Result<S::Ok, S::Error>
@@ -81,21 +75,21 @@ pub mod utils {
         pub proof: Proof<E>,
         #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
         pub pub_inputs: (
-            GlobalPublicInputs<E::ScalarField>,
-            SubTrees<E::ScalarField>,
+            GlobalPublicInputs<curves::pallas::Fr>,
+            SubTrees<curves::pallas::Fr>,
             AccInstance<I>,
             Vec<AccInstance<E>>,
         ),
         #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
         pub vk: VerifyingKey<E>,
         #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
-        pub commit_key: (CommitKey<E>, CommitKey<I>),
+        pub commit_key: (CommitKey<PallasConfig>, CommitKey<VestaConfig>),
         #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
         pub g_poly: DensePolynomial<E::ScalarField>,
         #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
         pub pi_stars: (
-            Vec<DensePolynomial<E::ScalarField>>,
-            DensePolynomial<I::ScalarField>,
+            Vec<DensePolynomial<curves::pallas::Fr>>,
+            DensePolynomial<curves::vesta::Fr>,
         ),
     }
 
@@ -104,32 +98,34 @@ pub mod utils {
         E: Pairing,
         <E::G1 as CurveGroup>::Config: SWCurveConfig,
         I: Pairing<BaseField = E::ScalarField>,
-        <E as Pairing>::ScalarField: EmulationConfig<<E as Pairing>::BaseField>,
+        E: Pairing<ScalarField = curves::pallas::Fr>,
     {
-        pub fn new(
-            base_circuit: &PlonkCircuit<E::ScalarField>,
+        #[allow(clippy::too_many_arguments)]
+        pub fn new_from_base(
+            base_circuit: &PlonkCircuit<curves::pallas::Fr>,
             base_ipa_proof: Proof<E>,
             base_ipa_vk: VerifyingKey<E>,
-            pallas_commit_key: CommitKey<E>,
-            vesta_commit_key: CommitKey<I>,
+            pallas_commit_key: CommitKey<PallasConfig>,
+            vesta_commit_key: CommitKey<VestaConfig>,
             g_poly: DensePolynomial<E::ScalarField>,
-            pi_star: DensePolynomial<I::ScalarField>,
+            pi_star: DensePolynomial<curves::vesta::Fr>,
+            passthrough: Vec<AccInstance<E>>,
         ) -> Result<Self, String> {
-            let public_inputs = base_circuit
+            let public_inputs: Vec<curves::pallas::Fr> = base_circuit
                 .public_input()
                 .map_err(|_| "Invalid Public Inputs to generate Stored Proof".to_string())?;
-            let global_public_inputs: GlobalPublicInputs<E::ScalarField> =
+            let global_public_inputs: GlobalPublicInputs<curves::pallas::Fr> =
                 GlobalPublicInputs::from_vec(public_inputs.clone());
             let subtree_pi = SubTrees::from_vec(
                 public_inputs[BasePublicVarIndex::CommitmentSubteeRoot as usize
                     ..=BasePublicVarIndex::NullifierSubtreeRoot as usize]
                     .to_vec(),
             );
-            let comm: SWPoint<E::ScalarField> = SWPoint(
+            let comm: SWPoint<curves::pallas::Fr> = SWPoint(
                 public_inputs[BasePublicVarIndex::AccumulatorCommitmentX as usize],
                 public_inputs[BasePublicVarIndex::AccumulatorCommitmentY as usize],
                 public_inputs[BasePublicVarIndex::AccumulatorCommitmentX as usize]
-                    == E::ScalarField::from(0u32),
+                    == curves::pallas::Fr::from(0u32),
             );
             let instance: AccInstance<I> = AccInstance {
                 comm,
@@ -144,7 +140,7 @@ pub mod utils {
 
             Ok(StoredProof {
                 proof: base_ipa_proof,
-                pub_inputs: (global_public_inputs, subtree_pi, instance, vec![]),
+                pub_inputs: (global_public_inputs, subtree_pi, instance, passthrough),
                 vk: base_ipa_vk,
                 commit_key: (pallas_commit_key, vesta_commit_key),
                 g_poly,
@@ -156,17 +152,17 @@ pub mod utils {
     pub fn serial_to_file<E, I>(
         proof: Proof<E>,
         pub_inputs: (
-            GlobalPublicInputs<E::ScalarField>,
-            SubTrees<E::ScalarField>,
+            GlobalPublicInputs<curves::pallas::Fr>,
+            SubTrees<curves::pallas::Fr>,
             AccInstance<I>,
             Vec<AccInstance<E>>,
         ),
         vk: VerifyingKey<E>,
-        commit_key: (CommitKey<E>, CommitKey<I>),
+        commit_key: (CommitKey<PallasConfig>, CommitKey<VestaConfig>),
         g_poly: DensePolynomial<E::ScalarField>,
         pi_stars: (
-            Vec<DensePolynomial<E::ScalarField>>,
-            DensePolynomial<I::ScalarField>,
+            Vec<DensePolynomial<curves::pallas::Fr>>,
+            DensePolynomial<curves::vesta::Fr>,
         ),
         file_name: &str,
     ) where

@@ -38,6 +38,7 @@ const MAX_N_BASE_TRANSACTIONS: usize = 8;
 const MAX_N_COMMITMENTS: usize = 4;
 const MAX_N_NULLIFIERS: usize = 4;
 
+#[allow(non_snake_case)]
 #[allow(clippy::type_complexity)]
 pub fn base_rollup_circuit<C1, C2, const D: usize>(
     client_inputs: Vec<ClientInput<C1, D>>,
@@ -145,7 +146,7 @@ where
             let (commitment_tree_root_var, nullifier) =
                 client_commitment_membership_check::<C1, C2, D>(
                     &mut circuit,
-                    &input,
+                    input,
                     global_commitment_root_var,
                     i,
                 )?;

@@ -191,6 +191,9 @@ where
     public_outputs.push(acc.instance.value);
     public_outputs.push(acc.instance.point);
 
+    circuit.check_circuit_satisfiability(&circuit.public_input()?)?;
+    circuit.finalize_for_arithmetization()?;
+
     Ok((circuit, public_outputs))
 }
 

@@ -1,70 +1,44 @@
 #[cfg(test)]
-use super::*;
-use crate::client::PlonkCircuitParams;
+use super::base_rollup_circuit;
+use crate::client::circuits::swap::swap_circuit;
+use crate::rollup::circuits::client_input::{self, LowNullifierInfo};
+use crate::rollup::circuits::utils::StoredProof;
+use crate::utils::bench;
+use crate::utils::bench::base::{self, TransactionType};
+use crate::utils::bench::tree::tree_generator_from_client_inputs;
 use ark_ec::pairing::Pairing;
 use ark_ec::short_weierstrass::SWCurveConfig;
 use ark_ec::CurveGroup;
 use ark_ff::Zero;
-use ark_poly::univariate::DensePolynomial;
 use ark_std::UniformRand;
+use client_input::ClientInput;
 use common::crypto::poseidon::Poseidon;
 use curves::pallas::Affine as PAffine;
 use curves::pallas::{Fq, Fr, PallasConfig};
 use curves::vesta::VestaConfig;
-use jf_plonk::nightfall::ipa_structs::{ProvingKey, VerifyingKey};
 use jf_plonk::nightfall::PlonkIpaSnark;
 use jf_plonk::proof_system::UniversalSNARK;
 use jf_plonk::transcript::RescueTranscript;
-use jf_primitives::pcs::StructuredReferenceString;
-use jf_relation::gadgets::ecc::short_weierstrass::SWPoint;
 use jf_relation::PlonkCircuit;
 use jf_relation::{Arithmetization, Circuit};
 use jf_utils::{field_switching, fq_to_fr_with_mask, test_rng};
-use rand::SeedableRng;
-use rand_chacha::ChaChaRng;
-use std::ptr::null;
 use std::str::FromStr;
 use trees::membership_tree::{MembershipTree, Tree};
 use trees::non_membership_tree::IndexedMerkleTree;
 use trees::non_membership_tree::NonMembershipTree;
 use trees::tree::AppendTree;
-use trees::MembershipPath;
-use zk_macros::{client_circuit, sequencer_circuit};
-
-use crate::client::circuits::mint;
-use crate::client::circuits::swap::swap_circuit;
-use crate::client::circuits::transfer;
-
-use crate::primitives::circuits::kem_dem::KemDemParams;
-use crate::rollup::circuits::base::BasePublicVarIndex;
-use crate::rollup::circuits::client_input::{self, LowNullifierInfo};
-use crate::rollup::circuits::structs::{AccInstance, GlobalPublicInputs, SubTrees};
-use crate::rollup::circuits::utils::StoredProof;
-use crate::utils::bench::tree::tree_generator_from_client_inputs;
-use ark_ec::short_weierstrass::Affine;
-use ark_ec::short_weierstrass::Projective;
-use ark_ec::CurveConfig;
-use ark_ff::PrimeField;
-use common::crypto::poseidon::constants::PoseidonParams;
-use jf_plonk::nightfall::ipa_structs::Proof;
-use jf_primitives::rescue::RescueParameter;
-use jf_relation::gadgets::ecc::SWToTEConParam;
-
-use super::base_rollup_circuit;
-use client_input::ClientInput;
-mod test_helpers;
-use test_helpers::*;
 
 #[test]
 fn test_base_circuit() {
-    //test_base_rollup_helper::<8>(&[TransactionType::Mint, TransactionType::Mint]);
+    test_base_rollup_helper::<8>(&[TransactionType::Mint, TransactionType::Mint]);
     //test_base_rollup_helper::<8>(&[
     //    TransactionType::Mint,
     //    TransactionType::Mint,
     //    TransactionType::Mint,
     //    TransactionType::Mint,
     //]);
-    //test_base_rollup_helper::<8>(&[TransactionType::Transfer, TransactionType::Transfer]);
+
+    test_base_rollup_helper::<8>(&[TransactionType::Transfer, TransactionType::Transfer]);
     //test_base_rollup_helper::<8>(&[
     //TransactionType::Transfer,
     //TransactionType::Transfer,
@@ -79,103 +53,17 @@ fn test_base_circuit() {
         TransactionType::Transfer,
         TransactionType::Mint,
     ]);
-    //test_base_rollup_helper_swap::<8>();
+
+    test_base_rollup_helper_swap::<8>();
 }
 
 pub fn test_base_rollup_helper<const D: usize>(
     transaction_sequence: &[TransactionType],
 ) -> StoredProof<PallasConfig, VestaConfig> {
-    // Prepare transfer preamble (i.e. create fake mints)
-    let mut rng = ChaChaRng::from_entropy();
-    let mut client_inputs = vec![];
-    let mut global_comm_roots: Vec<Fr> = vec![];
-    let mut nullifier_tree = IndexedMerkleTree::<Fr, 32>::new();
-    let init_nullifier_root = nullifier_tree.root();
-    let mut g_polys = vec![];
-    let initial_nullifier_tree = IndexedMerkleTree::<Fr, 32>::new();
-
-    let token_id = Some(Fq::rand(&mut rng));
-
-    for i in 0..transaction_sequence.len() {
-        build_client_inputs(
-            &mut client_inputs,
-            &mut nullifier_tree,
-            &mut global_comm_roots,
-            &mut g_polys,
-            &transaction_sequence[i],
-            i,
-            token_id,
-        )
-        .unwrap();
-    }
-
-    /* ----------------------------------------------------------------------------------
-     * ---------------------------  Base Rollup Circuit ----------------------------------
-     * ----------------------------------------------------------------------------------
-     */
-
-    let (vk_tree, _, nullifier_tree, global_comm_tree) =
-        tree_generator_from_client_inputs(&mut client_inputs, global_comm_roots).unwrap();
-
-    let (vesta_commit_key, pallas_commit_key) = build_commit_keys().unwrap();
-
-    let (base_rollup_circuit, pi_star) = base_rollup_circuit::<VestaConfig, PallasConfig, D>(
-        client_inputs.try_into().unwrap(),
-        vk_tree.root(),
-        // initial_nullifier_tree.root,
-        init_nullifier_root,
-        (initial_nullifier_tree.leaf_count() as u64).into(),
-        global_comm_tree.root(),
-        g_polys.try_into().unwrap(),
-        vesta_commit_key.clone(),
-    )
-    .unwrap();
-
-    ark_std::println!(
-        "Base rollup circuit constraints: {:?}",
-        base_rollup_circuit.num_gates()
-    );
-
-    let (base_ipa_proof, g_poly, base_ipa_pk, base_ipa_vk) =
-        generate_base_circuit_artifacts_and_verify::<PallasConfig, VestaConfig, _, _>(
-            &base_rollup_circuit,
-            true,
-        )
-        .unwrap();
-
-    //ark_std::println!("Running serial");
-    // serial_to_file(
-    //     base_ipa_proof.clone(),
-    //     base_rollup_circuit.public_input().unwrap(),
-    //     base_ipa_vk.clone(),
-    //     (pallas_commit_key.clone(), vesta_commit_key.clone()),
-    //     pi_star.clone(),
-    //     "base_circuit_output.json",
-    // );
-    // ark_std::println!("Proof verified");
-
-    //     (
-    //         base_rollup_circuit,
-    //         base_ipa_proof,
-    //         base_ipa_vk,
-    //         (vesta_commit_key, pallas_commit_key),
-    //         pi_star,
-    //     )
-
-    StoredProof::new(
-        &base_rollup_circuit,
-        base_ipa_proof,
-        base_ipa_vk,
-        pallas_commit_key,
-        vesta_commit_key,
-        g_poly,
-        pi_star,
-    )
-    .unwrap()
+    base::base_circuit_helper_generator::<D>(transaction_sequence)
 }
-/*
 
-fn test_base_rollup_helper_swap<const D: usize>() {
+fn test_base_rollup_helper_swap<const D: usize>() -> StoredProof<PallasConfig, VestaConfig> {
     const I: usize = 2;
     let mut rng = test_rng();
     let private_key_domain = Fq::from_str("1").unwrap();
@@ -246,13 +134,12 @@ fn test_base_rollup_helper_swap<const D: usize>() {
         let (swap_ipa_pk, swap_ipa_vk) =
             PlonkIpaSnark::<VestaConfig>::preprocess(&swap_ipa_srs, &swap_circuit).unwrap();
 
-        let (swap_ipa_proof, g_poly, _) =
-            PlonkIpaSnark::<VestaConfig>::prove_for_partial::<
-                _,
-                _,
-                RescueTranscript<<VestaConfig as Pairing>::BaseField>,
-            >(&mut rng, &swap_circuit, &swap_ipa_pk, None)
-            .unwrap();
+        let (swap_ipa_proof, g_poly, _) = PlonkIpaSnark::<VestaConfig>::prove_for_partial::<
+            _,
+            _,
+            RescueTranscript<<VestaConfig as Pairing>::BaseField>,
+        >(&mut rng, &swap_circuit, &swap_ipa_pk, None)
+        .unwrap();
         PlonkIpaSnark::<VestaConfig>::verify::<
             RescueTranscript<<VestaConfig as Pairing>::BaseField>,
         >(
@@ -294,27 +181,24 @@ fn test_base_rollup_helper_swap<const D: usize>() {
         }
         // nullifier_tree.append_leaf(null);
         nullifier_tree.update_low_nullifier(lifted_nullifier);
-
-        let client_input: ClientInput<VestaConfig, 2, 1, D> = ClientInput {
-            proof: swap_ipa_proof,
-            swap_field: true,
-            nullifiers: [nullifier],
-            commitments,
-            commitment_tree_root: [comm_tree.root()],
-            path_comm_tree_root_to_global_tree_root: [[Fr::zero(); D]; 1], // filled later
-            path_comm_tree_index: [Fr::zero()],                            // filled later
-            low_nullifier: [low_null.node],
-            low_nullifier_indices: [low_index],
-            low_nullifier_mem_path: [low_path],
-            vk_paths: [Fr::zero(), Fr::zero()], // filled later
-            vk_path_index: Fr::from(0u64),
-            vk: swap_ipa_vk.clone(),
-            eph_pub_key: [
-                field_switching(&eph_pub_key[0]),
-                field_switching(&eph_pub_key[1]),
-            ],
-            ciphertext,
+        let low_nullifier_info = LowNullifierInfo {
+            nullifiers: vec![low_null.node],
+            indices: vec![low_index],
+            paths: vec![low_path],
         };
+
+        let mut client_input: ClientInput<VestaConfig, D> =
+            ClientInput::new(swap_ipa_proof, swap_ipa_vk.clone(), 2, 1);
+        client_input
+            .set_swap_field(true)
+            .set_nullifiers(&vec![nullifier])
+            .set_commitments(&commitments)
+            .set_commitment_tree_root(&vec![comm_tree.root()])
+            .set_low_nullifier_info(&low_nullifier_info)
+            .set_ciphertext(ciphertext)
+            .set_eph_pub_key(
+                client_input::to_eph_key_array::<VestaConfig>(eph_pub_key.to_vec()).unwrap(),
+            );
 
         client_inputs.push(client_input);
         g_polys.push(g_poly);
@@ -325,108 +209,53 @@ fn test_base_rollup_helper_swap<const D: usize>() {
      * ----------------------------------------------------------------------------------
      */
 
-    // all have the same vk
-    let vks = vec![client_inputs[0].vk.clone()];
+    let zk_trees = tree_generator_from_client_inputs(
+        &mut client_inputs,
+        vec![field_switching(&comm_tree.root())],
+    )
+    .unwrap();
 
-    let (vk_tree, _, _, global_comm_tree) = tree_generator(
-        vks,
-        vec![],
-        vec![],
-        [field_switching(&comm_tree.root())].to_vec(),
-    );
-
-    for (_, ci) in client_inputs.iter_mut().enumerate() {
-        // both use the same comm root
-        let global_root_path = global_comm_tree
-            .membership_witness(0)
-            .unwrap()
-            .try_into()
-            .unwrap();
-        ci.path_comm_tree_root_to_global_tree_root = [global_root_path];
-        ci.path_comm_tree_index = [Fr::from(0 as u32)];
-        ci.vk_paths = vk_tree.membership_witness(0).unwrap().try_into().unwrap();
-        // vk index is already (correctly) zero
-    }
-
-    let vesta_srs = <PlonkIpaSnark<VestaConfig> as UniversalSNARK<VestaConfig>>::universal_setup_for_testing(
-        2usize.pow(21),
-        &mut rng,
-    ).unwrap();
-    let (vesta_commit_key, _) = vesta_srs.trim(2usize.pow(21)).unwrap();
+    let (vesta_commit_key, pallas_commit_key) = base::build_commit_keys().unwrap();
 
     // let pallas_srs = <PlonkIpaSnark<PallasConfig> as UniversalSNARK<PallasConfig>>::universal_setup_for_testing(
     //     2usize.pow(21),
     //     &mut rng,
     // ).unwrap();
     // let (pallas_commit_key, _) = pallas_srs.trim(2usize.pow(21)).unwrap();
-    let (mut base_rollup_circuit, _pi_star) =
-        base_rollup_circuit::<VestaConfig, PallasConfig, I, 2, 1, D>(
-            client_inputs.try_into().unwrap(),
-            vk_tree.root(),
-            // initial_nullifier_tree.root,
-            init_nullifier_root,
-            Fr::from(0 as u32),
-            global_comm_tree.root(),
-            g_polys.try_into().unwrap(),
-            vesta_commit_key.clone(),
-        )
-        .unwrap();
+
+    let (base_rollup_circuit, pi_star) = base_rollup_circuit::<VestaConfig, PallasConfig, D>(
+        client_inputs.try_into().unwrap(),
+        zk_trees.vk_tree.root(),
+        // initial_nullifier_tree.root,
+        init_nullifier_root,
+        Fr::from(0 as u32),
+        zk_trees.global_root_tree.root(),
+        g_polys.try_into().unwrap(),
+        vesta_commit_key.clone(),
+    )
+    .unwrap();
     ark_std::println!(
         "Base rollup circuit constraints: {:?}",
         base_rollup_circuit.num_gates()
     );
-    base_rollup_circuit
-        .check_circuit_satisfiability(&base_rollup_circuit.public_input().unwrap())
+    let base_artifacts =
+        bench::generate_rollup_circuit_artifacts_and_verify::<PallasConfig, VestaConfig, _, _>(
+            &base_rollup_circuit,
+            true,
+        )
         .unwrap();
-    base_rollup_circuit.finalize_for_arithmetization().unwrap();
-    let base_ipa_srs = <PlonkIpaSnark<PallasConfig> as UniversalSNARK<PallasConfig>>::universal_setup_for_testing(
-        base_rollup_circuit.srs_size().unwrap(),
-        &mut rng,
-    ).unwrap();
-    let (base_ipa_pk, base_ipa_vk) =
-        PlonkIpaSnark::<PallasConfig>::preprocess(&base_ipa_srs, &base_rollup_circuit).unwrap();
-    let now = std::time::Instant::now();
-    let base_ipa_proof = PlonkIpaSnark::<PallasConfig>::prove::<
-        _,
-        _,
-        RescueTranscript<<PallasConfig as Pairing>::BaseField>,
-    >(&mut rng, &base_rollup_circuit, &base_ipa_pk, None)
-    .unwrap();
-    ark_std::println!("Proving time: {}", now.elapsed().as_secs());
-    PlonkIpaSnark::<PallasConfig>::verify::<
-        RescueTranscript<<PallasConfig as Pairing>::BaseField>,
-    >(
-        &base_ipa_vk,
-        &base_rollup_circuit.public_input().unwrap(),
-        &base_ipa_proof,
-        None,
+
+    StoredProof::new_from_base(
+        &base_rollup_circuit,
+        base_artifacts.proof,
+        base_artifacts.vk,
+        pallas_commit_key,
+        vesta_commit_key,
+        base_artifacts.g_poly,
+        pi_star,
+        vec![],
     )
-    .unwrap();
-    ark_std::println!("Base proof verified");
-
-    // uncomment below if we want to return and further roll this base
-
-    // let public_inputs = base_rollup_circuit.public_input().unwrap();
-    // let global_public_inputs = GlobalPublicInputs::from_vec(public_inputs.clone());
-    // let subtree_pi = SubTrees::from_vec(public_inputs[5..=6].to_vec());
-    // let instance: AccInstance<VestaConfig> = AccInstance {
-    //     comm: SWPoint(
-    //         public_inputs[7],
-    //         public_inputs[8],
-    //         public_inputs[9] == Fr::one(),
-    //     ),
-    //     // values are originally Vesta scalar => safe switch back into 'native'
-    //     eval: field_switching(&public_inputs[10]),
-    //     eval_point: field_switching(&public_inputs[11]),
-    // };
-    // StoredProof {
-    //     proof: base_ipa_proof,
-    //     pub_inputs: (global_public_inputs, subtree_pi, instance, vec![]),
-    //     vk: base_ipa_vk,
-    //     commit_key: (pallas_commit_key, vesta_commit_key),
-    //     g_poly,
-    //     pi_stars: (Default::default(), pi_star),
-    // }
+    .unwrap()
 }
 
 fn swap_circuit_helper_generator(
@@ -475,4 +304,3 @@ fn swap_circuit_helper_generator(
     );
     (circuit, client_input)
 }
-*/

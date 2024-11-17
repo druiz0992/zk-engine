@@ -6,7 +6,7 @@ pub mod usecase;
 
 use sequencer::utils;
 use services::{
-    prover::{generate_and_store_cks, generate_and_store_vks},
+    prover::{generate_and_store_cks, generate_and_store_client_circuit_vks},
     storage::generate_and_store_vk_tree,
 };
 
@@ -28,11 +28,12 @@ fn main() {
         Box<dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>>,
     > = utils::circuits::select_client_circuits_sequencer();
     ark_std::println!("Generating Keys");
-    let vks = generate_and_store_vks(&mut prover, client_circuit_info);
+    let vks = generate_and_store_client_circuit_vks(&mut prover, client_circuit_info);
     generate_and_store_vk_tree(&mut db, vks);
     ark_std::println!("Generating srs_1");
     generate_and_store_cks(&mut prover);
     ark_std::println!("Ck ready");
+    //generate_and_store_rollup_pk(&mut prover);
 
     let thread_safe_db = std::sync::Arc::new(tokio::sync::Mutex::new(db));
     let thread_safe_prover = std::sync::Arc::new(tokio::sync::Mutex::new(prover));

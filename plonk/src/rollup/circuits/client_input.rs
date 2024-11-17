@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use ark_ec::{pairing::Pairing, short_weierstrass::SWCurveConfig, CurveGroup};
 use ark_ff::PrimeField;
 use common::crypto::poseidon::constants::PoseidonParams;
@@ -65,7 +67,7 @@ where
             low_nullifier: vec![Default::default(); N],
             low_nullifier_indices: vec![E::BaseField::from(1u32); N],
             low_nullifier_mem_path: vec![[E::BaseField::from(0u32); H]; N],
-            vk_paths: vec![E::BaseField::from(0u32); 2], // filled later
+            vk_paths: vec![E::BaseField::from(0u32); VK_PATHS_LEN],
             vk_path_index: E::BaseField::from(0u64),
             vk,
             eph_pub_key: [E::BaseField::from(0u32); EPHEMERAL_KEY_LEN],
