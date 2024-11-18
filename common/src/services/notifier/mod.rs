@@ -1,9 +1,11 @@
 use std::marker::PhantomData;
 
-use crate::{configuration::SequencerSettings, ports::notifier::Notifier};
+use crate::structs::Block;
+use crate::structs::Transaction;
+use crate::{configuration::ClientSettings, ports::notifier::Notifier};
 use ark_ec::{pairing::Pairing, short_weierstrass::SWCurveConfig, CurveGroup};
+use ark_ff::Field;
 use async_trait::async_trait;
-use common::structs::Transaction;
 
 #[derive(Clone, Debug)]
 pub struct HttpNotifier<V> {
@@ -12,7 +14,7 @@ pub struct HttpNotifier<V> {
 }
 
 impl<V> HttpNotifier<V> {
-    pub fn new(settings: SequencerSettings) -> Self {
+    pub fn new(settings: ClientSettings) -> Self {
         let _timeout = settings.timeout();
         Self {
             base_url: settings.base_url,
@@ -37,6 +39,27 @@ where
         let res = client
             .post(format!("{}/transactions", base_url))
             .json(&transaction)
+            .send()
+            .await;
+        ark_std::println!("Got response {:?}", res);
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl<F> Notifier for HttpNotifier<Block<F>>
+where
+    F: Field,
+{
+    type Info = Block<F>;
+
+    #[tracing::instrument(name = "Send notification", skip(block))]
+    async fn send_info(&self, block: Block<F>) -> anyhow::Result<()> {
+        let base_url = self.base_url.clone();
+        let client = reqwest::Client::new();
+        let res = client
+            .post(format!("{}/transactions", base_url))
+            .json(&block)
             .send()
             .await;
         ark_std::println!("Got response {:?}", res);

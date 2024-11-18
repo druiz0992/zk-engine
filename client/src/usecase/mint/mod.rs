@@ -1,6 +1,6 @@
 use crate::domain::Preimage;
 use crate::ports::storage::StoredPreimageInfo;
-use crate::ports::{notifier::Notifier, prover::Prover, storage::PreimageDB};
+use crate::ports::{prover::Prover, storage::PreimageDB};
 use crate::utils;
 use ark_ec::{
     pairing::Pairing,
@@ -9,6 +9,7 @@ use ark_ec::{
 };
 use ark_ff::PrimeField;
 use common::crypto::poseidon::constants::PoseidonParams;
+use common::ports::notifier::Notifier;
 use common::structs::{Commitment, Transaction};
 use jf_plonk::nightfall::ipa_structs::ProvingKey;
 use jf_primitives::rescue::RescueParameter;

@@ -1,18 +1,16 @@
-use std::sync::Arc;
-use tracing_log::log;
-
 use crate::services::{
-    notifier::HttpNotifier, prover::in_memory_prover::InMemProver,
-    storage::in_mem_storage::InMemStorage,
+    prover::in_memory_prover::InMemProver, storage::in_mem_storage::InMemStorage,
 };
 use adapters::rest_api::rest_api_entry::Application;
-use adapters::telemetry;
+use common::services::notifier::HttpNotifier;
+use common::{configuration, telemetry};
 use curves::{
     pallas::{Fq, PallasConfig},
     vesta::VestaConfig,
 };
+use std::sync::Arc;
+use tracing_log::log;
 pub mod adapters;
-pub mod configuration;
 pub mod domain;
 pub mod ports;
 pub mod services;

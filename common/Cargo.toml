@@ -13,31 +13,29 @@ ark-std="0.4.0"
 ark-poly="0.4.2"
 ark-serialize="0.4.2"
 
-thiserror="1.0.50"
-poseidon-paramgen="0.4.0"
-poseidon-parameters="0.4.0"
-rayon="1.8.0"
-serde = {version = "1.0.192", features = ["derive"]}
-serde_json = "1.0.108"
-serde_with = "3.4.0"
-serde-hex = "0.1.0"
-derivative = "2.2.0"
-num-bigint = {version = "0.4.4", features = ["serde"]}
-num-traits = "0.2.17"
-
-
 jf-plonk = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test", features = ["test-srs"]}
 jf-relation = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test"}
 jf-utils = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test"}
 jf-primitives = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test"}
 curves = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test"}
-#jf-plonk = {path = "../../jellyfish/plonk", features = ["test-srs"]}
-#jf-relation = {path = "../../jellyfish/relation"}
-#jf-utils = {path = "../../jellyfish/utilities"}
-#jf-primitives = {path = "../../jellyfish/primitives"}
-#curves = {path = "../../jellyfish/curves"}
 
-
+thiserror="1.0.50"
+poseidon-paramgen="0.4.0"
+serde = {version = "1.0.192", features = ["derive"]}
+serde_json = "1.0.108"
+derivative = "2.2.0"
+num-bigint = {version = "0.4.4", features = ["serde"]}
+num-traits = "0.2.17"
+tokio = {version = "1.29.1", features = ["full"]}
+tracing = { version = "0.1.40", features = ["log"]}
+tracing-subscriber = { version = "0.3.18", features = ["registry", "env-filter"] }
+tracing-bunyan-formatter = "0.3"
+tracing-log = "0.1"
+serde-aux = "3"
+config = "0.14"
+async-trait = "0.1.83"
+anyhow = "1"
+reqwest = {version = "0.11.22", features = ["json"]}
 
 
 [[example]]

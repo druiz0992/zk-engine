@@ -5,6 +5,7 @@ use axum::{extract::State, Json};
 use common::structs::Transaction;
 use curves::{pallas::PallasConfig, vesta::VestaConfig};
 
+#[tracing::instrument(name = "Creating new transfer transaction", skip(db, transfer_details))]
 pub async fn create_transfer(
     State(db): State<AppState>,
     Json(transfer_details): Json<TransferInput<PallasConfig>>,
