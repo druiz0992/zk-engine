@@ -1,9 +1,9 @@
 general:
   log_level: "debug"
 application:
-  port: 8000
+  port: 4000
 sequencer:
   timeout_milliseconds: 10000
+  base_url: "localhost"
 client:
   timeout_milliseconds: 10000
-  base_url: "localhost"

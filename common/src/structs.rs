@@ -82,6 +82,23 @@ where
     }
 }
 
+#[derive(Serialize, Debug, Deserialize)]
+pub struct Tx<P>
+where
+    P: Pairing,
+    <<P as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig,
+{
+    pub ct: Vec<Commitment<P::ScalarField>>,
+    phantom: std::marker::PhantomData<P>,
+    pub nullifiers: Vec<Nullifier<P::ScalarField>>,
+    #[serde(serialize_with = "vec_ark_se", deserialize_with = "vec_ark_de")]
+    pub ciphertexts: Vec<P::ScalarField>,
+    #[serde(serialize_with = "ark_se_std", deserialize_with = "ark_de_std")]
+    pub proof: Proof<P>,
+    #[serde(serialize_with = "ark_se_std", deserialize_with = "ark_de_std")]
+    pub g_polys: DensePolynomial<P::ScalarField>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

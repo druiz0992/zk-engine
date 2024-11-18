@@ -2,35 +2,31 @@ pub mod handlers;
 pub mod structs;
 
 pub mod rest_api_entry {
-    use anyhow::anyhow;
-    use std::sync::Arc;
-    use tokio::sync::Mutex;
-    use tracing_log::log;
-
     use super::handlers::block::handle_block;
     use super::handlers::keys::create_keys;
     use super::handlers::mint::create_mint;
     use super::handlers::preimage::get_preimages;
     use super::handlers::transfer::create_transfer;
-
-    use common::structs::Transaction;
-
+    use anyhow::anyhow;
     use axum::{
         http::StatusCode,
         response::IntoResponse,
         routing::{get, post},
         Json, Router,
     };
+    use common::services::notifier::HttpNotifier;
+    use common::structs::Transaction;
     use curves::{pallas::PallasConfig, vesta::VestaConfig};
     use dotenvy::dotenv;
     use serde_json::json;
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+    use tracing_log::log;
 
     use crate::services::{
-        notifier::HttpNotifier, prover::in_memory_prover::InMemProver,
-        storage::in_mem_storage::InMemStorage,
+        prover::in_memory_prover::InMemProver, storage::in_mem_storage::InMemStorage,
     };
-
-    use crate::configuration::ApplicationSettings;
+    use common::configuration::ApplicationSettings;
 
     pub enum AppError {
         TxError,

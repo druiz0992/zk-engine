@@ -17,7 +17,6 @@ ark-ec="0.4.2"
 ark-ff="0.4.2"
 ark-std="0.4.0"
 ark-poly="0.4.2"
-ark-serialize="0.4.2"
 
 # JF Deps
 jf-plonk = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test", features = ["test-srs"]}
@@ -25,11 +24,6 @@ jf-relation = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "te
 jf-utils = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test"}
 jf-primitives = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test"}
 curves = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test"}
-#jf-plonk = {path = "../../jellyfish/plonk", features = ["test-srs"]}
-#jf-relation = {path = "../../jellyfish/relation"}
-#jf-utils = {path = "../../jellyfish/utilities"}
-#jf-primitives = {path = "../../jellyfish/primitives"}
-#curves = {path = "../../jellyfish/curves"}
 
 common = {path = "../common"}
 trees = {path = "../trees"}
@@ -37,17 +31,20 @@ plonk-prover = { path="../plonk"}
 zk-macros = { path="../macros"}
 
 tokio = {version = "1.29.1", features = ["full"]}
-axum = { version = "0.6.20", features = ["json"]}
-tracing = "0.1.40"
-tracing-subscriber = "0.3.18"
+axum = { version = "0.7.7", features = ["json"]}
+tracing-log = "0.1"
+tracing = { version = "0.1.40", features = ["log"]}
 dotenvy = "0.15.7"
 serde = {version = "1.0.192", features = ["derive"]}
-serde_json = "1.0.108"
-serde_with = "3.4.0"
-hex= {version= "0.4.3", features = ["serde"]}
-serde-hex = "0.1.0"
 reqwest = {version = "0.11.22", features = ["json"]}
 rand = { version = "0.8.5", features = ["std"]}
 rand_chacha = "0.3.1"
 anyhow = "1"
 
+
+[dev-dependencies]
+once_cell = "1"
+bip39 = {version = "2.1", features = ["rand", "french"]}
+itertools = "0.13.0"
+random_word = { version = "0.4.2", features = ["en"] }
+wiremock = "0.5"

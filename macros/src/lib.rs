@@ -79,9 +79,18 @@ pub fn client_circuit(_attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn sequencer_circuit(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let item = item.clone();
-
     // Define each bound as a `WherePredicate`
     let bounds: Vec<WherePredicate> = vec![
+        /* 
+        parse_str("V: Pairing<G1Affine = Affine<VSW>, G1 = Projective<VSW>, ScalarField = <P as CurveConfig>::BaseField>").unwrap(),
+        parse_str("<V as Pairing>::BaseField: PrimeField + PoseidonParams<Field = <P as Pairing>::ScalarField> + RescueParameter + SWToTEConParam").unwrap(),
+        parse_str("<V as Pairing>::ScalarField: PrimeField + PoseidonParams<Field = <P as Pairing>::BaseField> + RescueParameter + SWToTEConParam").unwrap(),
+        parse_str("<V as Pairing>::ScalarField: KemDemParams<Field = <V as Pairing>::ScalarField>").unwrap(),
+        parse_str("P: Pairing<G1Affine = Affine<SW>, G1 = Projective<SW>> + SWCurveConfig + Pairing<BaseField = <V as Pairing>::ScalarField, ScalarField = <V as Pairing>::BaseField>").unwrap(),
+        parse_str("<P as CurveConfig>::BaseField: PrimeField + PoseidonParams<Field = V::ScalarField>").unwrap(), 
+        parse_str("SW: SWCurveConfig<BaseField = <V as Pairing>::ScalarField, ScalarField = <V as Pairing>::BaseField>").unwrap(),
+        parse_str("VSW: SWCurveConfig<BaseField = <V as Pairing>::BaseField, ScalarField = <V as Pairing>::ScalarField>").unwrap(),
+        */ 
         parse_str("V: Pairing<G1Affine = Affine<VSW>, G1 = Projective<VSW>>").unwrap(),
         parse_str("<<V as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = V::BaseField>").unwrap(),
         parse_str("<V as Pairing>::BaseField: PrimeField + PoseidonParams<Field = P::ScalarField> + RescueParameter + SWToTEConParam").unwrap(),

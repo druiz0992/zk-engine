@@ -1,6 +1,6 @@
 use crate::adapters::rest_api::structs::TransferInput;
+use crate::ports::prover::Prover;
 use crate::ports::storage::{KeyDB, PreimageDB, TreeDB};
-use crate::ports::{notifier::Notifier, prover::Prover};
 use crate::services::user_keys::UserKeys;
 use crate::utils;
 use ark_ec::{
@@ -10,6 +10,7 @@ use ark_ec::{
 };
 use ark_ff::PrimeField;
 use common::crypto::poseidon::constants::PoseidonParams;
+use common::ports::notifier::Notifier;
 use common::structs::Transaction;
 use jf_plonk::nightfall::ipa_structs::ProvingKey;
 use jf_primitives::rescue::RescueParameter;
