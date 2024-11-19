@@ -1,29 +1,33 @@
-use crate::helpers::spawn_app;
+use crate::helpers::mint::MintParams;
+use crate::helpers::{self, spawn_app};
 use plonk_prover::client::circuits::mint::MintCircuit;
 
 #[tokio::test]
 async fn mint_endpoint_returns_200_with_correct_input() {
     let mut app = spawn_app().await;
+    let mint_params = &[MintParams::default()];
 
     app.add_client_circuits(vec![Box::new(MintCircuit::<1>::new())])
         .await
         .expect("Error adding new circuit");
 
-    app.enable_sequencer().await;
-    let mint_response = app.post_mint_request(vec![["1", "1"]]).await;
+    let mint_response = app.post_mint_request(mint_params).await;
     let sequencer_requests = app.get_sequencer_requests().await;
 
     assert!(mint_response.status().is_success());
-    assert_eq!(
-        sequencer_requests, 1,
+    assert!(
+        sequencer_requests.is_ok(),
         "Sequencer did not receive the transaction"
     );
+
+    app.check_mint_preimages(mint_params).await;
 }
 
 #[tokio::test]
 async fn mint_endpoint_returns_500_if_circuit_not_registered() {
-    let app = spawn_app().await;
-    let mint_response = app.post_mint_request(vec![["1", "1"]]).await;
+    let mut app = spawn_app().await;
+    let mint_params = &[MintParams::default()];
+    let mint_response = app.post_mint_request(mint_params).await;
 
     assert_eq!(
         mint_response.status(),
@@ -35,8 +39,9 @@ async fn mint_endpoint_returns_500_if_circuit_not_registered() {
 
 #[tokio::test]
 async fn mint_endpoint_returns_422_with_incorrect_input() {
-    let app = spawn_app().await;
-    let mint_response = app.post_mint_request(vec![["-1", "1"]]).await;
+    let mut app = spawn_app().await;
+    let mint_params = &[MintParams::new("-1", "1")];
+    let mint_response = app.post_mint_request(mint_params).await;
 
     assert_eq!(
         mint_response.status(),
@@ -72,25 +77,27 @@ async fn mint_endpoint_returns_200_with_4_transactions() {
     app.add_client_circuits(vec![Box::new(MintCircuit::<4>::new())])
         .await
         .expect("Error adding new circuit");
-    let mint_requests = vec![["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"]];
-    app.enable_sequencer().await;
 
-    let mint_response = app.post_mint_request(mint_requests).await;
+    let mint_params = &MintParams::new_vector(4);
+
+    let mint_response = app.post_mint_request(mint_params).await;
     let sequencer_requests = app.get_sequencer_requests().await;
 
     assert!(mint_response.status().is_success());
-    assert_eq!(
-        sequencer_requests, 1,
+    assert!(
+        sequencer_requests.is_ok(),
         "Sequencer did not receive the transaction"
     );
+
+    app.check_mint_preimages(mint_params).await;
 }
 
 #[tokio::test]
 async fn mint_endpoint_returns_500_with_4_transactions_if_circuit_unregistered() {
-    let app = spawn_app().await;
-    let mint_requests = vec![["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"]];
+    let mut app = spawn_app().await;
+    let mint_params = &MintParams::new_vector(4);
 
-    let mint_response = app.post_mint_request(mint_requests).await;
+    let mint_response = app.post_mint_request(mint_params).await;
 
     assert_eq!(
         mint_response.status(),
@@ -98,4 +105,42 @@ async fn mint_endpoint_returns_500_with_4_transactions_if_circuit_unregistered()
         "Expected a 500  Internal Server Error, but got {}",
         mint_response.status()
     );
+}
+
+#[tokio::test]
+#[ignore]
+async fn save_mints() {
+    let mut app = spawn_app().await;
+    let mint_params = vec![
+        MintParams::new("100", "1"),
+        MintParams::new("10", "1"),
+        MintParams::new("1000", "1"),
+        MintParams::new("2000", "1"),
+        MintParams::new("10000", "1"),
+    ];
+
+    app.add_client_circuits(vec![Box::new(MintCircuit::<1>::new())])
+        .await
+        .expect("Error adding new circuit");
+
+    for i in 0..mint_params.len() {
+        app.post_mint_request(&[mint_params[i].clone()]).await;
+        let value = &mint_params[i].value;
+        let filename = format!("./tests/data/mint_transaction_c1_v{}.dat", value);
+        let body = app.get_sequencer_requests_as_bytes().await.unwrap();
+        helpers::utils::save_to_file(&filename, &body).unwrap();
+    }
+
+    let preimages = app.get_preimages().await;
+
+    let a = preimages
+        .iter()
+        .map(|p| serde_json::to_string(p).unwrap())
+        .collect::<Vec<_>>();
+
+    for i in 0..mint_params.len() {
+        let value = &mint_params[i].value;
+        let filename = format!("./tests/data/mint_preimage_c1_v{}.dat", value);
+        helpers::utils::save_to_file(&filename, a[i].as_bytes()).unwrap();
+    }
 }

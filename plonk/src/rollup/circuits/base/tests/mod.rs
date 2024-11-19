@@ -31,22 +31,22 @@ use trees::tree::AppendTree;
 #[test]
 fn test_base_circuit() {
     test_base_rollup_helper::<8>(&[TransactionType::Mint, TransactionType::Mint]);
-    //test_base_rollup_helper::<8>(&[
-    //    TransactionType::Mint,
-    //    TransactionType::Mint,
-    //    TransactionType::Mint,
-    //    TransactionType::Mint,
-    //]);
+    test_base_rollup_helper::<8>(&[
+        TransactionType::Mint,
+        TransactionType::Mint,
+        TransactionType::Mint,
+        TransactionType::Mint,
+    ]);
 
     test_base_rollup_helper::<8>(&[TransactionType::Transfer, TransactionType::Transfer]);
-    //test_base_rollup_helper::<8>(&[
-    //TransactionType::Transfer,
-    //TransactionType::Transfer,
-    //TransactionType::Transfer,
-    //TransactionType::Transfer,
-    //]);
+    test_base_rollup_helper::<8>(&[
+        TransactionType::Transfer,
+        TransactionType::Transfer,
+        TransactionType::Transfer,
+        TransactionType::Transfer,
+    ]);
 
-    //test_base_rollup_helper::<8>(&[TransactionType::Mint, TransactionType::Transfer]);
+    test_base_rollup_helper::<8>(&[TransactionType::Mint, TransactionType::Transfer]);
     test_base_rollup_helper::<8>(&[
         TransactionType::Mint,
         TransactionType::Transfer,

@@ -19,7 +19,9 @@ use wiremock::MockServer;
 pub mod circuits;
 pub mod keys;
 pub mod mint;
+pub mod preimages;
 pub mod sequencer;
+pub mod utils;
 
 pub struct TestApp {
     pub address: String,
@@ -82,6 +84,7 @@ pub async fn spawn_app() -> TestApp {
         user_keys: None,
         sequencer_server,
     };
+    test_app.enable_sequencer().await;
 
     test_app
 }

@@ -21,6 +21,15 @@ impl UserKeysRequestBody {
     }
 }
 
+impl Default for UserKeysRequestBody {
+    fn default() -> Self {
+        let test_mnemonic = "pact gun essay three dash seat page silent slogan hole huge harvest awesome fault cute alter boss thank click menu service quarter gaze salmon";
+        Self {
+            mnemonic: test_mnemonic.to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct UserKeysResponseBody {
     pub root_key: String,
@@ -41,8 +50,10 @@ impl TestApp {
             .expect("Failed execute POST /keys request")
     }
 
-    pub async fn new_user_keys(&self) -> Result<UserKeysResponseBody, anyhow::Error> {
-        let mnemonic_request = UserKeysRequestBody::new(MNEMONIC_COUNT, Language::English);
+    async fn build_user_keys(
+        &self,
+        mnemonic_request: UserKeysRequestBody,
+    ) -> Result<UserKeysResponseBody, anyhow::Error> {
         let body = json!(mnemonic_request);
         let response = self.post_keys_request(body).await;
 
@@ -64,6 +75,16 @@ impl TestApp {
         }
 
         Ok(user_keys)
+    }
+
+    pub async fn default_user_keys(&self) -> Result<UserKeysResponseBody, anyhow::Error> {
+        let mnemonic_request = UserKeysRequestBody::default();
+        self.build_user_keys(mnemonic_request).await
+    }
+
+    pub async fn new_user_keys(&self) -> Result<UserKeysResponseBody, anyhow::Error> {
+        let mnemonic_request = UserKeysRequestBody::new(MNEMONIC_COUNT, Language::English);
+        self.build_user_keys(mnemonic_request).await
     }
 
     pub fn set_user_keys(&mut self, user_keys: UserKeysResponseBody) {
