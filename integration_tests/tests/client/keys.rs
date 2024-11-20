@@ -1,6 +1,6 @@
-use super::helpers::keys::{UserKeysRequestBody, UserKeysResponseBody};
-use crate::helpers::spawn_app;
 use bip39::Language;
+use integration_tests::client::keys::{UserKeysRequestBody, UserKeysResponseBody};
+use integration_tests::client::test_app::spawn_app;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use random_word::Lang;

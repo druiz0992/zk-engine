@@ -1,5 +1,6 @@
-use crate::helpers::mint::MintParams;
-use crate::helpers::{self, spawn_app};
+use integration_tests::client::mint::MintParams;
+use integration_tests::client::test_app::spawn_app;
+use integration_tests::common;
 use plonk_prover::client::circuits::mint::MintCircuit;
 
 #[tokio::test]
@@ -128,7 +129,7 @@ async fn save_mints() {
         let value = &mint_params[i].value;
         let filename = format!("./tests/data/mint_transaction_c1_v{}.dat", value);
         let body = app.get_sequencer_requests_as_bytes().await.unwrap();
-        helpers::utils::save_to_file(&filename, &body).unwrap();
+        common::utils::save_to_file(&filename, &body).unwrap();
     }
 
     let preimages = app.get_preimages().await;
@@ -141,6 +142,6 @@ async fn save_mints() {
     for i in 0..mint_params.len() {
         let value = &mint_params[i].value;
         let filename = format!("./tests/data/mint_preimage_c1_v{}.dat", value);
-        helpers::utils::save_to_file(&filename, a[i].as_bytes()).unwrap();
+        common::utils::save_to_file(&filename, a[i].as_bytes()).unwrap();
     }
 }

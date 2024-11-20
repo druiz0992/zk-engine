@@ -1,4 +1,4 @@
-use super::TestApp;
+use super::test_app::ClientTestApp;
 use anyhow::Result;
 use common::structs::Transaction;
 use curves::vesta::VestaConfig;
@@ -7,7 +7,7 @@ use std::io::Read;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-impl TestApp {
+impl ClientTestApp {
     pub async fn enable_sequencer(&self) {
         Mock::given(path("/transactions"))
             .and(method("POST"))

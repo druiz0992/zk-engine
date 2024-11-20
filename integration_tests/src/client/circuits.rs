@@ -1,12 +1,12 @@
 use curves::{pallas::PallasConfig, vesta::VestaConfig};
 use jf_plonk::nightfall::ipa_structs::ProvingKey;
 
-use super::TestApp;
+use super::test_app::ClientTestApp;
 use anyhow::anyhow;
 use client::ports::prover::Prover;
 use plonk_prover::client::{circuits::structs::CircuitId, ClientPlonkCircuit};
 
-impl TestApp {
+impl ClientTestApp {
     pub async fn add_client_circuits(
         &mut self,
         circuits: Vec<Box<dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>>>,

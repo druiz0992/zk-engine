@@ -1,4 +1,4 @@
-use super::TestApp;
+use super::test_app::ClientTestApp;
 use anyhow::anyhow;
 use bip39::{Language, Mnemonic};
 use itertools::Itertools;
@@ -40,7 +40,7 @@ pub struct UserKeysResponseBody {
 
 const MNEMONIC_COUNT: usize = 24;
 
-impl TestApp {
+impl ClientTestApp {
     pub async fn post_keys_request(&self, body: serde_json::Value) -> Response {
         self.api_client
             .post(&format!("{}/keys", self.address))

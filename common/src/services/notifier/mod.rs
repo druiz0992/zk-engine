@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use crate::structs::Block;
 use crate::structs::Transaction;
-use crate::{configuration::ClientSettings, ports::notifier::Notifier};
+use crate::{configuration::ApplicationSettings, ports::notifier::Notifier};
 use ark_ec::{pairing::Pairing, short_weierstrass::SWCurveConfig, CurveGroup};
 use ark_ff::Field;
 use async_trait::async_trait;
@@ -14,7 +14,7 @@ pub struct HttpNotifier<V> {
 }
 
 impl<V> HttpNotifier<V> {
-    pub fn new(settings: ClientSettings) -> Self {
+    pub fn new(settings: ApplicationSettings) -> Self {
         let _timeout = settings.timeout();
         Self {
             base_url: settings.base_url,

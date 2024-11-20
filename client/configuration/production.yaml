@@ -1,4 +1,4 @@
-application:
+client:
   host: 0.0.0.0
 sequencer:
   base_url: "localhost"

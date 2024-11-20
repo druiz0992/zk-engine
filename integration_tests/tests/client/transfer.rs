@@ -1,4 +1,4 @@
-use crate::helpers::{mint::MintParams, spawn_app};
+use integration_tests::client::{mint::MintParams, test_app::spawn_app};
 //use client::ports::storage::PreimageDB;
 use plonk_prover::client::circuits::mint::MintCircuit;
 

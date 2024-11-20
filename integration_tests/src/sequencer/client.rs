@@ -1,8 +1,8 @@
-use super::TestApp;
+use super::test_app::SequencerTestApp;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-impl TestApp {
+impl SequencerTestApp {
     pub async fn enable_client(&self) {
         Mock::given(path("/sequence"))
             .and(method("POST"))

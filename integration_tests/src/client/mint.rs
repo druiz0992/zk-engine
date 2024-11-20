@@ -1,4 +1,4 @@
-use super::TestApp;
+use super::test_app::ClientTestApp;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use reqwest::Response;
@@ -60,7 +60,7 @@ impl MintRequestBody {
     }
 }
 
-impl TestApp {
+impl ClientTestApp {
     pub async fn post_mint_request(&mut self, mint_values: &[MintParams]) -> Response {
         let user_keys = if let Some(keys) = &self.user_keys {
             keys

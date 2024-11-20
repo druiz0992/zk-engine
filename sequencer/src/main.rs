@@ -30,7 +30,7 @@ fn main() {
     log::trace!("Initializing");
     let mut db: InMemStorage = InMemStorage::new();
     let mut prover = InMemProver::<VestaConfig, VestaConfig, PallasConfig, PallasConfig>::new();
-    let notifier = HttpNotifier::new(configuration.sequencer);
+    let notifier = HttpNotifier::new(configuration.client);
 
     let client_circuit_info: Vec<
         Box<dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>>,
@@ -56,7 +56,7 @@ fn main() {
             thread_safe_db,
             thread_safe_prover,
             thread_safe_notifier,
-            configuration.application,
+            configuration.sequencer,
         )
         .await
         .unwrap();

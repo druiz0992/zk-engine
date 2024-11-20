@@ -1,5 +1,5 @@
 [workspace]
-members = ["client", "plonk", "trees", "common","sequencer", "macros"]
+members = ["client", "plonk", "trees", "common","sequencer", "macros", "integration_tests"]
 resolver = "2"
 
 

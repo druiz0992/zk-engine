@@ -1,6 +1,6 @@
 use curves::{pallas::PallasConfig, vesta::VestaConfig};
 
-use super::TestApp;
+use super::test_app::SequencerTestApp;
 use common::crypto::poseidon::Poseidon;
 use jf_plonk::nightfall::ipa_structs::VerifyingKey;
 use jf_plonk::nightfall::PlonkIpaSnark;
@@ -15,7 +15,7 @@ use sequencer::ports::prover::SequencerProver;
 use sequencer::ports::storage::GlobalStateStorage;
 use trees::{membership_tree::Tree, tree::AppendTree};
 
-impl TestApp {
+impl SequencerTestApp {
     pub async fn add_client_circuits(
         &mut self,
         circuits: Vec<Box<dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>>>,
