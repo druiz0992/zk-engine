@@ -1,5 +1,6 @@
 use common::configuration;
 use common::services::notifier::HttpNotifier;
+use common::structs::Block;
 use common::telemetry;
 use curves::{pallas::PallasConfig, vesta::VestaConfig};
 
@@ -17,6 +18,7 @@ pub struct SequencerTestApp {
     pub port: u16,
     pub prover: Arc<Mutex<InMemProver<VestaConfig, VestaConfig, PallasConfig, PallasConfig>>>,
     pub db: Arc<Mutex<InMemStorage>>,
+    pub notifier: Arc<Mutex<HttpNotifier<Block<curves::vesta::Fr>>>>,
     pub api_client: reqwest::Client,
     pub client_server: MockServer,
 }
@@ -72,9 +74,11 @@ pub async fn spawn_sequencer_app() -> SequencerTestApp {
         port: application_port,
         prover: thread_safe_prover.clone(),
         db: thread_safe_db.clone(),
+        notifier: thread_safe_notifier.clone(),
         api_client: reqwest::Client::new(),
         client_server,
     };
+    println!("Sequencer listening at {}", test_app.address);
 
     test_app
 }

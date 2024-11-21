@@ -4,6 +4,7 @@ use client::services::{
 };
 use common::configuration;
 use common::services::notifier::HttpNotifier;
+use common::structs::Transaction;
 use common::telemetry;
 use curves::{
     pallas::{Fq, PallasConfig},
@@ -21,6 +22,7 @@ pub struct ClientTestApp {
     pub port: u16,
     pub prover: Arc<Mutex<InMemProver<PallasConfig, VestaConfig, VestaConfig>>>,
     pub db: Arc<Mutex<InMemStorage<PallasConfig, Fq>>>,
+    pub notifier: Arc<Mutex<HttpNotifier<Transaction<VestaConfig>>>>,
     pub api_client: reqwest::Client,
     pub user_keys: Option<UserKeysResponseBody>,
     pub sequencer_server: MockServer,
@@ -80,10 +82,12 @@ pub async fn spawn_client_app() -> ClientTestApp {
         port: application_port,
         prover: thread_safe_prover.clone(),
         db: thread_safe_db.clone(),
+        notifier: thread_safe_notifier.clone(),
         api_client: reqwest::Client::new(),
         user_keys: None,
         sequencer_server,
     };
+    println!("Client listening at {}", test_app.address);
 
     test_app
 }

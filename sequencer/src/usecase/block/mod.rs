@@ -15,6 +15,7 @@ use plonk_prover::client::circuits::{mint, transfer};
 use plonk_prover::primitives::circuits::kem_dem::KemDemParams;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tracing_log::log;
 use trees::{IndexedMerkleTree, Tree};
 
 mod build;
@@ -37,7 +38,7 @@ pub async fn build_block_process<
     Storage: TransactionStorage<V>
         + GlobalStateStorage<
             CommitmentTree = Tree<V::BaseField, 8>,
-            VkTree = Tree<V::BaseField, 2>,
+            VkTree = Tree<V::BaseField, 8>,
             NullifierTree = IndexedMerkleTree<V::BaseField, 32>,
         >,
     Comms: Notifier<Info = Block<V::ScalarField>>,
@@ -76,43 +77,35 @@ where
         ScalarField = <V as Pairing>::ScalarField,
     >,
 {
+    log::debug!("Get the mofo vks");
     let prover = prover.lock().await;
-    ark_std::println!("Get the mofo vks");
-    let vks = [
-        mint::MintCircuit::<1>::new()
-            .as_circuit::<P, V, _>()
-            .get_circuit_id(),
-        transfer::TransferCircuit::<2, 2, 8>::new()
-            .as_circuit::<P, V, _>()
-            .get_circuit_id(),
-    ]
-    .into_iter()
-    .map(|x| prover.get_vk(x))
-    .collect::<Option<Vec<_>>>()
-    .ok_or(BuildBlockError::VksNotFound)?;
     let proving_keys = prover.get_pks();
-
     let commit_keys = prover
         .get_cks()
         .ok_or(BuildBlockError::CommitKeysNotFound)?;
-    ark_std::println!("Preparing block");
 
-    let state_db = db.lock().await;
-    let transactions = state_db.get_all_transactions();
-    let nullifiers = transactions
+    log::debug!("Preparing block");
+    let db_locked = db.lock().await;
+    let transactions = db_locked.get_all_transactions();
+    let vk_info = transactions
         .iter()
-        .flat_map(|tx| tx.nullifiers.iter().map(|n| n.0))
-        .collect::<Vec<_>>();
+        .map(|t| {
+            let circuit_type = t.circuit_type.clone();
+            prover
+                .get_vk(circuit_type)
+                .ok_or(BuildBlockError::VksNotFound)
+        })
+        .collect::<Result<Vec<_>, BuildBlockError>>()?;
 
-    let (inputs, commitments, commitments_root) =
-        inputs::build_client_inputs::<P, V, SW, VSW, Storage>(db.clone(), transactions, vks)
-            .await?;
+    let (inputs, commitments, nullifiers, g_polys, commitments_root) =
+        inputs::build_client_inputs::<P, V, SW, VSW, Storage>(db_locked, vk_info).await?;
 
     let block = build::build_block::<P, V, SW, VSW, Storage, Proof>(
         db.clone(),
         inputs,
         nullifiers,
         commitments,
+        g_polys,
         commitments_root,
         commit_keys,
         proving_keys,

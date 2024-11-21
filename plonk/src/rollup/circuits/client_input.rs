@@ -9,6 +9,7 @@ use trees::NonMembershipTree;
 use trees::{non_membership_tree::IndexedNode, IndexedMerkleTree};
 
 use crate::client::circuits::mint::constants::{CIPHERTEXT_LEN, EPHEMERAL_KEY_LEN};
+use crate::client::structs::ClientPubInputs;
 
 /*
 nullifiers: [E::ScalarField; N], // List of nullifiers in transaction
@@ -23,12 +24,13 @@ vk_paths: [E::BaseField; VK_PATHS_LEN],
 */
 
 const H: usize = 32;
+const D: usize = 8;
 const VK_PATHS_LEN: usize = 8;
 // Fixed constants - I: Number of Input proofs (assume 2)
 // C: number of commitments (1) , N: number of nullifiers(1)
 // if swap_field, C = 2, N = 1
 #[derive(Debug, Clone)]
-pub struct ClientInput<E, const D: usize>
+pub struct ClientInput<E>
 where
     E: Pairing,
     <<E as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = E::BaseField>,
@@ -50,7 +52,7 @@ where
     pub ciphertext: [E::ScalarField; CIPHERTEXT_LEN],
 }
 
-impl<E, const D: usize> ClientInput<E, D>
+impl<E> ClientInput<E>
 where
     E: Pairing,
     <<E as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = E::BaseField>,
@@ -175,17 +177,27 @@ where
 pub fn update_nullifier_tree<E, const H: usize>(
     nullifier_tree: &mut IndexedMerkleTree<E::BaseField, H>,
     nullifiers: &[E::ScalarField],
-) -> LowNullifierInfo<E, H>
+) -> Option<LowNullifierInfo<E, H>>
 where
     E: Pairing,
     <<E as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = E::BaseField>,
     <E as Pairing>::BaseField: PrimeField + PoseidonParams<Field = E::BaseField>,
 {
-    let N = nullifiers.len();
+    /*
     let lifted_nullifiers = nullifiers
         .iter()
         .map(field_switching::<E::ScalarField, E::BaseField>)
         .collect::<Vec<_>>();
+    */
+    let mut lifted_nullifiers = Vec::new();
+
+    for n in nullifiers {
+        if *n == E::ScalarField::from(0u32) {
+            return None;
+        }
+        lifted_nullifiers.push(field_switching::<E::ScalarField, E::BaseField>(n));
+    }
+    let N = nullifiers.len();
     let mut low_nullifiers: Vec<IndexedNode<E::BaseField>> =
         vec![IndexedNode::new(E::BaseField::from(0u32), 0, E::BaseField::from(0u32)); N];
     let mut low_indices: Vec<E::BaseField> = vec![E::BaseField::from(0u32); N];
@@ -201,9 +213,9 @@ where
         low_indices[j] = E::BaseField::from(low_null.tree_index as u32);
         nullifier_tree.update_low_nullifier(*null);
     }
-    LowNullifierInfo {
+    Some(LowNullifierInfo {
         nullifiers: low_nullifiers,
         indices: low_indices,
         paths: low_paths,
-    }
+    })
 }

@@ -12,11 +12,11 @@ use plonk_prover::client::{
     ClientPlonkCircuit,
 };
 use plonk_prover::primitives::circuits::kem_dem::KemDemParams;
-use zk_macros::client_circuit;
+use zk_macros::client_bounds;
 
 const DEPTH: usize = 8;
 
-#[client_circuit]
+#[client_bounds]
 pub fn select_client_circuits_sequencer<P, V, VSW>() -> Vec<Box<dyn ClientPlonkCircuit<P, V, VSW>>>
 {
     let circuit_info: Vec<Box<dyn ClientPlonkCircuit<P, V, VSW>>> = vec![

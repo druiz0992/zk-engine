@@ -1,5 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use curves::{pallas::PallasConfig, vesta::VestaConfig};
+use plonk_prover::client::circuits::transfer::TransferCircuit;
+use plonk_prover::client::ClientPlonkCircuit;
 use plonk_prover::utils::bench;
 use plonk_prover::utils::bench::base::TransactionType;
 use plonk_prover::{
@@ -9,8 +11,11 @@ use plonk_prover::{
 
 pub fn benchmark_bounce_merge<const D: usize>(c: &mut Criterion) {
     // Below taken from bounce_merge_test_helper
-    let transaction_sequence = [TransactionType::Transfer, TransactionType::Transfer];
-    let stored_proof_merge = merge_circuit_helper_generator::<D>(&transaction_sequence);
+    let client_circuits: [Box<dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>>; 2] = [
+        Box::new(TransferCircuit::<1, 1, 8>::new()),
+        Box::new(TransferCircuit::<2, 2, 8>::new()),
+    ];
+    let stored_proof_merge = merge_circuit_helper_generator::<D>(&client_circuits);
     let (global_public_inputs, subtree_public_inputs, passthrough_instance, bounce_accs) =
         stored_proof_merge.pub_inputs;
     let (bounce_circuit, _) = bounce_merge_circuit::<PallasConfig, VestaConfig>(
@@ -36,7 +41,7 @@ pub fn benchmark_bounce_merge<const D: usize>(c: &mut Criterion) {
     c.bench_function(
         &format!(
             "Bounce Merge {:?}- Output: Proof Generation",
-            transaction_sequence
+            client_circuits,
         ),
         |b| {
             b.iter(|| {

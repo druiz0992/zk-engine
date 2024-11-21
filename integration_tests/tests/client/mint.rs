@@ -8,7 +8,7 @@ async fn mint_endpoint_returns_200_with_correct_input() {
     let mut app = spawn_app().await;
     let mint_params = &[MintParams::default()];
 
-    app.add_client_circuits(vec![Box::new(MintCircuit::<1>::new())])
+    app.add_client_circuits(&[Box::new(MintCircuit::<1>::new())])
         .await
         .expect("Error adding new circuit");
 
@@ -75,7 +75,7 @@ async fn mint_endpoint_returns_415_with_empty_input() {
 async fn mint_endpoint_returns_200_with_4_transactions() {
     let mut app = spawn_app().await;
 
-    app.add_client_circuits(vec![Box::new(MintCircuit::<4>::new())])
+    app.add_client_circuits(&[Box::new(MintCircuit::<4>::new())])
         .await
         .expect("Error adding new circuit");
 
@@ -120,7 +120,7 @@ async fn save_mints() {
         MintParams::new("10000", "1"),
     ];
 
-    app.add_client_circuits(vec![Box::new(MintCircuit::<1>::new())])
+    app.add_client_circuits(&[Box::new(MintCircuit::<1>::new())])
         .await
         .expect("Error adding new circuit");
 
@@ -134,7 +134,7 @@ async fn save_mints() {
 
     let preimages = app.get_preimages().await;
 
-    let a = preimages
+    let preimages = preimages
         .iter()
         .map(|p| serde_json::to_string(p).unwrap())
         .collect::<Vec<_>>();
@@ -142,6 +142,6 @@ async fn save_mints() {
     for i in 0..mint_params.len() {
         let value = &mint_params[i].value;
         let filename = format!("./tests/data/mint_preimage_c1_v{}.dat", value);
-        common::utils::save_to_file(&filename, a[i].as_bytes()).unwrap();
+        common::utils::save_to_file(&filename, preimages[i].as_bytes()).unwrap();
     }
 }

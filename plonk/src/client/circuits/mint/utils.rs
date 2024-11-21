@@ -18,10 +18,10 @@ use jf_relation::Circuit;
 use jf_relation::{errors::CircuitError, gadgets::ecc::SWToTEConParam};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-use zk_macros::client_circuit;
+use zk_macros::client_bounds;
 
 use super::check_inputs;
-#[client_circuit]
+#[client_bounds]
 pub fn build_random_inputs<P, V, VSW, const C: usize>(
     token_id: Option<V::ScalarField>,
 ) -> Result<CircuitInputs<P>, CircuitError> {
@@ -54,7 +54,7 @@ pub fn build_random_inputs<P, V, VSW, const C: usize>(
     Ok(circuit_inputs)
 }
 
-#[client_circuit]
+#[client_bounds]
 pub fn build_inputs<P, V, VSW, const C: usize>(
     values: Vec<V::ScalarField>,
     ids: Vec<V::ScalarField>,
@@ -71,24 +71,4 @@ pub fn build_inputs<P, V, VSW, const C: usize>(
     check_inputs::<P, V, C>(&circuit_inputs)?;
 
     Ok(circuit_inputs)
-}
-
-#[client_circuit]
-pub fn mint_with_random_inputs<P, V, VSW, const C: usize>(
-    token_id: Option<V::ScalarField>,
-) -> Result<PlonkCircuitParams<<P as CurveConfig>::BaseField>, CircuitError> {
-    let inputs = build_random_inputs::<P, V, _, C>(token_id)?;
-    let mint_circuit = MintCircuit::<C>::new().as_circuit::<P, V, _>();
-
-    let circuit = mint_circuit.to_plonk_circuit(inputs)?;
-
-    let public_inputs = ClientPubInputs::new(
-        circuit.public_input()?,
-        mint_circuit.get_commitment_and_nullifier_count(),
-    )
-    .map_err(|e| CircuitError::ParameterError(e.to_string()))?;
-    Ok(PlonkCircuitParams {
-        circuit,
-        public_inputs,
-    })
 }

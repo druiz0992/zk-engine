@@ -1,4 +1,6 @@
+use ark_ec::{pairing::Pairing, short_weierstrass::SWCurveConfig, CurveGroup};
 use ark_ff::Field;
+use common::structs::Transaction;
 
 pub struct ClientPubInputs<F: Field> {
     pub swap_field: bool,

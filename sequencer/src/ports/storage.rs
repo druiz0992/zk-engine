@@ -25,7 +25,7 @@ pub trait BlockStorage<F: PrimeField> {
 
 pub trait GlobalStateStorage {
     type CommitmentTree: MembershipTree<8> + AppendTree<8>;
-    type VkTree: MembershipTree<2> + AppendTree<2>;
+    type VkTree: MembershipTree<8> + AppendTree<8>;
     type NullifierTree: NonMembershipTree<32> + AppendTree<32>;
     fn get_global_commitment_tree(&self) -> Self::CommitmentTree;
     fn get_global_nullifier_tree(&self) -> Self::NullifierTree;

@@ -18,16 +18,17 @@ use trees::{membership_tree::Tree, tree::AppendTree};
 impl SequencerTestApp {
     pub async fn add_client_circuits(
         &mut self,
-        circuits: Vec<Box<dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>>>,
+        circuits: &[Box<dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>>],
     ) -> anyhow::Result<()> {
         let mut prover = self.prover.lock().await;
         let mut db = self.db.lock().await;
 
         let vks = circuits
             .into_iter()
-            .map(|c| {
+            .enumerate()
+            .map(|(idx, c)| {
                 let keys = c.generate_keys().unwrap();
-                prover.store_vk(c.get_circuit_id(), keys.1.clone());
+                prover.store_vk(c.get_circuit_type(), (keys.1.clone(), idx));
                 keys.1
             })
             .collect::<Vec<VerifyingKey<_>>>();
@@ -61,23 +62,23 @@ impl SequencerTestApp {
             })
             .collect::<Vec<_>>();
 
-        let vk_tree = Tree::<curves::vesta::Fq, 2>::from_leaves(vk_hashes);
+        let vk_tree = Tree::<curves::vesta::Fq, 8>::from_leaves(vk_hashes);
         db.store_vk_tree(vk_tree);
 
         let mut rng = ChaChaRng::from_entropy();
         let vesta_srs = <PlonkIpaSnark<VestaConfig> as UniversalSNARK<VestaConfig>>::universal_setup_for_testing(
-            2usize.pow(20),
+            2usize.pow(21),
             &mut rng,
         )
         .unwrap();
-        let (vesta_commit_key, _) = vesta_srs.trim(2usize.pow(20)).unwrap();
+        let (vesta_commit_key, _) = vesta_srs.trim(2usize.pow(21)).unwrap();
 
         let pallas_srs = <PlonkIpaSnark<PallasConfig> as UniversalSNARK<PallasConfig>>::universal_setup_for_testing(
-            2usize.pow(20),
+            2usize.pow(21),
             &mut rng,
         )
         .unwrap();
-        let (pallas_commit_key, _) = pallas_srs.trim(2usize.pow(20)).unwrap();
+        let (pallas_commit_key, _) = pallas_srs.trim(2usize.pow(21)).unwrap();
         let rollup_commit_keys = RollupCommitKeys {
             pallas_commit_key,
             vesta_commit_key,

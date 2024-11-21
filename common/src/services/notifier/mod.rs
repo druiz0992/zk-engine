@@ -41,7 +41,7 @@ where
             .json(&transaction)
             .send()
             .await;
-        ark_std::println!("Got response {:?}", res);
+        ark_std::println!("Got response {:?} from {}", res, base_url);
         Ok(())
     }
 }

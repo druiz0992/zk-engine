@@ -13,13 +13,4 @@ pub mod structs {
         pub ciphertext: Vec<V::ScalarField>,
         pub commitment_tree_root: V::ScalarField,
     }
-
-    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-    pub struct CircuitId(String);
-
-    impl CircuitId {
-        pub const fn new(id: String) -> Self {
-            CircuitId(id)
-        }
-    }
 }

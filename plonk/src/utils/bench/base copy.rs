@@ -1,8 +1,6 @@
 use super::generate_rollup_circuit_artifacts_and_verify;
 use super::tree;
 use crate::client::circuits::{mint, transfer};
-use crate::client::structs::ClientPubInputs;
-use crate::client::ClientPlonkCircuit;
 use crate::client::PlonkCircuitParams;
 use crate::primitives::circuits::kem_dem::KemDemParams;
 use crate::rollup::circuits::base;
@@ -40,10 +38,10 @@ pub enum TransactionType {
 }
 
 pub fn base_circuit_helper_generator<const D: usize>(
-    client_circuits: &[Box<dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>>],
+    transaction_sequence: &[TransactionType],
 ) -> StoredProof<PallasConfig, VestaConfig> {
     let mut rng = ChaChaRng::from_entropy();
-    let mut client_inputs: Vec<ClientInput<VestaConfig>> = vec![];
+    let mut client_inputs = vec![];
     let mut global_comm_roots: Vec<Fr> = vec![];
     let mut nullifier_tree = IndexedMerkleTree::<Fr, 32>::new();
     let init_nullifier_root = nullifier_tree.root();
@@ -53,13 +51,14 @@ pub fn base_circuit_helper_generator<const D: usize>(
     let token_id = Some(Fq::rand(&mut rng));
 
     #[allow(clippy::needless_range_loop)]
-    for i in 0..client_circuits.len() {
+    for i in 0..transaction_sequence.len() {
         build_client_inputs(
             &mut client_inputs,
             &mut nullifier_tree,
             &mut global_comm_roots,
             &mut g_polys,
-            &client_circuits[i],
+            &transaction_sequence[i],
+            i,
             token_id,
         )
         .unwrap();
@@ -71,12 +70,11 @@ pub fn base_circuit_helper_generator<const D: usize>(
      */
 
     let zk_trees =
-        tree::tree_generator_from_client_inputs::<8>(&mut client_inputs, global_comm_roots)
-            .unwrap();
+        tree::tree_generator_from_client_inputs(&mut client_inputs, global_comm_roots).unwrap();
 
     let (vesta_commit_key, pallas_commit_key) = build_commit_keys().unwrap();
 
-    let (base_rollup_circuit, pi_star) = base::base_rollup_circuit::<VestaConfig, PallasConfig, 8>(
+    let (base_rollup_circuit, pi_star) = base::base_rollup_circuit::<VestaConfig, PallasConfig, D>(
         client_inputs,
         zk_trees.vk_tree.root(),
         // initial_nullifier_tree.root,
@@ -162,60 +160,166 @@ fn generate_client_circuit_artifacts_and_verify<P, V, VSW>(
     })
 }
 
-pub fn build_client_inputs(
-    client_inputs: &mut Vec<ClientInput<VestaConfig>>,
+fn generate_circuit_params<const D: usize>(
+    transaction_type_selector: TransactionType,
+    transaction_inputs_selector: usize,
+    token_id: Option<Fq>,
+) -> (PlonkCircuitParams<Fq>, usize, usize) {
+    match transaction_inputs_selector % 2 {
+        0 => {
+            const C: usize = 1;
+            const N: usize = 1;
+            let circuit_params = match transaction_type_selector {
+                TransactionType::Mint => {
+                    mint::utils::mint_with_random_inputs::<PallasConfig, VestaConfig, _, C>(
+                        token_id,
+                    )
+                    .unwrap()
+                }
+                TransactionType::Transfer => transfer::utils::transfer_with_random_inputs::<
+                    PallasConfig,
+                    VestaConfig,
+                    _,
+                    C,
+                    N,
+                    D,
+                >(token_id)
+                .unwrap(),
+            };
+            (circuit_params, C, N)
+        }
+        1 => {
+            const C: usize = 1;
+            const N: usize = 4;
+            let circuit_params = match transaction_type_selector {
+                TransactionType::Mint => {
+                    mint::utils::mint_with_random_inputs::<PallasConfig, VestaConfig, _, C>(
+                        token_id,
+                    )
+                    .unwrap()
+                }
+                TransactionType::Transfer => transfer::utils::transfer_with_random_inputs::<
+                    PallasConfig,
+                    VestaConfig,
+                    _,
+                    C,
+                    N,
+                    D,
+                >(token_id)
+                .unwrap(),
+            };
+            (circuit_params, C, N)
+        }
+        _ => unimplemented!(),
+    }
+}
+
+fn build_client_inputs_for_mint<const D: usize>(
+    client_inputs: &mut Vec<ClientInput<VestaConfig, D>>,
+    g_polys: &mut Vec<DensePolynomial<Fq>>,
+    transaction_inputs_selector: usize,
+    token_id: Option<Fq>,
+) -> Result<(), String> {
+    let (mint_circuit_params, mint_n_commitments, _mint_n_nullifiers) =
+        generate_circuit_params::<D>(TransactionType::Mint, transaction_inputs_selector, token_id);
+    let mint_artifacts = generate_client_circuit_artifacts_and_verify::<
+        PallasConfig,
+        VestaConfig,
+        _,
+    >(&mint_circuit_params.circuit, true)?;
+
+    let mut client_input = ClientInput::<VestaConfig, D>::new(
+        mint_artifacts.proof,
+        mint_artifacts.vk.clone(),
+        mint_n_commitments,
+        1,
+    );
+    let public_inputs = mint_circuit_params.public_inputs;
+
+    client_input.set_commitments(&public_inputs.commitments);
+    client_inputs.push(client_input);
+    g_polys.push(mint_artifacts.g_poly);
+
+    Ok(())
+}
+
+pub(crate) fn build_client_inputs_for_transfer<const D: usize>(
+    client_inputs: &mut Vec<ClientInput<VestaConfig, D>>,
     nullifier_tree: &mut IndexedMerkleTree<Fr, 32>,
     global_comm_roots: &mut Vec<Fr>,
     g_polys: &mut Vec<DensePolynomial<Fq>>,
-    client_circuit: &Box<dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>>,
+    transaction_inputs_selector: usize,
     token_id: Option<Fq>,
 ) -> Result<(), String> {
-    let (c, n) = client_circuit.get_commitment_and_nullifier_count();
-    let inputs = client_circuit
-        .generate_random_inputs(token_id)
-        .map_err(|e| e.to_string())?;
-    let plonk_circuit = client_circuit
-        .to_plonk_circuit(inputs)
-        .map_err(|e| e.to_string())?;
-    let public_inputs = ClientPubInputs::new(
-        plonk_circuit.public_input().map_err(|e| e.to_string())?,
-        (c, n),
-    )
-    .map_err(|e| e.to_string())?;
-    let artifacts = generate_client_circuit_artifacts_and_verify::<PallasConfig, VestaConfig, _>(
-        &plonk_circuit,
-        true,
-    )?;
+    let (transfer_circuit_params, n_commitments, n_nullifiers) = generate_circuit_params::<D>(
+        TransactionType::Transfer,
+        transaction_inputs_selector,
+        token_id,
+    );
+    let transfer_artifacts = generate_client_circuit_artifacts_and_verify::<
+        PallasConfig,
+        VestaConfig,
+        _,
+    >(&transfer_circuit_params.circuit, true)?;
+
+    let mut client_input = ClientInput::<VestaConfig, D>::new(
+        transfer_artifacts.proof,
+        transfer_artifacts.vk.clone(),
+        n_commitments,
+        n_nullifiers,
+    );
+    let public_inputs = transfer_circuit_params.public_inputs;
+
     let low_nullifier_info = client_input::update_nullifier_tree::<VestaConfig, 32>(
         nullifier_tree,
         &public_inputs.nullifiers,
     );
 
-    let client_input = client_circuit.generate_sequencer_inputs(
-        artifacts.proof,
-        artifacts.vk,
-        &public_inputs,
-        &low_nullifier_info,
-    );
-    dbg!(public_inputs.commitment_root[0]);
-    // TODO: This is only for transfers. Check if OK
-    if low_nullifier_info.is_some() {
-        global_comm_roots.push(field_switching(&public_inputs.commitment_root[0]));
-        //TODO: this is principle is only fot transfers
-    }
-    /*
+    client_input
+        .set_nullifiers(&public_inputs.nullifiers)
+        .set_commitments(&public_inputs.commitments)
+        .set_commitment_tree_root(&public_inputs.commitment_root)
+        .set_low_nullifier_info(&low_nullifier_info)
+        .set_eph_pub_key(
+            client_input::to_eph_key_array::<VestaConfig>(public_inputs.ephemeral_public_key)
+                .unwrap(),
+        )
+        .set_ciphertext(
+            client_input::to_ciphertext_array::<VestaConfig>(public_inputs.ciphertexts).unwrap(),
+        );
 
-    dbg!(
-        "111",
-        nullifier_tree,
-        &low_nullifier_info //public_inputs.commitment_root[0]
-    );
-    */
-
-    g_polys.push(artifacts.g_poly);
+    g_polys.push(transfer_artifacts.g_poly);
     client_inputs.push(client_input);
+    global_comm_roots.push(field_switching(&public_inputs.commitment_root[0]));
 
     Ok(())
+}
+
+pub fn build_client_inputs<const D: usize>(
+    client_inputs: &mut Vec<ClientInput<VestaConfig, D>>,
+    nullifier_tree: &mut IndexedMerkleTree<Fr, 32>,
+    global_comm_roots: &mut Vec<Fr>,
+    g_polys: &mut Vec<DensePolynomial<Fq>>,
+    transaction_type_selector: &TransactionType,
+    transaction_inputs_selector: usize,
+    token_id: Option<Fq>,
+) -> Result<(), String> {
+    match transaction_type_selector {
+        TransactionType::Mint => build_client_inputs_for_mint(
+            client_inputs,
+            g_polys,
+            transaction_inputs_selector,
+            token_id,
+        ),
+        TransactionType::Transfer => build_client_inputs_for_transfer(
+            client_inputs,
+            nullifier_tree,
+            global_comm_roots,
+            g_polys,
+            transaction_inputs_selector,
+            token_id,
+        ),
+    }
 }
 
 pub fn build_commit_keys() -> Result<(CommitKey<VestaConfig>, CommitKey<PallasConfig>), String> {

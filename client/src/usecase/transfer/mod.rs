@@ -20,7 +20,7 @@ use plonk_prover::client::ClientPlonkCircuit;
 use plonk_prover::primitives::circuits::kem_dem::KemDemParams;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use zk_macros::client_circuit;
+use zk_macros::client_bounds;
 
 mod inputs;
 pub mod transfer_tokens;
@@ -29,7 +29,7 @@ use transfer_tokens::*;
 
 use inputs::*;
 
-#[client_circuit]
+#[client_bounds]
 pub async fn transfer_process<
     P,
     V,
@@ -56,7 +56,7 @@ pub async fn transfer_process<
     Ok(transaction)
 }
 
-#[client_circuit]
+#[client_bounds]
 async fn get_circuit_and_pk<P, V, VSW, Proof: Prover<P, V, VSW>>(
     prover: Arc<Mutex<Proof>>,
     transfer_details: &CircuitInputs<P>,
@@ -67,16 +67,16 @@ async fn get_circuit_and_pk<P, V, VSW, Proof: Prover<P, V, VSW>>(
         transfer_details.old_token_values.len(),
     )?;
     let pk = prover_guard
-        .get_pk(circuit.get_circuit_id())
+        .get_pk(circuit.get_circuit_type())
         .ok_or(anyhow::anyhow!(
             "Error in minting process. Circuit Id {:?} not registered",
-            circuit.get_circuit_id()
+            circuit.get_circuit_type()
         ))?
         .clone();
     Ok((pk, circuit))
 }
 
-#[client_circuit]
+#[client_bounds]
 async fn spawn_transfer<P, V, VSW, Proof: Prover<P, V, VSW>>(
     transfer_circuit: Box<dyn ClientPlonkCircuit<P, V, VSW>>,
     transfer_inputs: CircuitInputs<P>,

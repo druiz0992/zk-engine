@@ -41,7 +41,7 @@ const MAX_N_NULLIFIERS: usize = 4;
 #[allow(non_snake_case)]
 #[allow(clippy::type_complexity)]
 pub fn base_rollup_circuit<C1, C2, const D: usize>(
-    client_inputs: Vec<ClientInput<C1, D>>,
+    client_inputs: Vec<ClientInput<C1>>,
     global_vk_root: C2::ScalarField,
     global_nullifier_root: C2::ScalarField,
     global_nullifier_leaf_count: C2::ScalarField,
@@ -98,7 +98,7 @@ where
     let mut out_commitments = vec![];
 
     let mut prev_nullifier_low_nullifier =
-        create_initial_low_nullifier_vars(&mut circuit, &client_inputs[0])?;
+        create_initial_low_nullifier_vars::<C1, 8>(&mut circuit, &client_inputs[0])?;
 
     // These values are hardcoded based on turbo_plonk vks
     for (input_idx, input) in client_inputs.iter().enumerate() {
@@ -463,7 +463,6 @@ where
         &acc,
     )?;
     circuit.check_circuit_satisfiability(&circuit.public_input()?)?;
-
     circuit.finalize_for_arithmetization()?;
 
     Ok((circuit, pi_star))

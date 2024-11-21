@@ -1,5 +1,6 @@
 use super::base::TransactionType;
 use super::bounce::bounce_circuit_helper_generator;
+use crate::client::ClientPlonkCircuit;
 use crate::rollup::circuits::{
     merge::merge_circuit,
     structs::{AccInstance, SubTrees},
@@ -15,10 +16,10 @@ use jf_relation::{gadgets::ecc::short_weierstrass::SWPoint, Circuit};
 use jf_utils::field_switching;
 
 pub fn merge_circuit_helper_generator<const D: usize>(
-    transaction_sequence: &[TransactionType],
+    client_circuits: &[Box<dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>>],
 ) -> StoredProof<PallasConfig, VestaConfig> {
     // Below taken from merge_test_helper
-    let stored_bounce = bounce_circuit_helper_generator::<D>(transaction_sequence);
+    let stored_bounce = bounce_circuit_helper_generator::<D>(client_circuits);
     let stored_bounce_2 = stored_bounce.clone();
     let (global_public_inputs, subtree_pi_1, passthrough_instance_1, instance_1) =
         stored_bounce.pub_inputs;

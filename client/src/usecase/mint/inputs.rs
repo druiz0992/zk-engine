@@ -15,9 +15,9 @@ use jf_primitives::rescue::RescueParameter;
 use jf_relation::gadgets::ecc::SWToTEConParam;
 use plonk_prover::client::circuits::circuit_inputs::CircuitInputs;
 use plonk_prover::primitives::circuits::kem_dem::KemDemParams;
-use zk_macros::client_circuit;
+use zk_macros::client_bounds;
 
-#[client_circuit]
+#[client_bounds]
 pub(crate) fn compute_mint_preimages<P, V, VSW>(
     mint_details: Vec<Preimage<P>>,
     transaction: &Transaction<V>,
@@ -45,7 +45,7 @@ pub(crate) fn compute_mint_preimages<P, V, VSW>(
     Ok(stored_preimages)
 }
 
-#[client_circuit]
+#[client_bounds]
 pub(crate) fn build_mint_inputs<P, V, VSW>(
     preimage: Vec<Preimage<P>>,
 ) -> anyhow::Result<CircuitInputs<P>> {

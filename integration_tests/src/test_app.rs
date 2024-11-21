@@ -5,7 +5,6 @@ use common::telemetry;
 use once_cell::sync::Lazy;
 
 pub struct TestApp {
-    pub api_client: reqwest::Client,
     pub client: ClientTestApp,
     pub sequencer: SequencerTestApp,
 }
@@ -26,11 +25,24 @@ pub async fn spawn_app() -> TestApp {
     let client_app = spawn_client_app().await;
     let sequencer_app = spawn_sequencer_app().await;
 
+    let configuration = {
+        let mut c = configuration::get_configuration().expect("Failed to read configuration");
+        c.client.base_url = format!("{}", client_app.address);
+        c.sequencer.base_url = format!("{}", sequencer_app.address);
+        c
+    };
+
     let test_app = TestApp {
-        api_client: reqwest::Client::new(),
         client: client_app,
         sequencer: sequencer_app,
     };
+
+    {
+        let mut client_notifier = test_app.client.notifier.lock().await;
+        client_notifier.base_url = configuration.sequencer.base_url;
+        let mut sequencer_notifier = test_app.sequencer.notifier.lock().await;
+        sequencer_notifier.base_url = configuration.client.base_url;
+    }
 
     test_app
 }

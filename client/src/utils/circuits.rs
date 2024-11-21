@@ -14,12 +14,15 @@ use plonk_prover::client::{
     ClientPlonkCircuit,
 };
 use plonk_prover::primitives::circuits::kem_dem::KemDemParams;
-use zk_macros::client_circuit;
+use zk_macros::client_bounds;
 
 const DEPTH: usize = 8;
 
-#[client_circuit]
-pub fn select_client_circuits<P, V, VSW>() -> Vec<Box<dyn ClientPlonkCircuit<P, V, VSW>>> {
+#[client_bounds]
+pub fn select_client_circuits<P, V, VSW>() -> Vec<Box<dyn ClientPlonkCircuit<P, V, VSW>>>
+where
+    <V as Pairing>::BaseField: PrimeField + PoseidonParams<Field = V::BaseField>,
+{
     let circuit_info: Vec<Box<dyn ClientPlonkCircuit<P, V, VSW>>> = vec![
         Box::new(MintCircuit::<1>::new()),
         Box::new(MintCircuit::<2>::new()),
@@ -31,19 +34,22 @@ pub fn select_client_circuits<P, V, VSW>() -> Vec<Box<dyn ClientPlonkCircuit<P, 
     circuit_info
 }
 
-#[client_circuit]
-pub fn init_client_circuits<P, V, VSW, PR: Prover<P, V, VSW>>(prover: &mut PR) -> Result<()> {
+#[client_bounds]
+pub fn init_client_circuits<P, V, VSW, PR: Prover<P, V, VSW>>(prover: &mut PR) -> Result<()>
+where
+    <V as Pairing>::BaseField: PrimeField + PoseidonParams<Field = V::BaseField>,
+{
     let circuit_info = select_client_circuits::<P, V, VSW>();
     for c in circuit_info {
         let keys = c
             .generate_keys()
             .map_err(|e| anyhow!("Failed to generate keys: {:?}", e))?;
-        prover.store_pk(c.get_circuit_id(), keys.0);
+        prover.store_pk(c.get_circuit_type(), keys.0);
     }
     Ok(())
 }
 
-#[client_circuit]
+#[client_bounds]
 pub fn get_mint_circuit_from_params<P, V, VSW>(
     c: usize,
 ) -> Result<Box<dyn ClientPlonkCircuit<P, V, VSW>>> {
@@ -62,11 +68,14 @@ pub fn get_mint_circuit_from_params<P, V, VSW>(
     Ok(circuit)
 }
 
-#[client_circuit]
+#[client_bounds]
 pub fn get_transfer_circuit_from_params<P, V, VSW>(
     c: usize,
     n: usize,
-) -> Result<Box<dyn ClientPlonkCircuit<P, V, VSW>>> {
+) -> Result<Box<dyn ClientPlonkCircuit<P, V, VSW>>>
+where
+    <V as Pairing>::BaseField: PrimeField + PoseidonParams<Field = V::BaseField>,
+{
     let circuit = match (c, n) {
         (1, 1) => TransferCircuit::<1, 1, DEPTH>::new().as_circuit::<P, V, VSW>(),
         (1, 2) => TransferCircuit::<1, 2, DEPTH>::new().as_circuit::<P, V, VSW>(),
@@ -100,7 +109,7 @@ mod tests {
         let pk = prover.get_pk(
             MintCircuit::<1>::new()
                 .as_circuit::<PallasConfig, VestaConfig, _>()
-                .get_circuit_id(),
+                .get_circuit_type(),
         );
 
         assert!(pk.is_none());
@@ -117,7 +126,7 @@ mod tests {
             Box::new(TransferCircuit::<2, 3, DEPTH>::new()),
         ];
         circuit_info.iter().for_each(|c| {
-            let pk = prover.get_pk(c.get_circuit_id());
+            let pk = prover.get_pk(c.get_circuit_type());
             assert!(pk.is_some())
         });
     }

@@ -1,6 +1,9 @@
 #[cfg(test)]
 use super::base_rollup_circuit;
+use crate::client::circuits::mint::MintCircuit;
 use crate::client::circuits::swap::swap_circuit;
+use crate::client::circuits::transfer::TransferCircuit;
+use crate::client::ClientPlonkCircuit;
 use crate::rollup::circuits::client_input::{self, LowNullifierInfo};
 use crate::rollup::circuits::utils::StoredProof;
 use crate::utils::bench;
@@ -30,37 +33,56 @@ use trees::tree::AppendTree;
 
 #[test]
 fn test_base_circuit() {
-    test_base_rollup_helper::<8>(&[TransactionType::Mint, TransactionType::Mint]);
+    /*
     test_base_rollup_helper::<8>(&[
-        TransactionType::Mint,
-        TransactionType::Mint,
-        TransactionType::Mint,
-        TransactionType::Mint,
+        Box::new(MintCircuit::<1>::new()),
+        Box::new(MintCircuit::<2>::new()),
+    ]);
+    test_base_rollup_helper::<8>(&[
+        Box::new(TransferCircuit::<1, 1, 8>::new()),
+        Box::new(TransferCircuit::<2, 2, 8>::new()),
+    ]);
+    */
+    test_base_rollup_helper::<8>(&[
+        Box::new(MintCircuit::<1>::new()),
+        Box::new(TransferCircuit::<2, 2, 8>::new()),
+    ]);
+    test_base_rollup_helper::<8>(&[
+        Box::new(TransferCircuit::<2, 2, 8>::new()),
+        Box::new(MintCircuit::<1>::new()),
+    ]);
+    /*
+     test_base_rollup_helper::<8>(&[
+         Box::new(MintCircuit::<1>::new()),
+         Box::new(MintCircuit::<2>::new()),
+         Box::new(MintCircuit::<1>::new()),
+         Box::new(MintCircuit::<2>::new()),
+     ]);
+
+
+    test_base_rollup_helper::<8>(&[
+        Box::new(TransferCircuit::<1, 1, 8>::new()),
+        Box::new(TransferCircuit::<2, 2, 8>::new()),
+        Box::new(TransferCircuit::<2, 3, 8>::new()),
+        Box::new(TransferCircuit::<2, 4, 8>::new()),
     ]);
 
-    test_base_rollup_helper::<8>(&[TransactionType::Transfer, TransactionType::Transfer]);
-    test_base_rollup_helper::<8>(&[
-        TransactionType::Transfer,
-        TransactionType::Transfer,
-        TransactionType::Transfer,
-        TransactionType::Transfer,
-    ]);
 
-    test_base_rollup_helper::<8>(&[TransactionType::Mint, TransactionType::Transfer]);
     test_base_rollup_helper::<8>(&[
-        TransactionType::Mint,
-        TransactionType::Transfer,
-        TransactionType::Transfer,
-        TransactionType::Mint,
+        Box::new(MintCircuit::<1>::new()),
+        Box::new(TransferCircuit::<2, 2, 8>::new()),
+        Box::new(TransferCircuit::<2, 3, 8>::new()),
+        Box::new(MintCircuit::<2>::new()),
     ]);
 
     test_base_rollup_helper_swap::<8>();
+    */
 }
 
 pub fn test_base_rollup_helper<const D: usize>(
-    transaction_sequence: &[TransactionType],
+    client_circuits: &[Box<dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>>],
 ) -> StoredProof<PallasConfig, VestaConfig> {
-    base::base_circuit_helper_generator::<D>(transaction_sequence)
+    base::base_circuit_helper_generator::<D>(client_circuits)
 }
 
 fn test_base_rollup_helper_swap<const D: usize>() -> StoredProof<PallasConfig, VestaConfig> {
@@ -187,7 +209,7 @@ fn test_base_rollup_helper_swap<const D: usize>() -> StoredProof<PallasConfig, V
             paths: vec![low_path],
         };
 
-        let mut client_input: ClientInput<VestaConfig, D> =
+        let mut client_input: ClientInput<VestaConfig> =
             ClientInput::new(swap_ipa_proof, swap_ipa_vk.clone(), 2, 1);
         client_input
             .set_swap_field(true)
@@ -209,7 +231,7 @@ fn test_base_rollup_helper_swap<const D: usize>() -> StoredProof<PallasConfig, V
      * ----------------------------------------------------------------------------------
      */
 
-    let zk_trees = tree_generator_from_client_inputs(
+    let zk_trees = tree_generator_from_client_inputs::<D>(
         &mut client_inputs,
         vec![field_switching(&comm_tree.root())],
     )

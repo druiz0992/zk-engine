@@ -15,11 +15,11 @@ use plonk_prover::client::ClientPlonkCircuit;
 use plonk_prover::primitives::circuits::kem_dem::KemDemParams;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-use zk_macros::sequencer_circuit;
+use zk_macros::sequencer_bounds;
 
 pub mod in_mem_sequencer_prover;
 
-#[sequencer_circuit]
+#[sequencer_bounds]
 pub fn generate_and_store_cks<V, VSW, P, SW, Prover>(prover: &mut Prover)
 where
     Prover: SequencerProver<V, VSW, P, SW>,
@@ -82,9 +82,10 @@ where
 {
     circuit_info
         .into_iter()
-        .map(|c| {
+        .enumerate()
+        .map(|(idx, c)| {
             let keys = c.generate_keys().unwrap();
-            prover.store_vk(c.get_circuit_id(), keys.1.clone());
+            prover.store_vk(c.get_circuit_type(), (keys.1.clone(), idx));
             keys.1
         })
         .collect::<Vec<VerifyingKey<_>>>()

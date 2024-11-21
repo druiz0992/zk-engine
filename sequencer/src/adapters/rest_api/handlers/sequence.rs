@@ -12,7 +12,7 @@ impl From<BuildBlockError> for StatusCode {
     }
 }
 
-#[tracing::instrument(name = "New Block Make Request", skip(db))]
+#[tracing::instrument(name = "New Make Block Request", skip(db))]
 pub async fn make_block(
     State(db): State<SequencerState>,
 ) -> Result<Json<Block<curves::vesta::Fr>>, StatusCode> {
