@@ -1,4 +1,4 @@
-use crate::client::structs::ClientPubInputs;
+use crate::client::structs::ClientPubInput;
 use crate::primitives::circuits::kem_dem::KemDemParams;
 use crate::rollup::circuits::client_input::ClientInput;
 use crate::rollup::circuits::client_input::LowNullifierInfo;
@@ -21,7 +21,6 @@ use jf_relation::gadgets::ecc::SWToTEConParam;
 use jf_relation::Arithmetization;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-use trees::IndexedMerkleTree;
 use zk_macros::client_bounds;
 
 pub mod circuits;
@@ -29,7 +28,7 @@ pub mod structs;
 
 pub struct PlonkCircuitParams<F: PrimeField> {
     pub circuit: PlonkCircuit<F>,
-    pub public_inputs: ClientPubInputs<F>,
+    pub public_input: ClientPubInput<F>,
 }
 // P: SWCurveConfig,
 // <P as CurveConfig>::BaseField: PrimeField + PoseidonParams<Field = V::ScalarField>,
@@ -63,11 +62,11 @@ pub trait ClientPlonkCircuit<P, V, VSW>: Send + Sync + 'static + std::fmt::Debug
     ) -> Result<CircuitInputs<P>, CircuitError>;
     fn get_circuit_type(&self) -> CircuitType;
     fn get_commitment_and_nullifier_count(&self) -> (usize, usize);
-    fn generate_sequencer_inputs(
+    fn generate_client_input_for_sequencer(
         &self,
         proof: Proof<V>,
         vk: VerifyingKey<V>,
-        public_inputs: &ClientPubInputs<V::ScalarField>,
+        public_input: &ClientPubInput<V::ScalarField>,
         low_nullifier_info: &Option<LowNullifierInfo<V, 32>>,
     ) -> ClientInput<V>;
 }

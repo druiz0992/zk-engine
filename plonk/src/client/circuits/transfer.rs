@@ -6,7 +6,7 @@ use ark_ec::{
 use ark_ff::PrimeField;
 
 use super::circuit_inputs::CircuitInputs;
-use crate::client::structs::ClientPubInputs;
+use crate::client::structs::ClientPubInput;
 use crate::client::ClientPlonkCircuit;
 use crate::primitives::circuits::kem_dem::KemDemParams;
 use crate::rollup::circuits::client_input::LowNullifierInfo;
@@ -18,7 +18,6 @@ use jf_plonk::nightfall::ipa_structs::VerifyingKey;
 use jf_primitives::rescue::RescueParameter;
 use jf_relation::gadgets::ecc::SWToTEConParam;
 use jf_relation::{errors::CircuitError, PlonkCircuit};
-use trees::IndexedMerkleTree;
 use zk_macros::client_bounds;
 
 pub mod circuit;
@@ -78,11 +77,11 @@ impl<P, V, VSW, const C: usize, const N: usize, const D: usize> ClientPlonkCircu
         (C, N)
     }
 
-    fn generate_sequencer_inputs(
+    fn generate_client_input_for_sequencer(
         &self,
         proof: Proof<V>,
         vk: VerifyingKey<V>,
-        public_inputs: &ClientPubInputs<V::ScalarField>,
+        public_inputs: &ClientPubInput<V::ScalarField>,
         low_nullifier_info: &Option<LowNullifierInfo<V, 32>>,
     ) -> ClientInput<V> {
         let (c, n) =
@@ -169,8 +168,6 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::client::PlonkCircuitParams;
-
     use super::*;
     use curves::pallas::PallasConfig;
     use curves::vesta::VestaConfig;

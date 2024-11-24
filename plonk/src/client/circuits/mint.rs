@@ -1,4 +1,4 @@
-use crate::client::structs::ClientPubInputs;
+use crate::client::structs::ClientPubInput;
 use crate::rollup::circuits::client_input::ClientInput;
 use crate::rollup::circuits::client_input::LowNullifierInfo;
 use crate::{
@@ -19,7 +19,6 @@ use jf_primitives::rescue::RescueParameter;
 use jf_relation::{
     constraint_system::PlonkCircuit, errors::CircuitError, gadgets::ecc::SWToTEConParam,
 };
-use trees::IndexedMerkleTree;
 use zk_macros::client_bounds;
 
 pub mod circuit;
@@ -38,7 +37,7 @@ impl<const C: usize> MintCircuit<C> {
     }
 
     pub fn get_circuit_type(&self) -> CircuitType {
-        get_circuit_id_from_params(C, 0)
+        get_circuit_type_from_params(C, 0)
     }
 
     #[client_bounds]
@@ -47,7 +46,7 @@ impl<const C: usize> MintCircuit<C> {
     }
 }
 
-pub fn get_circuit_id_from_params(c: usize, _n: usize) -> CircuitType {
+pub fn get_circuit_type_from_params(c: usize, _n: usize) -> CircuitType {
     CircuitType::Mint(c)
 }
 
@@ -57,7 +56,6 @@ impl<const C: usize> Default for MintCircuit<C> {
     }
 }
 
-const DEPTH: usize = 8;
 #[client_bounds]
 impl<P, V, VSW, const C: usize> ClientPlonkCircuit<P, V, VSW> for MintCircuit<C> {
     fn to_plonk_circuit(
@@ -78,11 +76,11 @@ impl<P, V, VSW, const C: usize> ClientPlonkCircuit<P, V, VSW> for MintCircuit<C>
     fn get_commitment_and_nullifier_count(&self) -> (usize, usize) {
         (C, 1)
     }
-    fn generate_sequencer_inputs(
+    fn generate_client_input_for_sequencer(
         &self,
         proof: Proof<V>,
         vk: VerifyingKey<V>,
-        public_inputs: &ClientPubInputs<V::ScalarField>,
+        public_inputs: &ClientPubInput<V::ScalarField>,
         _low_nullifier_info: &Option<LowNullifierInfo<V, 32>>,
     ) -> ClientInput<V> {
         let (c, n) =
@@ -126,8 +124,6 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::client::PlonkCircuitParams;
-
     use super::*;
     use curves::pallas::PallasConfig;
     use curves::vesta::VestaConfig;

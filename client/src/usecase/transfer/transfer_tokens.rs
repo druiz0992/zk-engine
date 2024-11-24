@@ -11,7 +11,7 @@ use jf_primitives::rescue::RescueParameter;
 use jf_relation::gadgets::ecc::SWToTEConParam;
 use plonk_prover::client::circuits::circuit_inputs::CircuitInputs;
 use plonk_prover::client::ClientPlonkCircuit;
-use plonk_prover::{client::structs::ClientPubInputs, primitives::circuits::kem_dem::KemDemParams};
+use plonk_prover::{client::structs::ClientPubInput, primitives::circuits::kem_dem::KemDemParams};
 
 #[allow(clippy::too_many_arguments)]
 pub fn transfer_tokens<P, V, VSW, Proof>(
@@ -38,7 +38,7 @@ where
 
     let commitment_nullifier_count = transfer_circuit.get_commitment_and_nullifier_count();
 
-    let client_pub_inputs = ClientPubInputs::new(pub_inputs, commitment_nullifier_count)?;
+    let client_pub_inputs = ClientPubInput::new(pub_inputs, commitment_nullifier_count)?;
 
     let transaction = Transaction::new(
         client_pub_inputs

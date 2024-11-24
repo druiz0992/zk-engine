@@ -8,6 +8,7 @@ pub mod sequencer_api {
         prover::in_mem_sequencer_prover::InMemProver,
         storage::in_mem_sequencer_storage::InMemStorage,
     };
+    use crate::usecase::block::TransactionProcessor;
     use anyhow::anyhow;
     use axum::{
         http::StatusCode,
@@ -26,12 +27,15 @@ pub mod sequencer_api {
     type SequencerProve =
         Arc<Mutex<InMemProver<VestaConfig, VestaConfig, PallasConfig, PallasConfig>>>;
     type SequencerNotifier = Arc<Mutex<HttpNotifier<Block<curves::vesta::Fr>>>>;
+    type SequencerProcessor =
+        Arc<Mutex<TransactionProcessor<PallasConfig, VestaConfig, VestaConfig>>>;
 
     #[derive(Clone)]
     pub struct SequencerState {
         pub state_db: SequencerDB,
         pub prover: SequencerProve,
         pub notifier: SequencerNotifier,
+        pub processor: SequencerProcessor,
     }
     pub struct Application {
         port: u16,
@@ -48,6 +52,7 @@ pub mod sequencer_api {
             db: SequencerDB,
             prover: SequencerProve,
             notifier: SequencerNotifier,
+            processor: SequencerProcessor,
             configuration: ApplicationSettings,
         ) -> Result<Application, anyhow::Error> {
             let address = format!("{}:{}", configuration.host, configuration.port);
@@ -56,8 +61,14 @@ pub mod sequencer_api {
                 .map_err(|_| anyhow!("Unable to start application"))?;
             let port = listener.local_addr().unwrap().port();
 
-            let server: axum::serve::Serve<Router, Router> =
-                run_api(listener, db.clone(), prover.clone(), notifier.clone()).await;
+            let server: axum::serve::Serve<Router, Router> = run_api(
+                listener,
+                db.clone(),
+                prover.clone(),
+                notifier.clone(),
+                processor.clone(),
+            )
+            .await;
             log::trace!("Launching server at {}:{}", configuration.host, port);
 
             Ok(Application {
@@ -84,12 +95,14 @@ pub mod sequencer_api {
         sequencer_db: SequencerDB,
         sequencer_prover: SequencerProve,
         sequencer_notifier: SequencerNotifier,
+        sequencer_processor: SequencerProcessor,
     ) -> axum::serve::Serve<Router, Router> {
         dotenv().ok();
         let state = SequencerState {
             state_db: sequencer_db,
             prover: sequencer_prover,
             notifier: sequencer_notifier,
+            processor: sequencer_processor,
         };
 
         let app = Router::new()

@@ -1,5 +1,3 @@
-use std::{collections::HashMap, time::Instant};
-
 use crate::{
     domain::{RollupCommitKeys, RollupProvingKeys},
     ports::prover::SequencerProver,
@@ -26,6 +24,7 @@ use plonk_prover::rollup::circuits::base::base_rollup_circuit;
 use plonk_prover::rollup::circuits::client_input::ClientInput;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+use std::{collections::HashMap, time::Instant};
 use tracing_log::log;
 use zk_macros::sequencer_bounds;
 

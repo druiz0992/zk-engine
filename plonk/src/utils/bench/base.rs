@@ -1,9 +1,7 @@
 use super::generate_rollup_circuit_artifacts_and_verify;
 use super::tree;
-use crate::client::circuits::{mint, transfer};
-use crate::client::structs::ClientPubInputs;
+use crate::client::structs::ClientPubInput;
 use crate::client::ClientPlonkCircuit;
-use crate::client::PlonkCircuitParams;
 use crate::primitives::circuits::kem_dem::KemDemParams;
 use crate::rollup::circuits::base;
 use crate::rollup::circuits::client_input;
@@ -59,7 +57,7 @@ pub fn base_circuit_helper_generator<const D: usize>(
             &mut nullifier_tree,
             &mut global_comm_roots,
             &mut g_polys,
-            &client_circuits[i],
+            &*client_circuits[i],
             token_id,
         )
         .unwrap();
@@ -167,7 +165,7 @@ pub fn build_client_inputs(
     nullifier_tree: &mut IndexedMerkleTree<Fr, 32>,
     global_comm_roots: &mut Vec<Fr>,
     g_polys: &mut Vec<DensePolynomial<Fq>>,
-    client_circuit: &Box<dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>>,
+    client_circuit: &dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>,
     token_id: Option<Fq>,
 ) -> Result<(), String> {
     let (c, n) = client_circuit.get_commitment_and_nullifier_count();
@@ -177,7 +175,7 @@ pub fn build_client_inputs(
     let plonk_circuit = client_circuit
         .to_plonk_circuit(inputs)
         .map_err(|e| e.to_string())?;
-    let public_inputs = ClientPubInputs::new(
+    let public_inputs = ClientPubInput::new(
         plonk_circuit.public_input().map_err(|e| e.to_string())?,
         (c, n),
     )
@@ -191,13 +189,12 @@ pub fn build_client_inputs(
         &public_inputs.nullifiers,
     );
 
-    let client_input = client_circuit.generate_sequencer_inputs(
+    let client_input = client_circuit.generate_client_input_for_sequencer(
         artifacts.proof,
         artifacts.vk,
         &public_inputs,
         &low_nullifier_info,
     );
-    dbg!(public_inputs.commitment_root[0]);
     // TODO: This is only for transfers. Check if OK
     if low_nullifier_info.is_some() {
         global_comm_roots.push(field_switching(&public_inputs.commitment_root[0]));

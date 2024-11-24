@@ -7,7 +7,7 @@ async fn send_transactions() {
     let mut app = spawn_app().await;
     let mint_params = &[MintParams::default()];
 
-    app.add_client_circuits(&[Box::new(MintCircuit::<1>::new())])
+    app.add_client_circuits(vec![Box::new(MintCircuit::<1>::new())])
         .await
         .expect("Error adding new circuit");
 

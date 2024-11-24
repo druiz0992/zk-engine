@@ -10,7 +10,7 @@ pub fn save_to_file(filename: &str, body: &[u8]) -> Result<()> {
         File::create(filename).map_err(|e| anyhow::anyhow!("Error creating file: {}", e))?;
 
     // Write the binary data (the body) to the file
-    file.write_all(&body)
+    file.write_all(body)
         .map_err(|e| anyhow::anyhow!("Error writing to file: {}", e))?;
     Ok(())
 }

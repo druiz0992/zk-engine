@@ -75,20 +75,17 @@ impl ClientTestApp {
 
         let mint_request: Vec<MintRequestBody> = mint_values
             .iter()
-            .map(|m| MintRequestBody::new(&m.value, &m.token_id, &user_keys.public_key.as_str()))
+            .map(|m| MintRequestBody::new(&m.value, &m.token_id, user_keys.public_key.as_str()))
             .collect();
 
         let body = json!(mint_request);
 
-        let mint_response = self
-            .api_client
-            .post(&format!("{}/mint", self.address))
+        self.api_client
+            .post(format!("{}/mint", self.address))
             .json(&body)
             .send()
             .await
-            .unwrap();
-
-        mint_response
+            .unwrap()
     }
 
     pub async fn check_mint_preimages(&self, mint_params: &[MintParams]) {
@@ -106,14 +103,14 @@ impl ClientTestApp {
                 *preimage.get_value(),
                 curves::pallas::Fq::from_str(mint_params[i].value.as_str()).unwrap(),
                 "Stored preimage value {} doesnt match with expected value {}",
-                p.preimage.get_value().to_string(),
+                p.preimage.get_value(),
                 mint_params[i].value,
             );
             assert_eq!(
                 *preimage.get_token_id(),
                 curves::pallas::Fq::from_str(mint_params[i].token_id.as_str()).unwrap(),
                 "Stored preimage id {} doesnt match with expected id {}",
-                preimage.get_token_id().to_string(),
+                preimage.get_token_id(),
                 mint_params[i].token_id,
             );
         });

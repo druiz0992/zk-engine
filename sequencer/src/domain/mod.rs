@@ -47,12 +47,3 @@ impl<V, VSW, P, SW> Clone for RollupProvingKeys<V, VSW, P, SW> {
         }
     }
 }
-#[derive(Debug, Clone, Eq, Hash, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum CircuitType {
-    Mint,
-    Transfer,
-    BaseRollup,
-    BounceRollup,
-    MergeRollup,
-    BounceMergeRollup,
-}

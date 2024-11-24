@@ -46,7 +46,7 @@ pub fn benchmark_client_transactions<const D: usize>(c: &mut Criterion) {
                 &mut nullifier_tree,
                 &mut global_comm_roots,
                 &mut g_polys,
-                &client_circuit[i],
+                &*client_circuit[i],
                 token_id,
             )
             .unwrap();

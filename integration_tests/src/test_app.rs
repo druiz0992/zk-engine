@@ -27,8 +27,8 @@ pub async fn spawn_app() -> TestApp {
 
     let configuration = {
         let mut c = configuration::get_configuration().expect("Failed to read configuration");
-        c.client.base_url = format!("{}", client_app.address);
-        c.sequencer.base_url = format!("{}", sequencer_app.address);
+        c.client.base_url = client_app.address.to_string();
+        c.sequencer.base_url = sequencer_app.address.to_string();
         c
     };
 

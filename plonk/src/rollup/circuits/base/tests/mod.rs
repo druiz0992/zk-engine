@@ -7,7 +7,7 @@ use crate::client::ClientPlonkCircuit;
 use crate::rollup::circuits::client_input::{self, LowNullifierInfo};
 use crate::rollup::circuits::utils::StoredProof;
 use crate::utils::bench;
-use crate::utils::bench::base::{self, TransactionType};
+use crate::utils::bench::base;
 use crate::utils::bench::tree::tree_generator_from_client_inputs;
 use ark_ec::pairing::Pairing;
 use ark_ec::short_weierstrass::SWCurveConfig;
@@ -32,8 +32,7 @@ use trees::non_membership_tree::NonMembershipTree;
 use trees::tree::AppendTree;
 
 #[test]
-fn test_base_circuit() {
-    /*
+fn test_base_circuit_2_transactions() {
     test_base_rollup_helper::<8>(&[
         Box::new(MintCircuit::<1>::new()),
         Box::new(MintCircuit::<2>::new()),
@@ -42,7 +41,6 @@ fn test_base_circuit() {
         Box::new(TransferCircuit::<1, 1, 8>::new()),
         Box::new(TransferCircuit::<2, 2, 8>::new()),
     ]);
-    */
     test_base_rollup_helper::<8>(&[
         Box::new(MintCircuit::<1>::new()),
         Box::new(TransferCircuit::<2, 2, 8>::new()),
@@ -51,14 +49,16 @@ fn test_base_circuit() {
         Box::new(TransferCircuit::<2, 2, 8>::new()),
         Box::new(MintCircuit::<1>::new()),
     ]);
-    /*
-     test_base_rollup_helper::<8>(&[
-         Box::new(MintCircuit::<1>::new()),
-         Box::new(MintCircuit::<2>::new()),
-         Box::new(MintCircuit::<1>::new()),
-         Box::new(MintCircuit::<2>::new()),
-     ]);
+}
 
+#[test]
+fn test_base_circuit_4_transactions() {
+    test_base_rollup_helper::<8>(&[
+        Box::new(MintCircuit::<1>::new()),
+        Box::new(MintCircuit::<2>::new()),
+        Box::new(MintCircuit::<1>::new()),
+        Box::new(MintCircuit::<2>::new()),
+    ]);
 
     test_base_rollup_helper::<8>(&[
         Box::new(TransferCircuit::<1, 1, 8>::new()),
@@ -67,16 +67,17 @@ fn test_base_circuit() {
         Box::new(TransferCircuit::<2, 4, 8>::new()),
     ]);
 
-
     test_base_rollup_helper::<8>(&[
         Box::new(MintCircuit::<1>::new()),
         Box::new(TransferCircuit::<2, 2, 8>::new()),
         Box::new(TransferCircuit::<2, 3, 8>::new()),
         Box::new(MintCircuit::<2>::new()),
     ]);
+}
 
+#[test]
+fn test_base_circuit_swap() {
     test_base_rollup_helper_swap::<8>();
-    */
 }
 
 pub fn test_base_rollup_helper<const D: usize>(

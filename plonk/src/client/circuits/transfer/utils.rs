@@ -1,29 +1,23 @@
+use super::check_inputs;
+use super::constants::*;
+use crate::client::circuits::circuit_inputs::CircuitInputs;
+use crate::client::circuits::mint;
+use crate::primitives::circuits::kem_dem::KemDemParams;
+use crate::utils::poseidon_utils::build_commitment_hash;
 use ark_ec::{
     pairing::Pairing,
     short_weierstrass::{Affine, Projective, SWCurveConfig},
     CurveConfig,
 };
 use ark_ff::{PrimeField, UniformRand};
-
-use jf_primitives::rescue::RescueParameter;
-use jf_relation::errors::CircuitError;
-use jf_relation::{gadgets::ecc::SWToTEConParam, Circuit};
-
-use rand::SeedableRng;
-use rand_chacha::ChaChaRng;
-
-use super::check_inputs;
-use super::constants::*;
-use crate::client::circuits::circuit_inputs::CircuitInputs;
-use crate::client::circuits::mint;
-use crate::client::circuits::transfer::TransferCircuit;
-use crate::client::structs::ClientPubInputs;
-use crate::client::PlonkCircuitParams;
-use crate::primitives::circuits::kem_dem::KemDemParams;
-use crate::utils::poseidon_utils::build_commitment_hash;
 use common::crypto::poseidon::constants::PoseidonParams;
 use common::derived_keys::DerivedKeys;
 use common::keypair::PublicKey;
+use jf_primitives::rescue::RescueParameter;
+use jf_relation::errors::CircuitError;
+use jf_relation::gadgets::ecc::SWToTEConParam;
+use rand::SeedableRng;
+use rand_chacha::ChaChaRng;
 use trees::{AppendTree, MembershipPath, MembershipTree, Tree};
 use zk_macros::client_bounds;
 

@@ -1,8 +1,11 @@
+use crate::client::PoseidonParams;
 use ark_ec::{pairing::Pairing, short_weierstrass::SWCurveConfig, CurveGroup};
 use ark_ff::Field;
 use common::structs::Transaction;
+use trees::{AppendTree, Tree};
 
-pub struct ClientPubInputs<F: Field> {
+#[derive(Clone, Debug)]
+pub struct ClientPubInput<F: Field> {
     pub swap_field: bool,
     pub commitment_root: Vec<F>,
     pub nullifiers: Vec<F>,
@@ -11,7 +14,7 @@ pub struct ClientPubInputs<F: Field> {
     pub ciphertexts: Vec<F>,
 }
 
-impl<F: Field> ClientPubInputs<F> {
+impl<F: Field> ClientPubInput<F> {
     pub fn new(
         value: Vec<F>,
         commitment_nullifier_count: (usize, usize),
@@ -36,5 +39,55 @@ impl<F: Field> ClientPubInputs<F> {
             ephemeral_public_key: value[eph_offset..ciph_offset].to_vec(),
             ciphertexts: value[ciph_offset..ciph_offset + 3].to_vec(),
         })
+    }
+    fn from_transaction<V>(
+        transaction: &Transaction<V>,
+    ) -> ClientPubInput<<V as Pairing>::ScalarField>
+    where
+        V: Pairing,
+        <<V as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig,
+        <V as Pairing>::ScalarField: PoseidonParams<Field = V::ScalarField>,
+    {
+        let commitments = transaction
+            .commitments
+            .iter()
+            .map(|c| c.0)
+            .collect::<Vec<_>>();
+        let nullifiers = transaction
+            .nullifiers
+            .iter()
+            .map(|n| n.0)
+            .collect::<Vec<_>>();
+        let commitments_tree = Tree::<V::ScalarField, 8>::from_leaves(commitments.clone());
+        ClientPubInput {
+            swap_field: transaction.swap_field,
+            ciphertexts: transaction.ciphertexts.clone(),
+            ephemeral_public_key: transaction.eph_pub_key.clone(),
+            commitments,
+            nullifiers,
+            commitment_root: vec![commitments_tree.root(); transaction.nullifiers.len()],
+        }
+    }
+}
+
+impl<V> From<Transaction<V>> for ClientPubInput<<V as Pairing>::ScalarField>
+where
+    V: Pairing,
+    <<V as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig,
+    <V as Pairing>::ScalarField: PoseidonParams<Field = V::ScalarField>,
+{
+    fn from(value: Transaction<V>) -> Self {
+        ClientPubInput::<V::ScalarField>::from_transaction::<V>(&value)
+    }
+}
+
+impl<V> From<&Transaction<V>> for ClientPubInput<<V as Pairing>::ScalarField>
+where
+    V: Pairing,
+    <<V as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig,
+    <V as Pairing>::ScalarField: PoseidonParams<Field = V::ScalarField>,
+{
+    fn from(value: &Transaction<V>) -> Self {
+        ClientPubInput::<V::ScalarField>::from_transaction::<V>(value)
     }
 }

@@ -2,7 +2,6 @@ use crate::sequencer::test_app::SequencerTestApp;
 use anyhow::Result;
 use common::structs::Transaction;
 use curves::vesta::VestaConfig;
-use reqwest::Response;
 use serde_json::json;
 
 impl SequencerTestApp {
@@ -10,7 +9,7 @@ impl SequencerTestApp {
         let body = json!(transaction);
         let response = self
             .api_client
-            .post(&format!("{}/transactions", self.address))
+            .post(format!("{}/transactions", self.address))
             .json(&body)
             .send()
             .await
@@ -24,7 +23,7 @@ impl SequencerTestApp {
     pub async fn get_transactions(&self) -> Result<Vec<Transaction<VestaConfig>>> {
         let response = self
             .api_client
-            .get(&format!("{}/transactions", self.address))
+            .get(format!("{}/transactions", self.address))
             .send()
             .await
             .unwrap();

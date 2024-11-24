@@ -1,9 +1,5 @@
-use common::structs::Transaction;
-use curves::vesta::VestaConfig;
-use integration_tests::client::mint::MintParams;
 use integration_tests::common::utils;
 use integration_tests::sequencer::test_app::spawn_app;
-use plonk_prover::client::circuits::mint::MintCircuit;
 use reqwest::StatusCode;
 
 #[tokio::test]

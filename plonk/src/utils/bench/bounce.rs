@@ -1,4 +1,4 @@
-use super::base::{self, TransactionType};
+use super::base;
 use crate::client::ClientPlonkCircuit;
 use crate::rollup::circuits::{bounce::bounce_circuit, structs::AccInstance, utils::StoredProof};
 use crate::utils::bench;

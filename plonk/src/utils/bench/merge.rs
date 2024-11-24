@@ -1,4 +1,3 @@
-use super::base::TransactionType;
 use super::bounce::bounce_circuit_helper_generator;
 use crate::client::ClientPlonkCircuit;
 use crate::rollup::circuits::{

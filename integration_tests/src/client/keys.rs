@@ -43,7 +43,7 @@ const MNEMONIC_COUNT: usize = 24;
 impl ClientTestApp {
     pub async fn post_keys_request(&self, body: serde_json::Value) -> Response {
         self.api_client
-            .post(&format!("{}/keys", self.address))
+            .post(format!("{}/keys", self.address))
             .json(&body)
             .send()
             .await

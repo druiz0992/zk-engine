@@ -1,6 +1,4 @@
-use super::MintCircuit;
-use crate::client::structs::ClientPubInputs;
-use crate::client::{circuits::circuit_inputs::CircuitInputs, PlonkCircuitParams};
+use crate::client::circuits::circuit_inputs::CircuitInputs;
 use crate::primitives::circuits::kem_dem::KemDemParams;
 use ark_ec::{
     pairing::Pairing,
@@ -14,7 +12,6 @@ use common::{
     keypair::{PrivateKey, PublicKey},
 };
 use jf_primitives::rescue::RescueParameter;
-use jf_relation::Circuit;
 use jf_relation::{errors::CircuitError, gadgets::ecc::SWToTEConParam};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;

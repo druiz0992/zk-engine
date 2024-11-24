@@ -6,7 +6,7 @@ use plonk_prover::client::circuits::mint::MintCircuit;
 async fn post_sequence_after_posting_2_transactions() {
     let mut app = spawn_app().await;
 
-    app.add_client_circuits(&[Box::new(MintCircuit::<1>::new())])
+    app.add_client_circuits(vec![Box::new(MintCircuit::<1>::new())])
         .await
         .expect("Error adding new circuit");
 

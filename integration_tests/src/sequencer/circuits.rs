@@ -18,13 +18,13 @@ use trees::{membership_tree::Tree, tree::AppendTree};
 impl SequencerTestApp {
     pub async fn add_client_circuits(
         &mut self,
-        circuits: &[Box<dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>>],
+        circuits: Vec<Box<dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>>>,
     ) -> anyhow::Result<()> {
         let mut prover = self.prover.lock().await;
         let mut db = self.db.lock().await;
 
         let vks = circuits
-            .into_iter()
+            .iter()
             .enumerate()
             .map(|(idx, c)| {
                 let keys = c.generate_keys().unwrap();
@@ -84,6 +84,13 @@ impl SequencerTestApp {
             vesta_commit_key,
         };
         prover.store_cks(rollup_commit_keys);
+
+        ////
+        let mut processor = self.processor.lock().await;
+        circuits.into_iter().for_each(|c| {
+            let circuit_type = c.get_circuit_type();
+            processor.register(circuit_type, c);
+        });
 
         Ok(())
     }

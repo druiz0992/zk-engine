@@ -3,7 +3,6 @@ use curves::{pallas::PallasConfig, vesta::VestaConfig};
 use plonk_prover::client::circuits::transfer::TransferCircuit;
 use plonk_prover::client::ClientPlonkCircuit;
 use plonk_prover::utils::bench;
-use plonk_prover::utils::bench::base::TransactionType;
 use plonk_prover::{
     rollup::circuits::bounce_merge::bounce_merge_circuit,
     utils::bench::merge::merge_circuit_helper_generator,

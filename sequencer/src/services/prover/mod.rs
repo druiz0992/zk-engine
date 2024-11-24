@@ -15,7 +15,7 @@ use plonk_prover::client::ClientPlonkCircuit;
 use plonk_prover::primitives::circuits::kem_dem::KemDemParams;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-use zk_macros::sequencer_bounds;
+use zk_macros::{prover_bounds, sequencer_bounds};
 
 pub mod in_mem_sequencer_prover;
 
@@ -45,39 +45,12 @@ where
     prover.store_cks(rollup_commit_keys);
 }
 
+#[prover_bounds]
 pub fn generate_and_store_client_circuit_vks<P, V, SW, VSW, Prover>(
     prover: &mut Prover,
     circuit_info: Vec<Box<dyn ClientPlonkCircuit<P, V, VSW>>>,
 ) -> Vec<VerifyingKey<V>>
 where
-    V: Pairing<
-        G1Affine = Affine<VSW>,
-        G1 = Projective<VSW>,
-        ScalarField = <P as CurveConfig>::BaseField,
-    >,
-    <V as Pairing>::BaseField: PrimeField
-        + PoseidonParams<Field = <P as Pairing>::ScalarField>
-        + RescueParameter
-        + SWToTEConParam,
-    <V as Pairing>::ScalarField: PrimeField
-        + PoseidonParams<Field = <P as Pairing>::BaseField>
-        + RescueParameter
-        + SWToTEConParam,
-    <V as Pairing>::ScalarField: KemDemParams<Field = <V as Pairing>::ScalarField>,
-
-    P: Pairing<G1Affine = Affine<SW>, G1 = Projective<SW>>
-        + SWCurveConfig
-        + Pairing<BaseField = <V as Pairing>::ScalarField, ScalarField = <V as Pairing>::BaseField>,
-    <P as CurveConfig>::BaseField: PrimeField + PoseidonParams<Field = V::ScalarField>,
-
-    SW: SWCurveConfig<
-        BaseField = <V as Pairing>::ScalarField,
-        ScalarField = <V as Pairing>::BaseField,
-    >,
-    VSW: SWCurveConfig<
-        BaseField = <V as Pairing>::BaseField,
-        ScalarField = <V as Pairing>::ScalarField,
-    >,
     Prover: SequencerProver<V, VSW, P, SW>,
 {
     circuit_info

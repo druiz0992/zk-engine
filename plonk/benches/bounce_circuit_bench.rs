@@ -3,10 +3,7 @@ use curves::{pallas::PallasConfig, vesta::VestaConfig};
 use plonk_prover::client::circuits::transfer::TransferCircuit;
 use plonk_prover::client::ClientPlonkCircuit;
 use plonk_prover::utils::bench;
-use plonk_prover::{
-    rollup::circuits::bounce::bounce_circuit,
-    utils::bench::base::{self, TransactionType},
-};
+use plonk_prover::{rollup::circuits::bounce::bounce_circuit, utils::bench::base};
 
 pub fn benchmark_bounce<const D: usize>(c: &mut Criterion) {
     // Below taken from bounce_test_helper

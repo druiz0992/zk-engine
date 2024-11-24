@@ -22,10 +22,9 @@ impl ClientTestApp {
         let body = std::str::from_utf8(&body)
             .map_err(|_| anyhow::anyhow!("Error extracting sequencer response"))?;
 
-        let transaction =
-            serde_json::from_str::<Transaction<VestaConfig>>(&body).map_err(|_| {
-                anyhow::anyhow!("Error deserializing Transaction received by sequencer")
-            })?;
+        let transaction = serde_json::from_str::<Transaction<VestaConfig>>(body).map_err(|_| {
+            anyhow::anyhow!("Error deserializing Transaction received by sequencer")
+        })?;
 
         Ok(transaction)
     }

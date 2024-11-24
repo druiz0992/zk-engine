@@ -83,6 +83,10 @@ where
             circuit_type,
         }
     }
+    pub fn set_proof(&mut self, proof: Proof<P>) -> &mut Self {
+        self.proof = proof;
+        self
+    }
 }
 
 #[derive(Serialize, Debug, Deserialize)]

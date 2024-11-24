@@ -1,9 +1,19 @@
-use ark_ec::{pairing::Pairing, short_weierstrass::SWCurveConfig, CurveGroup};
+use ark_ec::{
+    pairing::Pairing,
+    short_weierstrass::{Affine, Projective, SWCurveConfig},
+    CurveConfig, CurveGroup,
+};
 use ark_ff::PrimeField;
-use common::structs::{Block, Transaction};
+use common::crypto::poseidon::constants::PoseidonParams;
+use common::structs::{Block, CircuitType, Transaction};
+use jf_primitives::rescue::RescueParameter;
+use jf_relation::gadgets::ecc::SWToTEConParam;
+use plonk_prover::client::ClientPlonkCircuit;
+use plonk_prover::primitives::circuits::kem_dem::KemDemParams;
 use trees::{
     membership_tree::MembershipTree, non_membership_tree::NonMembershipTree, tree::AppendTree,
 };
+use zk_macros::client_bounds;
 
 pub trait TransactionStorage<P>
 where
@@ -31,4 +41,17 @@ pub trait GlobalStateStorage {
     fn get_global_nullifier_tree(&self) -> Self::NullifierTree;
     fn get_vk_tree(&self) -> Self::VkTree;
     fn store_vk_tree(&mut self, vk_tree: Self::VkTree);
+}
+
+#[client_bounds]
+pub trait Dispatcher<P, V, VSW> {
+    fn register(
+        &mut self,
+        transaction_type: CircuitType,
+        processor: Box<dyn ClientPlonkCircuit<P, V, VSW>>,
+    );
+    fn get_dispatcher(
+        &self,
+        transaction_type: &CircuitType,
+    ) -> Option<Box<dyn ClientPlonkCircuit<P, V, VSW>>>;
 }

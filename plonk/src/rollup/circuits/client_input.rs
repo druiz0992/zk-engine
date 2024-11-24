@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 
+use crate::client::circuits::mint::constants::{CIPHERTEXT_LEN, EPHEMERAL_KEY_LEN};
 use ark_ec::{pairing::Pairing, short_weierstrass::SWCurveConfig, CurveGroup};
 use ark_ff::PrimeField;
 use common::crypto::poseidon::constants::PoseidonParams;
@@ -7,9 +8,6 @@ use jf_plonk::nightfall::ipa_structs::{Proof, VerifyingKey};
 use jf_utils::field_switching;
 use trees::NonMembershipTree;
 use trees::{non_membership_tree::IndexedNode, IndexedMerkleTree};
-
-use crate::client::circuits::mint::constants::{CIPHERTEXT_LEN, EPHEMERAL_KEY_LEN};
-use crate::client::structs::ClientPubInputs;
 
 /*
 nullifiers: [E::ScalarField; N], // List of nullifiers in transaction
@@ -120,7 +118,7 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct ClientInputError(String);
 
@@ -129,6 +127,7 @@ pub struct ClientInputError(String);
     pub indices: [E::BaseField; N],
     pub paths: [[E::BaseField; H]; N],
 */
+#[derive(Debug, Clone)]
 pub struct LowNullifierInfo<E, const H: usize>
 where
     E: Pairing,
