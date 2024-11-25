@@ -200,14 +200,6 @@ pub fn build_client_inputs(
         global_comm_roots.push(field_switching(&public_inputs.commitment_root[0]));
         //TODO: this is principle is only fot transfers
     }
-    /*
-
-    dbg!(
-        "111",
-        nullifier_tree,
-        &low_nullifier_info //public_inputs.commitment_root[0]
-    );
-    */
 
     g_polys.push(artifacts.g_poly);
     client_inputs.push(client_input);

@@ -1,3 +1,4 @@
+use crate::usecase::block::TransactionProcessor;
 use ark_ec::{
     pairing::Pairing,
     short_weierstrass::{Affine, Projective, SWCurveConfig},
@@ -28,4 +29,15 @@ pub fn select_client_circuits_sequencer<P, V, VSW>() -> Vec<Box<dyn ClientPlonkC
         Box::new(TransferCircuit::<2, 3, DEPTH>::new()),
     ];
     circuit_info
+}
+
+#[client_bounds]
+pub fn register_circuits<P, V, VSW>(
+    processor: &mut TransactionProcessor<P, V, VSW>,
+    circuits: Vec<Box<dyn ClientPlonkCircuit<P, V, VSW>>>,
+) {
+    circuits.into_iter().for_each(|c| {
+        let circuit_type = c.get_circuit_type();
+        processor.register(circuit_type, c);
+    });
 }

@@ -38,7 +38,10 @@ static TRACING: Lazy<()> = Lazy::new(|| {
 
 pub async fn spawn_app() -> SequencerTestApp {
     Lazy::force(&TRACING);
-    spawn_sequencer_app().await
+    let test_app = spawn_sequencer_app().await;
+    test_app.enable_client().await;
+
+    test_app
 }
 
 pub async fn spawn_sequencer_app() -> SequencerTestApp {

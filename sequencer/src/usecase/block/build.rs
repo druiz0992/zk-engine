@@ -14,7 +14,10 @@ use zk_macros::sequencer_bounds;
 
 use crate::{
     domain::{RollupCommitKeys, RollupProvingKeys},
-    ports::{prover::SequencerProver, storage::GlobalStateStorage},
+    ports::{
+        prover::SequencerProver,
+        storage::{BlockStorage, GlobalStateStorage},
+    },
 };
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -58,13 +61,13 @@ pub async fn build_block<P, V, SW, VSW, Storage, Prover>(
 ) -> Result<Block<V::ScalarField>, BuildBlockError>
 where
     Storage: GlobalStateStorage<
-        CommitmentTree = Tree<V::BaseField, 8>,
-        VkTree = Tree<V::BaseField, 8>,
-        NullifierTree = IndexedMerkleTree<V::BaseField, 32>,
-    >,
+            CommitmentTree = Tree<V::BaseField, 8>,
+            VkTree = Tree<V::BaseField, 8>,
+            NullifierTree = IndexedMerkleTree<V::BaseField, 32>,
+        > + BlockStorage<V::ScalarField>,
     Prover: SequencerProver<V, VSW, P, SW>,
 {
-    let db_locked = db.lock().await;
+    let mut db_locked = db.lock().await;
 
     // client_inputs: [ClientInput<V, 1, 1>; 2],
     // global_vk_root: P::ScalarField,
@@ -115,6 +118,8 @@ where
             )))
         }
     };
+
+    db_locked.insert_block(block.clone());
 
     Ok(block)
 

@@ -1,6 +1,6 @@
 use crate::domain::{RollupCommitKeys, RollupProvingKeys};
 use crate::ports::prover::SequencerProver;
-use crate::ports::storage::{GlobalStateStorage, TransactionStorage};
+use crate::ports::storage::{BlockStorage, GlobalStateStorage, TransactionStorage};
 use ark_ec::{
     pairing::Pairing,
     short_weierstrass::{Affine, Projective, SWCurveConfig},
@@ -144,7 +144,7 @@ pub async fn build_block_process<
             CommitmentTree = Tree<V::BaseField, 8>,
             VkTree = Tree<V::BaseField, 8>,
             NullifierTree = IndexedMerkleTree<V::BaseField, 32>,
-        >,
+        > + BlockStorage<V::ScalarField>,
     Comms: Notifier<Info = Block<V::ScalarField>>,
 >(
     db: Arc<Mutex<Storage>>,

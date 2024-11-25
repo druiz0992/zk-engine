@@ -45,16 +45,16 @@ impl TransactionStorage<VestaConfig> for InMemStorage {
 }
 
 impl BlockStorage<curves::vesta::Fr> for InMemStorage {
-    fn get_block(&self, _blocknumber: u64) -> Option<Block<curves::vesta::Fr>> {
-        todo!()
+    fn get_block(&self, blocknumber: u64) -> Option<Block<curves::vesta::Fr>> {
+        self.blocks.get(blocknumber as usize).cloned()
     }
 
-    fn insert_block(&mut self, _block: Block<curves::vesta::Fr>) {
-        todo!()
+    fn insert_block(&mut self, block: Block<curves::vesta::Fr>) {
+        self.blocks.push(block);
     }
 
     fn get_block_count(&self) -> u32 {
-        todo!()
+        self.blocks.len() as u32
     }
 }
 

@@ -58,7 +58,7 @@ where
         let base_url = self.base_url.clone();
         let client = reqwest::Client::new();
         let res = client
-            .post(format!("{}/transactions", base_url))
+            .post(format!("{}/block", base_url))
             .json(&block)
             .send()
             .await;

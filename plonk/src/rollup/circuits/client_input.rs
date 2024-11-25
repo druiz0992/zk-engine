@@ -182,12 +182,6 @@ where
     <<E as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = E::BaseField>,
     <E as Pairing>::BaseField: PrimeField + PoseidonParams<Field = E::BaseField>,
 {
-    /*
-    let lifted_nullifiers = nullifiers
-        .iter()
-        .map(field_switching::<E::ScalarField, E::BaseField>)
-        .collect::<Vec<_>>();
-    */
     let mut lifted_nullifiers = Vec::new();
 
     for n in nullifiers {

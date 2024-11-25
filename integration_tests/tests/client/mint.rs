@@ -134,14 +134,14 @@ async fn save_mints() {
 
     let preimages = app.get_preimages().await;
 
-    let preimages = preimages
+    let preimages_str = preimages
         .iter()
         .map(|p| serde_json::to_string(p).unwrap())
         .collect::<Vec<_>>();
 
     for i in 0..mint_params.len() {
-        let value = &mint_params[i].value;
+        let value = preimages[i].preimage.get_value().to_string();
         let filename = format!("./tests/data/mint_preimage_c1_v{}.dat", value);
-        common::utils::save_to_file(&filename, preimages[i].as_bytes()).unwrap();
+        common::utils::save_to_file(&filename, preimages_str[i].as_bytes()).unwrap();
     }
 }

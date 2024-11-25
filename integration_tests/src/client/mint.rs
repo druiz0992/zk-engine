@@ -1,3 +1,5 @@
+use crate::common::utils::decimal_to_hex;
+
 use super::test_app::ClientTestApp;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
@@ -52,10 +54,10 @@ impl MintRequestBody {
         let salt: u128 = rng.gen();
 
         Self {
-            value: value.to_string(),
-            token_id: token_id.to_string(),
+            value: decimal_to_hex(value).unwrap(),
+            token_id: decimal_to_hex(token_id).unwrap(),
             public_key: public_key.to_string(),
-            salt: salt.to_string(),
+            salt: decimal_to_hex(&salt.to_string()).unwrap(),
         }
     }
 }

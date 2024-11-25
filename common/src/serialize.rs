@@ -13,6 +13,7 @@ where
     let hex_s = BigUint::from_bytes_le(bytes.as_slice()).to_str_radix(16);
     s.serialize_str(&hex_s)
 }
+
 pub fn ark_se_std<S, A: CanonicalSerialize>(a: &A, s: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,

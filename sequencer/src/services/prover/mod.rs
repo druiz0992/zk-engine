@@ -26,18 +26,18 @@ where
 {
     let mut rng = ChaChaRng::from_entropy();
     let vesta_srs = <PlonkIpaSnark<V> as UniversalSNARK<V>>::universal_setup_for_testing(
-        2usize.pow(20),
+        2usize.pow(21),
         &mut rng,
     )
     .unwrap();
-    let (vesta_commit_key, _) = vesta_srs.trim(2usize.pow(20)).unwrap();
+    let (vesta_commit_key, _) = vesta_srs.trim(2usize.pow(21)).unwrap();
 
     let pallas_srs = <PlonkIpaSnark<P> as UniversalSNARK<P>>::universal_setup_for_testing(
-        2usize.pow(20),
+        2usize.pow(21),
         &mut rng,
     )
     .unwrap();
-    let (pallas_commit_key, _) = pallas_srs.trim(2usize.pow(20)).unwrap();
+    let (pallas_commit_key, _) = pallas_srs.trim(2usize.pow(21)).unwrap();
     let rollup_commit_keys = RollupCommitKeys {
         pallas_commit_key,
         vesta_commit_key,
@@ -48,13 +48,13 @@ where
 #[prover_bounds]
 pub fn generate_and_store_client_circuit_vks<P, V, SW, VSW, Prover>(
     prover: &mut Prover,
-    circuit_info: Vec<Box<dyn ClientPlonkCircuit<P, V, VSW>>>,
+    circuit_info: &[Box<dyn ClientPlonkCircuit<P, V, VSW>>],
 ) -> Vec<VerifyingKey<V>>
 where
     Prover: SequencerProver<V, VSW, P, SW>,
 {
     circuit_info
-        .into_iter()
+        .iter()
         .enumerate()
         .map(|(idx, c)| {
             let keys = c.generate_keys().unwrap();

@@ -4,7 +4,6 @@ use common::structs::Block;
 
 impl SequencerTestApp {
     pub async fn post_sequence(&self) -> Result<Block<curves::vesta::Fr>> {
-        //let body = json!(transaction);
         let response = self
             .api_client
             .post(format!("{}/sequence", self.address))
@@ -20,6 +19,10 @@ impl SequencerTestApp {
             .json::<Block<curves::vesta::Fr>>()
             .await
             .map_err(|_| anyhow::anyhow!("Error serializing Block from sequencer"))?;
+
+        let client_requests = self.get_client_requests().await;
+
+        assert!(client_requests.is_ok());
 
         Ok(block)
     }
