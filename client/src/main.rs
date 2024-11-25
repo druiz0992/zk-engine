@@ -47,24 +47,12 @@ fn main() -> anyhow::Result<()> {
             thread_safe_db,
             thread_safe_prover,
             thread_safe_notifier,
-            configuration.application,
+            configuration.client,
         )
         .await
         .unwrap();
         application.run_until_stopped().await.unwrap();
     });
-    // let rng = &mut rand::thread_rng();
-    // let transfer_input: TransferInput<PallasConfig> = TransferInput {
-    //     sender: Affine::rand(rng),
-    //     recipient: Affine::rand(rng),
-    //     transfer_amount: Fr::rand(rng),
-    //     commitments_to_use: [Fr::rand(rng); 2].to_vec(),
-    // };
-    // let s_string = serde_json::to_string(&transfer_input).unwrap();
-    // ark_std::println!("transfer_input: {:?}", s_string);
-    // let d_string = serde_json::from_str::<TransferInput<PallasConfig>>(&s_string);
-    //
-    // ark_std::println!("transfer_input: {:?}", d_string);
 
     Ok(())
 }

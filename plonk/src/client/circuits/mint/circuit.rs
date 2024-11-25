@@ -18,9 +18,9 @@ use crate::{
     },
 };
 use common::crypto::poseidon::constants::PoseidonParams;
-use zk_macros::client_circuit;
+use zk_macros::client_bounds;
 
-#[client_circuit]
+#[client_bounds]
 pub fn mint_circuit<P, V, VSW, const C: usize>(
     circuit_inputs: CircuitInputs<P>,
 ) -> Result<PlonkCircuit<V::ScalarField>, CircuitError> {

@@ -4,28 +4,25 @@ use client::services::{
 };
 use common::configuration;
 use common::services::notifier::HttpNotifier;
+use common::structs::Transaction;
 use common::telemetry;
 use curves::{
     pallas::{Fq, PallasConfig},
     vesta::VestaConfig,
 };
 
-use keys::UserKeysResponseBody;
+use super::keys::UserKeysResponseBody;
 use once_cell::sync::Lazy;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use wiremock::MockServer;
 
-pub mod circuits;
-pub mod keys;
-pub mod mint;
-pub mod sequencer;
-
-pub struct TestApp {
+pub struct ClientTestApp {
     pub address: String,
     pub port: u16,
     pub prover: Arc<Mutex<InMemProver<PallasConfig, VestaConfig, VestaConfig>>>,
     pub db: Arc<Mutex<InMemStorage<PallasConfig, Fq>>>,
+    pub notifier: Arc<Mutex<HttpNotifier<Transaction<VestaConfig>>>>,
     pub api_client: reqwest::Client,
     pub user_keys: Option<UserKeysResponseBody>,
     pub sequencer_server: MockServer,
@@ -42,12 +39,19 @@ static TRACING: Lazy<()> = Lazy::new(|| {
     }
 });
 
-pub async fn spawn_app() -> TestApp {
+pub async fn spawn_app() -> ClientTestApp {
     Lazy::force(&TRACING);
+    let test_app = spawn_client_app().await;
+    test_app.enable_sequencer().await;
+
+    test_app
+}
+
+pub async fn spawn_client_app() -> ClientTestApp {
     let sequencer_server = MockServer::start().await;
     let configuration = {
         let mut c = configuration::get_configuration().expect("Failed to read configuration");
-        c.application.port = 0;
+        c.client.port = 0;
         c.sequencer.base_url = sequencer_server.uri();
         c
     };
@@ -64,24 +68,26 @@ pub async fn spawn_app() -> TestApp {
         thread_safe_db.clone(),
         thread_safe_prover.clone(),
         thread_safe_notifier.clone(),
-        configuration.application.clone(),
+        configuration.client.clone(),
     )
     .await
     .expect("Couldnt launch application");
 
     let application_port = application.port();
 
-    let _ = tokio::spawn(application.run_until_stopped());
+    tokio::spawn(application.run_until_stopped());
 
-    let test_app = TestApp {
+    let test_app = ClientTestApp {
         address: format!("http://localhost:{}", application_port),
         port: application_port,
         prover: thread_safe_prover.clone(),
         db: thread_safe_db.clone(),
+        notifier: thread_safe_notifier.clone(),
         api_client: reqwest::Client::new(),
         user_keys: None,
         sequencer_server,
     };
+    println!("Client listening at {}", test_app.address);
 
     test_app
 }

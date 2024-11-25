@@ -1,5 +1,6 @@
-application:
+client:
   host: 127.0.0.1
   base_url: "http://127.0.0.1"
-client:
-  base_url: "localhost"
+sequencer:
+  host: 127.0.0.1
+  base_url: "http://127.0.0.1"

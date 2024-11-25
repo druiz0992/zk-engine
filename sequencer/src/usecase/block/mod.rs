@@ -1,24 +1,31 @@
+use crate::domain::{RollupCommitKeys, RollupProvingKeys};
 use crate::ports::prover::SequencerProver;
-use crate::ports::storage::{GlobalStateStorage, TransactionStorage};
+use crate::ports::storage::{BlockStorage, GlobalStateStorage, TransactionStorage};
 use ark_ec::{
     pairing::Pairing,
     short_weierstrass::{Affine, Projective, SWCurveConfig},
-    CurveConfig,
+    CurveConfig, CurveGroup,
 };
 use ark_ff::PrimeField;
+use ark_poly::univariate::DensePolynomial;
 use common::crypto::poseidon::constants::PoseidonParams;
 use common::ports::notifier::Notifier;
-use common::structs::Block;
+use common::structs::CircuitType;
+use common::structs::{Block, Transaction};
 use jf_primitives::rescue::RescueParameter;
 use jf_relation::gadgets::ecc::SWToTEConParam;
-use plonk_prover::client::circuits::{mint, transfer};
+use jf_utils::field_switching;
+use plonk_prover::client::ClientPlonkCircuit;
 use plonk_prover::primitives::circuits::kem_dem::KemDemParams;
+use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
-use trees::{IndexedMerkleTree, Tree};
+use tokio::sync::{Mutex, MutexGuard};
+use tracing_log::log;
+use trees::{AppendTree, IndexedMerkleTree, Tree};
+use zk_macros::{client_bounds, prover_bounds};
 
 mod build;
-mod inputs;
+pub mod inputs;
 
 pub enum BuildBlockError {
     VksNotFound,
@@ -27,7 +34,105 @@ pub enum BuildBlockError {
     InvalidNullifierPath,
     InvalidNullifier,
     NotifierError,
+    DispatcherNotFound,
 }
+
+#[client_bounds]
+pub struct TransactionProcessor<P, V, VSW> {
+    registry: HashMap<CircuitType, Box<dyn ClientPlonkCircuit<P, V, VSW>>>,
+}
+
+#[client_bounds]
+impl<P, V, VSW> TransactionProcessor<P, V, VSW> {
+    pub fn new() -> Self {
+        TransactionProcessor {
+            registry: HashMap::new(),
+        }
+    }
+
+    pub fn register(
+        &mut self,
+        transaction_type: CircuitType,
+        processor: Box<dyn ClientPlonkCircuit<P, V, VSW>>,
+    ) {
+        self.registry.insert(transaction_type, processor);
+    }
+
+    fn get_dispatcher(
+        &self,
+        transaction_type: &CircuitType,
+    ) -> Option<&Box<dyn ClientPlonkCircuit<P, V, VSW>>> {
+        self.registry.get(transaction_type)
+    }
+}
+
+#[client_bounds]
+impl<P, V, VSW> Default for TransactionProcessor<P, V, VSW> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[prover_bounds]
+fn get_keys<P, V, SW, VSW, Proof>(
+    prover: &MutexGuard<'_, Proof>,
+) -> Result<
+    (
+        Option<RollupProvingKeys<V, VSW, P, SW>>,
+        RollupCommitKeys<V, VSW, P, SW>,
+    ),
+    BuildBlockError,
+>
+where
+    Proof: SequencerProver<V, VSW, P, SW>,
+{
+    let proving_keys = prover.get_pks();
+    let commit_keys = prover
+        .get_cks()
+        .ok_or(BuildBlockError::CommitKeysNotFound)?;
+    Ok((proving_keys, commit_keys))
+}
+
+fn get_g_polys<V>(transactions: &[Transaction<V>]) -> Vec<DensePolynomial<V::ScalarField>>
+where
+    V: Pairing,
+    <<V as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig,
+{
+    transactions
+        .iter()
+        .map(|tx| tx.g_polys.clone())
+        .collect::<Vec<_>>()
+}
+
+fn get_commitments<V, Storage>(
+    db_locked: &MutexGuard<'_, Storage>,
+    transactions: &[Transaction<V>],
+) -> (Vec<V::ScalarField>, V::ScalarField)
+where
+    V: Pairing,
+    <V as Pairing>::BaseField: PoseidonParams<Field = V::BaseField>,
+    <<V as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig,
+    <V as Pairing>::ScalarField: PoseidonParams<Field = V::ScalarField>,
+    Storage: GlobalStateStorage<
+        CommitmentTree = Tree<V::BaseField, 8>,
+        VkTree = Tree<V::BaseField, 8>,
+        NullifierTree = IndexedMerkleTree<V::BaseField, 32>,
+    >,
+{
+    let commitments = transactions
+        .iter()
+        .flat_map(|tx| tx.commitments.iter().map(|c| c.0))
+        .collect::<Vec<_>>();
+
+    let local_commitment_tree: Tree<V::ScalarField, 8> = Tree::from_leaves(commitments.clone());
+    db_locked
+        .get_global_commitment_tree()
+        .append_leaf(field_switching(&local_commitment_tree.root()));
+
+    (commitments, local_commitment_tree.root())
+}
+
+#[prover_bounds]
 pub async fn build_block_process<
     P,
     V,
@@ -37,82 +142,41 @@ pub async fn build_block_process<
     Storage: TransactionStorage<V>
         + GlobalStateStorage<
             CommitmentTree = Tree<V::BaseField, 8>,
-            VkTree = Tree<V::BaseField, 2>,
+            VkTree = Tree<V::BaseField, 8>,
             NullifierTree = IndexedMerkleTree<V::BaseField, 32>,
-        >,
+        > + BlockStorage<V::ScalarField>,
     Comms: Notifier<Info = Block<V::ScalarField>>,
 >(
     db: Arc<Mutex<Storage>>,
     prover: Arc<Mutex<Proof>>,
     notifier: Arc<Mutex<Comms>>,
-) -> Result<Block<V::ScalarField>, BuildBlockError>
-where
-    V: Pairing<
-        G1Affine = Affine<VSW>,
-        G1 = Projective<VSW>,
-        ScalarField = <P as CurveConfig>::BaseField,
-    >,
-    <V as Pairing>::BaseField: PrimeField
-        + PoseidonParams<Field = <P as Pairing>::ScalarField>
-        + RescueParameter
-        + SWToTEConParam,
-    <V as Pairing>::ScalarField: PrimeField
-        + PoseidonParams<Field = <P as Pairing>::BaseField>
-        + RescueParameter
-        + SWToTEConParam,
-    <V as Pairing>::ScalarField: KemDemParams<Field = <V as Pairing>::ScalarField>,
-
-    P: Pairing<G1Affine = Affine<SW>, G1 = Projective<SW>>
-        + SWCurveConfig
-        + Pairing<BaseField = <V as Pairing>::ScalarField, ScalarField = <V as Pairing>::BaseField>,
-    <P as CurveConfig>::BaseField: PrimeField + PoseidonParams<Field = V::ScalarField>,
-
-    SW: SWCurveConfig<
-        BaseField = <V as Pairing>::ScalarField,
-        ScalarField = <V as Pairing>::BaseField,
-    >,
-    VSW: SWCurveConfig<
-        BaseField = <V as Pairing>::BaseField,
-        ScalarField = <V as Pairing>::ScalarField,
-    >,
-{
+    processor: Arc<Mutex<TransactionProcessor<P, V, VSW>>>,
+) -> Result<Block<V::ScalarField>, BuildBlockError> {
+    log::debug!("Preparing block");
     let prover = prover.lock().await;
-    ark_std::println!("Get the mofo vks");
-    let vks = [
-        mint::MintCircuit::<1>::new()
-            .as_circuit::<P, V, _>()
-            .get_circuit_id(),
-        transfer::TransferCircuit::<2, 2, 8>::new()
-            .as_circuit::<P, V, _>()
-            .get_circuit_id(),
-    ]
-    .into_iter()
-    .map(|x| prover.get_vk(x))
-    .collect::<Option<Vec<_>>>()
-    .ok_or(BuildBlockError::VksNotFound)?;
-    let proving_keys = prover.get_pks();
+    let db_locked = db.lock().await;
+    let processor = processor.lock().await;
 
-    let commit_keys = prover
-        .get_cks()
-        .ok_or(BuildBlockError::CommitKeysNotFound)?;
-    ark_std::println!("Preparing block");
+    let (proving_keys, commit_keys) = get_keys(&prover)?;
+    let transactions = db_locked.get_all_transactions();
+    let g_polys = get_g_polys(&transactions);
+    let (commitments, commitments_root) = get_commitments(&db_locked, &transactions);
+    let nullifiers = vec![];
 
-    let state_db = db.lock().await;
-    let transactions = state_db.get_all_transactions();
-    let nullifiers = transactions
-        .iter()
-        .flat_map(|tx| tx.nullifiers.iter().map(|n| n.0))
-        .collect::<Vec<_>>();
-
-    let (inputs, commitments, commitments_root) =
-        inputs::build_client_inputs::<P, V, SW, VSW, Storage>(db.clone(), transactions, vks)
-            .await?;
+    let inputs = inputs::build_client_inputs::<P, V, SW, VSW, Storage, Proof>(
+        db_locked,
+        prover,
+        processor,
+        transactions,
+    )
+    .await?;
 
     let block = build::build_block::<P, V, SW, VSW, Storage, Proof>(
         db.clone(),
         inputs,
         nullifiers,
         commitments,
+        g_polys,
         commitments_root,
         commit_keys,
         proving_keys,

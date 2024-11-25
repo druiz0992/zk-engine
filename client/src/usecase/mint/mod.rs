@@ -18,7 +18,7 @@ use plonk_prover::client::ClientPlonkCircuit;
 use plonk_prover::primitives::circuits::kem_dem::KemDemParams;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use zk_macros::client_circuit;
+use zk_macros::client_bounds;
 
 mod inputs;
 mod mint_tokens;
@@ -35,7 +35,7 @@ where
     preimage: StoredPreimageInfo<P>,
 }
 
-#[client_circuit]
+#[client_bounds]
 pub async fn mint_process<
     P,
     V,
@@ -84,7 +84,7 @@ pub async fn mint_process<
     Ok(transaction)
 }
 
-#[client_circuit]
+#[client_bounds]
 async fn get_circuit_and_pk<P, V, VSW, Proof: Prover<P, V, VSW>>(
     prover: Arc<Mutex<Proof>>,
     mint_details: &[Preimage<P>],
@@ -93,16 +93,16 @@ async fn get_circuit_and_pk<P, V, VSW, Proof: Prover<P, V, VSW>>(
     let n_commitments = mint_details.len();
     let circuit = utils::circuits::get_mint_circuit_from_params::<P, V, _>(n_commitments)?;
     let pk = prover_guard
-        .get_pk(circuit.get_circuit_id())
+        .get_pk(circuit.get_circuit_type())
         .ok_or(anyhow::anyhow!(
             "Error in minting process. Circuit Id {:?} not registered",
-            circuit.get_circuit_id()
+            circuit.get_circuit_type()
         ))?
         .clone();
     Ok((pk, circuit))
 }
 
-#[client_circuit]
+#[client_bounds]
 async fn spawn_mint<P, V, VSW, Proof: Prover<P, V, VSW>>(
     mint_circuit: Box<dyn ClientPlonkCircuit<P, V, VSW>>,
     mint_details: Vec<Preimage<P>>,

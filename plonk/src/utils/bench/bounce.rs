@@ -1,4 +1,5 @@
-use super::base::{self, TransactionType};
+use super::base;
+use crate::client::ClientPlonkCircuit;
 use crate::rollup::circuits::{bounce::bounce_circuit, structs::AccInstance, utils::StoredProof};
 use crate::utils::bench;
 use ark_ff::Zero;
@@ -10,11 +11,11 @@ use jf_relation::gadgets::ecc::short_weierstrass::SWPoint;
 use jf_utils::field_switching;
 
 pub fn bounce_circuit_helper_generator<const D: usize>(
-    transaction_sequence: &[TransactionType],
+    client_circuits: &[Box<dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>>],
 ) -> StoredProof<VestaConfig, PallasConfig> {
     // Below taken from bounce_test_helper
     ark_std::println!("Creating Bounce Circuit");
-    let stored_proof_base = base::base_circuit_helper_generator::<D>(transaction_sequence);
+    let stored_proof_base = base::base_circuit_helper_generator::<D>(client_circuits);
     let (global_public_inputs, subtree_public_inputs, passthrough_instance, _) =
         stored_proof_base.pub_inputs;
     let (bounce_circuit, public_outputs) = bounce_circuit::<PallasConfig, VestaConfig>(

@@ -22,9 +22,9 @@ use rand_chacha::ChaChaRng;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use trees::MembershipPath;
-use zk_macros::client_circuit;
+use zk_macros::client_bounds;
 
-#[client_circuit]
+#[client_bounds]
 pub(crate) async fn build_transfer_inputs<
     P,
     V,

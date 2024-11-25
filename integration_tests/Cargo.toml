@@ -1,0 +1,48 @@
+[package]
+name = "integration_tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Arkworks Deps
+ark-ec="0.4.2"
+ark-ff="0.4.2"
+ark-std="0.4.0"
+ark-poly="0.4.2"
+ark-serialize="0.4.2"
+
+# JF Deps
+ jf-plonk = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test", features = ["test-srs"]}
+ jf-relation = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test"}
+ jf-utils = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test"}
+ jf-primitives = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test"}
+ curves = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test"}
+
+common = {path = "../common"}
+trees = {path = "../trees"}
+plonk-prover = { path="../plonk"}
+zk-macros = { path="../macros"}
+client = {path="../client"}
+sequencer = {path="../sequencer"}
+
+num-bigint = {version = "0.4.4", features = ["serde"]}
+bip32 = "0.5.1"
+rand = { version = "0.8.5", features = ["std"]}
+rand_chacha = "0.3.1"
+tokio = {version = "1.29.1", features = ["full"]}
+axum = { version = "0.7.7", features = ["json"]}
+tracing = { version = "0.1.40", features = ["log"]}
+tracing-log = "0.1"
+serde = {version = "1.0.192", features = ["derive"]}
+serde_json = "1.0.108"
+dotenvy = "0.15.7"
+derivative = "2.2.0"
+reqwest = {version = "0.11.22", features = ["json"]}
+anyhow = "1"
+async-trait = "0.1.83"
+once_cell = "1"
+bip39 = {version = "2.1", features = ["rand", "french"]}
+itertools = "0.13.0"
+random_word = { version = "0.4.2", features = ["en"] }
+wiremock = "0.5"
+

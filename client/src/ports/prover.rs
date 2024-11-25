@@ -10,14 +10,14 @@ use jf_primitives::rescue::RescueParameter;
 use jf_relation::{errors::CircuitError, gadgets::ecc::SWToTEConParam};
 use plonk_prover::primitives::circuits::kem_dem::KemDemParams;
 
+use common::structs::CircuitType;
 use plonk_prover::client::circuits::circuit_inputs::CircuitInputs;
-use plonk_prover::client::circuits::structs::CircuitId;
 use plonk_prover::client::ClientPlonkCircuit;
 
 use common::crypto::poseidon::constants::PoseidonParams;
-use zk_macros::client_circuit;
+use zk_macros::client_bounds;
 
-#[client_circuit]
+#[client_bounds]
 pub trait Prover<P, V, VSW> {
     // Returns Proofs and Public Inputs
     #[allow(clippy::type_complexity)]
@@ -36,6 +36,6 @@ pub trait Prover<P, V, VSW> {
 
     fn verify(vk: VerifyingKey<V>, public_inputs: Vec<V::ScalarField>, proof: Proof<V>) -> bool;
 
-    fn get_pk(&self, circuit_id: CircuitId) -> Option<&ProvingKey<V>>;
-    fn store_pk(&mut self, circuit_id: CircuitId, pk: ProvingKey<V>);
+    fn get_pk(&self, circuit_type: CircuitType) -> Option<&ProvingKey<V>>;
+    fn store_pk(&mut self, circuit_type: CircuitType, pk: ProvingKey<V>);
 }

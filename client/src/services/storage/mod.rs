@@ -60,7 +60,17 @@ pub mod in_mem_storage {
         }
 
         fn get_spendable(&self) -> Option<StoredPreimageInfoVector<VSW>> {
-            todo!()
+            let spendable = self
+                .preimage_db
+                .values()
+                .filter(|p| p.block_number.is_some())
+                .cloned()
+                .collect::<Vec<_>>();
+            if spendable.is_empty() {
+                None
+            } else {
+                Some(spendable)
+            }
         }
 
         fn get_preimage(&self, key: VSW::BaseField) -> Option<StoredPreimageInfo<VSW>> {

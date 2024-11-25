@@ -55,6 +55,7 @@ where
     #[serde(serialize_with = "ark_se_std", deserialize_with = "ark_de_std")]
     pub eph_pub_key: Vec<P::ScalarField>,
     pub swap_field: bool,
+    pub circuit_type: CircuitType,
 }
 
 impl<P: Pairing> Transaction<P>
@@ -69,6 +70,7 @@ where
         g_polys: DensePolynomial<P::ScalarField>,
         eph_pub_key: Vec<P::ScalarField>,
         swap_field: bool,
+        circuit_type: CircuitType,
     ) -> Self {
         Self {
             commitments,
@@ -78,7 +80,12 @@ where
             g_polys,
             eph_pub_key,
             swap_field,
+            circuit_type,
         }
+    }
+    pub fn set_proof(&mut self, proof: Proof<P>) -> &mut Self {
+        self.proof = proof;
+        self
     }
 }
 
@@ -97,6 +104,16 @@ where
     pub proof: Proof<P>,
     #[serde(serialize_with = "ark_se_std", deserialize_with = "ark_de_std")]
     pub g_polys: DensePolynomial<P::ScalarField>,
+}
+
+#[derive(Debug, Clone, Eq, Hash, PartialEq, Serialize, Deserialize)]
+pub enum CircuitType {
+    Mint(usize),
+    Transfer(usize, usize),
+    BaseRollup,
+    BounceRollup,
+    MergeRollup,
+    BounceMergeRollup,
 }
 
 #[cfg(test)]

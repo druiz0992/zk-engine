@@ -4,19 +4,24 @@ use ark_ec::{
     CurveGroup,
 };
 use ark_ff::PrimeField;
+use ark_poly::univariate::DensePolynomial;
 use common::{crypto::poseidon::constants::PoseidonParams, structs::Block};
 use jf_primitives::rescue::RescueParameter;
 use jf_relation::gadgets::ecc::SWToTEConParam;
 use plonk_prover::rollup::circuits::client_input::ClientInput;
 use trees::{membership_tree::Tree, non_membership_tree::IndexedMerkleTree, tree::AppendTree};
-use zk_macros::sequencer_circuit;
+use zk_macros::sequencer_bounds;
 
 use crate::{
     domain::{RollupCommitKeys, RollupProvingKeys},
-    ports::{prover::SequencerProver, storage::GlobalStateStorage},
+    ports::{
+        prover::SequencerProver,
+        storage::{BlockStorage, GlobalStateStorage},
+    },
 };
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tracing_log::log;
 
 use super::BuildBlockError;
 
@@ -43,27 +48,27 @@ use super::BuildBlockError;
 // }
 //
 
-#[sequencer_circuit]
+#[sequencer_bounds]
 pub async fn build_block<P, V, SW, VSW, Storage, Prover>(
     db: Arc<Mutex<Storage>>,
-    client_inputs: Vec<ClientInput<V, 8>>,
+    client_inputs: Vec<ClientInput<V>>,
     nullifiers: Vec<V::ScalarField>,
     commitments: Vec<V::ScalarField>,
+    g_polys: Vec<DensePolynomial<V::ScalarField>>,
     local_commitment_root: V::ScalarField,
     commit_keys: RollupCommitKeys<V, VSW, P, SW>,
     proving_keys: Option<RollupProvingKeys<V, VSW, P, SW>>,
 ) -> Result<Block<V::ScalarField>, BuildBlockError>
 where
     Storage: GlobalStateStorage<
-        CommitmentTree = Tree<V::BaseField, 8>,
-        VkTree = Tree<V::BaseField, 2>,
-        NullifierTree = IndexedMerkleTree<V::BaseField, 32>,
-    >,
+            CommitmentTree = Tree<V::BaseField, 8>,
+            VkTree = Tree<V::BaseField, 8>,
+            NullifierTree = IndexedMerkleTree<V::BaseField, 32>,
+        > + BlockStorage<V::ScalarField>,
     Prover: SequencerProver<V, VSW, P, SW>,
 {
-    let db_locked = db.lock().await;
+    let mut db_locked = db.lock().await;
 
-    println!("build_block");
     // client_inputs: [ClientInput<V, 1, 1>; 2],
     // global_vk_root: P::ScalarField,
     // global_nullifier_root: P::ScalarField,
@@ -77,6 +82,7 @@ where
         V::BaseField::from(db_locked.get_global_nullifier_tree().leaf_count());
     let global_commitment_tree_root = db_locked.get_global_commitment_tree().root();
 
+    log::debug!("build_block");
     let block =
         tokio::task::spawn_blocking(move || -> Result<Block<V::ScalarField>, BuildBlockError> {
             let res = Prover::rollup_proof(
@@ -85,13 +91,14 @@ where
                 global_nullifier_tree_root,
                 global_nullifier_tree_leaf_count,
                 global_commitment_tree_root,
-                vec![Default::default()],
+                g_polys,
+                //vec![Default::default(); 2],
                 commit_keys,
                 proving_keys,
             )
             .map_err(|_| BuildBlockError::BlockError("Error building block".to_string()))?;
 
-            ark_std::println!("res: {:?}", res);
+            log::debug!("res: {:?}", res);
 
             Ok(Block {
                 block_number: 0,
@@ -111,6 +118,8 @@ where
             )))
         }
     };
+
+    db_locked.insert_block(block.clone());
 
     Ok(block)
 

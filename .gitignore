@@ -3,4 +3,4 @@
 Cargo.lock
 .pre-commit-config.yaml
 .vscode
-
+*.dat

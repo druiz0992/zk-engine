@@ -4,7 +4,7 @@ use axum::{extract::State, http::StatusCode, Json};
 use common::structs::Transaction;
 use curves::vesta::VestaConfig;
 
-#[tracing::instrument(name = "Received Transaction", skip(db))]
+#[tracing::instrument(name = "Received Transaction", skip(db, tx))]
 pub async fn handle_tx(
     State(db): State<SequencerState>,
     Json(tx): Json<Transaction<VestaConfig>>,

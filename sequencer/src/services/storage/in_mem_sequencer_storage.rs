@@ -12,7 +12,7 @@ pub struct InMemStorage {
     pub past_txs: Vec<Transaction<VestaConfig>>,
     pub nullifier_tree: IndexedMerkleTree<Fr, 32>,
     pub commitment_tree: Tree<Fr, 8>,
-    pub vk_tree: Tree<Fr, 2>,
+    pub vk_tree: Tree<Fr, 8>,
 }
 
 impl InMemStorage {
@@ -45,22 +45,22 @@ impl TransactionStorage<VestaConfig> for InMemStorage {
 }
 
 impl BlockStorage<curves::vesta::Fr> for InMemStorage {
-    fn get_block(&self, _blocknumber: u64) -> Option<Block<curves::vesta::Fr>> {
-        todo!()
+    fn get_block(&self, blocknumber: u64) -> Option<Block<curves::vesta::Fr>> {
+        self.blocks.get(blocknumber as usize).cloned()
     }
 
-    fn insert_block(&mut self, _block: Block<curves::vesta::Fr>) {
-        todo!()
+    fn insert_block(&mut self, block: Block<curves::vesta::Fr>) {
+        self.blocks.push(block);
     }
 
     fn get_block_count(&self) -> u32 {
-        todo!()
+        self.blocks.len() as u32
     }
 }
 
 impl GlobalStateStorage for InMemStorage {
     type CommitmentTree = Tree<Fr, 8>;
-    type VkTree = Tree<Fr, 2>;
+    type VkTree = Tree<Fr, 8>;
     type NullifierTree = IndexedMerkleTree<Fr, 32>;
     fn get_global_commitment_tree(&self) -> Self::CommitmentTree {
         self.commitment_tree.clone()

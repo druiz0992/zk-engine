@@ -1,0 +1,6 @@
+sequencer:
+  host: 127.0.0.1
+  base_url: "localhost"
+client:
+  host: 127.0.0.1
+  base_url: "localhost"

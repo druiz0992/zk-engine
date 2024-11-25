@@ -10,16 +10,16 @@ use jf_plonk::nightfall::ipa_structs::{Proof, VerifyingKey};
 use jf_primitives::rescue::RescueParameter;
 use jf_relation::{errors::CircuitError, gadgets::ecc::SWToTEConParam};
 use plonk_prover::rollup::circuits::client_input::ClientInput;
-use zk_macros::sequencer_circuit;
+use zk_macros::sequencer_bounds;
 
 use crate::domain::{RollupCommitKeys, RollupProvingKeys};
-use plonk_prover::client::circuits::structs::CircuitId;
+use common::structs::CircuitType;
 
-#[sequencer_circuit]
+#[sequencer_bounds]
 pub trait SequencerProver<V, VSW, P, SW> {
     #[allow(clippy::too_many_arguments)]
     fn rollup_proof(
-        client_inputs: Vec<ClientInput<V, 8>>,
+        client_inputs: Vec<ClientInput<V>>,
         global_vk_root: P::ScalarField,
         global_nullifier_root: P::ScalarField,
         global_nullifier_leaf_count: P::ScalarField,
@@ -32,8 +32,8 @@ pub trait SequencerProver<V, VSW, P, SW> {
     fn store_pks(&mut self, pks: RollupProvingKeys<V, VSW, P, SW>);
     fn get_pks(&self) -> Option<RollupProvingKeys<V, VSW, P, SW>>;
 
-    fn store_vk(&mut self, circuit_id: CircuitId, vk: VerifyingKey<V>);
-    fn get_vk(&self, circuit_id: CircuitId) -> Option<VerifyingKey<V>>;
+    fn store_vk(&mut self, circuit_type: CircuitType, vk_info: (VerifyingKey<V>, usize));
+    fn get_vk(&self, circuit_type: CircuitType) -> Option<(VerifyingKey<V>, usize)>;
 
     fn store_cks(&mut self, cks: RollupCommitKeys<V, VSW, P, SW>);
     fn get_cks(&self) -> Option<RollupCommitKeys<V, VSW, P, SW>>;

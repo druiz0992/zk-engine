@@ -1,31 +1,34 @@
+use crate::client::structs::ClientPubInput;
+use crate::rollup::circuits::client_input::ClientInput;
+use crate::rollup::circuits::client_input::LowNullifierInfo;
+use crate::{
+    client::circuits::circuit_inputs::CircuitInputs, client::ClientPlonkCircuit,
+    primitives::circuits::kem_dem::KemDemParams,
+};
 use ark_ec::{
     pairing::Pairing,
     short_weierstrass::{Affine, Projective, SWCurveConfig},
     CurveConfig,
 };
 use ark_ff::PrimeField;
+use common::crypto::poseidon::constants::PoseidonParams;
+use common::structs::CircuitType;
+use jf_plonk::nightfall::ipa_structs::Proof;
+use jf_plonk::nightfall::ipa_structs::VerifyingKey;
 use jf_primitives::rescue::RescueParameter;
 use jf_relation::{
     constraint_system::PlonkCircuit, errors::CircuitError, gadgets::ecc::SWToTEConParam,
 };
-
-use super::structs::CircuitId;
-use crate::{
-    client::circuits::circuit_inputs::CircuitInputs, client::ClientPlonkCircuit,
-    primitives::circuits::kem_dem::KemDemParams,
-};
-use common::crypto::poseidon::constants::PoseidonParams;
-
-use zk_macros::client_circuit;
+use zk_macros::client_bounds;
 
 pub mod circuit;
 pub mod constants;
 pub mod utils;
 
 pub use circuit::*;
-pub use utils::{build_random_inputs, mint_with_random_inputs};
+pub use utils::build_random_inputs;
 
-const CIRCUIT_ID: &str = "MINT";
+#[derive(Debug, Hash)]
 pub struct MintCircuit<const C: usize>;
 
 impl<const C: usize> MintCircuit<C> {
@@ -33,19 +36,18 @@ impl<const C: usize> MintCircuit<C> {
         MintCircuit
     }
 
-    pub fn get_circuit_id(&self) -> CircuitId {
-        get_circuit_id_from_params(C, 0)
+    pub fn get_circuit_type(&self) -> CircuitType {
+        get_circuit_type_from_params(C, 0)
     }
 
-    #[client_circuit]
+    #[client_bounds]
     pub fn as_circuit<P, V, VSW>(self) -> Box<dyn ClientPlonkCircuit<P, V, VSW>> {
         Box::new(self)
     }
 }
 
-pub fn get_circuit_id_from_params(c: usize, _n: usize) -> CircuitId {
-    let id = format!("{}_{}", CIRCUIT_ID, c);
-    CircuitId::new(id)
+pub fn get_circuit_type_from_params(c: usize, _n: usize) -> CircuitType {
+    CircuitType::Mint(c)
 }
 
 impl<const C: usize> Default for MintCircuit<C> {
@@ -54,7 +56,7 @@ impl<const C: usize> Default for MintCircuit<C> {
     }
 }
 
-#[client_circuit]
+#[client_bounds]
 impl<P, V, VSW, const C: usize> ClientPlonkCircuit<P, V, VSW> for MintCircuit<C> {
     fn to_plonk_circuit(
         &self,
@@ -62,14 +64,32 @@ impl<P, V, VSW, const C: usize> ClientPlonkCircuit<P, V, VSW> for MintCircuit<C>
     ) -> Result<PlonkCircuit<V::ScalarField>, CircuitError> {
         mint_circuit::<P, V, VSW, C>(circuit_inputs)
     }
-    fn generate_random_inputs(&self) -> Result<CircuitInputs<P>, CircuitError> {
-        utils::build_random_inputs::<P, V, VSW, C>(None)
+    fn generate_random_inputs(
+        &self,
+        token_id: Option<V::ScalarField>,
+    ) -> Result<CircuitInputs<P>, CircuitError> {
+        utils::build_random_inputs::<P, V, VSW, C>(token_id)
     }
-    fn get_circuit_id(&self) -> CircuitId {
-        self.get_circuit_id()
+    fn get_circuit_type(&self) -> CircuitType {
+        self.get_circuit_type()
     }
     fn get_commitment_and_nullifier_count(&self) -> (usize, usize) {
-        (C, 0)
+        (C, 1)
+    }
+    fn generate_client_input_for_sequencer(
+        &self,
+        proof: Proof<V>,
+        vk: VerifyingKey<V>,
+        public_inputs: &ClientPubInput<V::ScalarField>,
+        _low_nullifier_info: &Option<LowNullifierInfo<V, 32>>,
+    ) -> ClientInput<V> {
+        let (c, n) =
+            <MintCircuit<C> as ClientPlonkCircuit<P, V, VSW>>::get_commitment_and_nullifier_count(
+                self,
+            );
+        let mut client_inputs = ClientInput::<V>::new(proof, vk, c, n);
+        client_inputs.set_commitments(&public_inputs.commitments);
+        client_inputs
     }
 }
 
@@ -104,8 +124,6 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::client::PlonkCircuitParams;
-
     use super::*;
     use curves::pallas::PallasConfig;
     use curves::vesta::VestaConfig;
@@ -136,15 +154,14 @@ mod test {
     }
 
     fn mint_test_helper_random<const C: usize>() -> Result<(), CircuitError> {
-        let PlonkCircuitParams {
-            circuit: plonk_circuit,
-            public_inputs: _,
-        } = mint_with_random_inputs::<PallasConfig, VestaConfig, _, C>(None).expect(&format!(
-            "Error during Mint transaction from random inputs with C:{C}"
-        ));
+        let inputs = build_random_inputs::<PallasConfig, VestaConfig, _, C>(None).unwrap();
+        let mint_circuit = MintCircuit::<C>::new()
+            .as_circuit::<PallasConfig, VestaConfig, _>()
+            .to_plonk_circuit(inputs)
+            .unwrap();
 
-        assert!(plonk_circuit
-            .check_circuit_satisfiability(&plonk_circuit.public_input().unwrap())
+        assert!(mint_circuit
+            .check_circuit_satisfiability(&mint_circuit.public_input().unwrap())
             .is_ok());
 
         Ok(())

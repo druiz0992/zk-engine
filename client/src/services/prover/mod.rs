@@ -22,20 +22,20 @@ pub mod in_memory_prover {
     use crate::ports::prover::Prover;
     use ark_ff::PrimeField;
     use common::crypto::poseidon::constants::PoseidonParams;
+    use common::structs::CircuitType;
     use plonk_prover::client::circuits::circuit_inputs::CircuitInputs;
-    use plonk_prover::client::circuits::structs::CircuitId;
     use plonk_prover::client::ClientPlonkCircuit;
     use plonk_prover::primitives::circuits::kem_dem::KemDemParams;
     use std::marker::PhantomData;
-    use zk_macros::client_circuit;
+    use zk_macros::client_bounds;
 
-    #[client_circuit]
+    #[client_bounds]
     pub struct InMemProver<P, V, VSW> {
-        pub key_storage: HashMap<CircuitId, ProvingKey<V>>,
+        pub key_storage: HashMap<CircuitType, ProvingKey<V>>,
         _marker: PhantomData<(P, VSW)>,
     }
 
-    #[client_circuit]
+    #[client_bounds]
     impl<P, V, VSW> InMemProver<P, V, VSW> {
         pub fn new() -> Self {
             Self {
@@ -45,7 +45,7 @@ pub mod in_memory_prover {
         }
     }
 
-    #[client_circuit]
+    #[client_bounds]
     impl<P, V, VSW> Default for InMemProver<P, V, VSW> {
         fn default() -> Self {
             Self {
@@ -55,7 +55,7 @@ pub mod in_memory_prover {
         }
     }
 
-    #[client_circuit]
+    #[client_bounds]
     impl<P, V, VSW> Prover<P, V, VSW> for InMemProver<P, V, VSW> {
         fn prove(
             circuit: &dyn ClientPlonkCircuit<P, V, VSW>,
@@ -105,11 +105,11 @@ pub mod in_memory_prover {
             .is_ok()
         }
 
-        fn get_pk(&self, circuit_id: CircuitId) -> Option<&ProvingKey<V>> {
-            self.key_storage.get(&circuit_id)
+        fn get_pk(&self, circuit_type: CircuitType) -> Option<&ProvingKey<V>> {
+            self.key_storage.get(&circuit_type)
         }
-        fn store_pk(&mut self, circuit_id: CircuitId, pk: ProvingKey<V>) {
-            self.key_storage.entry(circuit_id).or_insert(pk);
+        fn store_pk(&mut self, circuit_type: CircuitType, pk: ProvingKey<V>) {
+            self.key_storage.entry(circuit_type).or_insert(pk);
         }
     }
 }
@@ -167,16 +167,16 @@ mod tests {
         ));
 
         let mint_circuit = MintCircuit::<C>;
-        prover.store_pk(mint_circuit.get_circuit_id(), mint_pk.clone());
+        prover.store_pk(mint_circuit.get_circuit_type(), mint_pk.clone());
         let transfer_circuit = TransferCircuit::<C, N, D>;
-        prover.store_pk(transfer_circuit.get_circuit_id(), transfer_pk.clone());
+        prover.store_pk(transfer_circuit.get_circuit_type(), transfer_pk.clone());
 
         let mint_circuit = MintCircuit::<C>;
-        let stored_mint_pk = prover.get_pk(mint_circuit.get_circuit_id()).unwrap();
+        let stored_mint_pk = prover.get_pk(mint_circuit.get_circuit_type()).unwrap();
         assert_eq!(stored_mint_pk, &mint_pk);
 
         let transfer_circuit = TransferCircuit::<C, N, D>;
-        let stored_transfer_pk = prover.get_pk(transfer_circuit.get_circuit_id()).unwrap();
+        let stored_transfer_pk = prover.get_pk(transfer_circuit.get_circuit_type()).unwrap();
         assert_eq!(stored_transfer_pk, &transfer_pk);
     }
 
@@ -225,7 +225,7 @@ mod tests {
                 .get_pk(
                     MintCircuit::<C>::new()
                         .as_circuit::<PallasConfig, VestaConfig, VestaConfig>()
-                        .get_circuit_id(),
+                        .get_circuit_type(),
                 )
                 .unwrap(),
         );

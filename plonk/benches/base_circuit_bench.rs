@@ -5,6 +5,9 @@ use curves::{
     vesta::VestaConfig,
 };
 use jf_relation::Circuit;
+use plonk_prover::client::circuits::mint::MintCircuit;
+use plonk_prover::client::circuits::transfer::TransferCircuit;
+use plonk_prover::client::ClientPlonkCircuit;
 use plonk_prover::rollup::circuits::base::base_rollup_circuit;
 use plonk_prover::utils::bench;
 use plonk_prover::utils::bench::base::*;
@@ -14,11 +17,18 @@ use rand_chacha::ChaChaRng;
 use trees::{non_membership_tree::IndexedMerkleTree, tree::AppendTree};
 
 pub fn benchmark_client_transactions<const D: usize>(c: &mut Criterion) {
-    let transaction_sequences = [
-        [TransactionType::Mint, TransactionType::Mint],
-        [TransactionType::Transfer, TransactionType::Transfer],
+    let client_circuits: [[Box<dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>>; 2];
+        2] = [
+        [
+            Box::new(MintCircuit::<1>::new()),
+            Box::new(MintCircuit::<2>::new()),
+        ],
+        [
+            Box::new(TransferCircuit::<1, 1, 8>::new()),
+            Box::new(TransferCircuit::<2, 2, 8>::new()),
+        ],
     ];
-    for transaction_sequence in transaction_sequences.iter() {
+    for client_circuit in client_circuits.iter() {
         // Prepare transfer preamble (i.e. create fake mints)
         let mut rng = ChaChaRng::from_entropy();
         let mut client_inputs = vec![];
@@ -30,14 +40,13 @@ pub fn benchmark_client_transactions<const D: usize>(c: &mut Criterion) {
 
         let token_id = Some(Fq::rand(&mut rng));
 
-        for i in 0..transaction_sequence.len() {
+        for i in 0..client_circuit.len() {
             build_client_inputs(
                 &mut client_inputs,
                 &mut nullifier_tree,
                 &mut global_comm_roots,
                 &mut g_polys,
-                &transaction_sequence[i],
-                i,
+                &*client_circuit[i],
                 token_id,
             )
             .unwrap();
@@ -49,7 +58,7 @@ pub fn benchmark_client_transactions<const D: usize>(c: &mut Criterion) {
          */
 
         let zk_trees =
-            tree_generator_from_client_inputs(&mut client_inputs, global_comm_roots).unwrap();
+            tree_generator_from_client_inputs::<D>(&mut client_inputs, global_comm_roots).unwrap();
 
         let (vesta_commit_key, _pallas_commit_key) = build_commit_keys().unwrap();
 
@@ -71,10 +80,7 @@ pub fn benchmark_client_transactions<const D: usize>(c: &mut Criterion) {
         );
 
         c.bench_function(
-            &format!(
-                "Base with {:?} - Output: Proof Generation",
-                transaction_sequence
-            ),
+            &format!("Base with {:?} - Output: Proof Generation", client_circuit),
             |b| {
                 b.iter(|| {
                     bench::generate_rollup_circuit_artifacts_and_verify::<

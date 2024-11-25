@@ -6,15 +6,16 @@ use ark_ec::{
 };
 use ark_ff::PrimeField;
 use common::crypto::poseidon::constants::PoseidonParams;
+use common::structs::CircuitType;
 use common::structs::Transaction;
 use jf_plonk::nightfall::ipa_structs::ProvingKey;
 use jf_primitives::rescue::RescueParameter;
 use jf_relation::gadgets::ecc::SWToTEConParam;
 use plonk_prover::client::{circuits::circuit_inputs::CircuitInputs, ClientPlonkCircuit};
-use plonk_prover::{client::structs::ClientPubInputs, primitives::circuits::kem_dem::KemDemParams};
-use zk_macros::client_circuit;
+use plonk_prover::{client::structs::ClientPubInput, primitives::circuits::kem_dem::KemDemParams};
+use zk_macros::client_bounds;
 
-#[client_circuit]
+#[client_bounds]
 pub(crate) fn mint_tokens<P, V, VSW, Proof: Prover<P, V, VSW>>(
     mint_circuit: Box<dyn ClientPlonkCircuit<P, V, VSW>>,
     circuit_inputs: CircuitInputs<P>,
@@ -23,10 +24,9 @@ pub(crate) fn mint_tokens<P, V, VSW, Proof: Prover<P, V, VSW>>(
     let (proof, pub_inputs, g_polys) =
         Proof::prove(&*mint_circuit, circuit_inputs, proving_key).unwrap();
 
-    let client_pub_inputs = ClientPubInputs::new(
-        pub_inputs,
-        mint_circuit.get_commitment_and_nullifier_count(),
-    )?;
+    let commitments_nullifiers_count = mint_circuit.get_commitment_and_nullifier_count();
+    let client_pub_inputs: ClientPubInput<<V as Pairing>::ScalarField> =
+        ClientPubInput::new(pub_inputs, commitments_nullifiers_count)?;
 
     let transaction = Transaction::new(
         client_pub_inputs
@@ -44,6 +44,7 @@ pub(crate) fn mint_tokens<P, V, VSW, Proof: Prover<P, V, VSW>>(
         g_polys,
         client_pub_inputs.ephemeral_public_key,
         client_pub_inputs.swap_field,
+        CircuitType::Mint(commitments_nullifiers_count.0),
     );
     Ok(transaction)
 }

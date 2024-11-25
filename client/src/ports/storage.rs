@@ -9,7 +9,7 @@ use derivative::Derivative;
 use serde::{Deserialize, Serialize};
 use trees::MembershipPath;
 
-use crate::domain::{ark_de, ark_se, Preimage};
+use crate::domain::{ark_de, ark_de_std, ark_se, ark_se_std, Preimage};
 
 use super::keys::FullKey;
 
@@ -24,7 +24,7 @@ use super::keys::FullKey;
     Hash(bound = "E: SWCurveConfig")
 )]
 pub struct StoredPreimageInfo<E: SWCurveConfig> {
-    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
+    #[serde(serialize_with = "ark_se_std", deserialize_with = "ark_de_std")]
     pub preimage: Preimage<E>,
     pub block_number: Option<u64>,
     pub leaf_index: Option<usize>,

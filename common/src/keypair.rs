@@ -4,10 +4,11 @@ use derivative::Derivative;
 
 /// This defines a private-public keypair.
 
-#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize, Default, Debug)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize, Default)]
 #[derivative(
     Copy(bound = "P: SWCurveConfig"),
     Clone(bound = "P: SWCurveConfig"),
+    Debug(bound = "P: SWCurveConfig"),
     PartialEq(bound = "P: SWCurveConfig"),
     Eq(bound = "P: SWCurveConfig"),
     Hash(bound = "P: SWCurveConfig")

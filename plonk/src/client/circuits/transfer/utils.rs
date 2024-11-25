@@ -1,33 +1,27 @@
+use super::check_inputs;
+use super::constants::*;
+use crate::client::circuits::circuit_inputs::CircuitInputs;
+use crate::client::circuits::mint;
+use crate::primitives::circuits::kem_dem::KemDemParams;
+use crate::utils::poseidon_utils::build_commitment_hash;
 use ark_ec::{
     pairing::Pairing,
     short_weierstrass::{Affine, Projective, SWCurveConfig},
     CurveConfig,
 };
 use ark_ff::{PrimeField, UniformRand};
-
-use jf_primitives::rescue::RescueParameter;
-use jf_relation::errors::CircuitError;
-use jf_relation::{gadgets::ecc::SWToTEConParam, Circuit};
-
-use rand::SeedableRng;
-use rand_chacha::ChaChaRng;
-
-use super::check_inputs;
-use super::constants::*;
-use crate::client::circuits::circuit_inputs::CircuitInputs;
-use crate::client::circuits::mint;
-use crate::client::circuits::transfer::TransferCircuit;
-use crate::client::structs::ClientPubInputs;
-use crate::client::PlonkCircuitParams;
-use crate::primitives::circuits::kem_dem::KemDemParams;
-use crate::utils::poseidon_utils::build_commitment_hash;
 use common::crypto::poseidon::constants::PoseidonParams;
 use common::derived_keys::DerivedKeys;
 use common::keypair::PublicKey;
+use jf_primitives::rescue::RescueParameter;
+use jf_relation::errors::CircuitError;
+use jf_relation::gadgets::ecc::SWToTEConParam;
+use rand::SeedableRng;
+use rand_chacha::ChaChaRng;
 use trees::{AppendTree, MembershipPath, MembershipTree, Tree};
-use zk_macros::client_circuit;
+use zk_macros::client_bounds;
 
-#[client_circuit]
+#[client_bounds]
 pub fn build_random_inputs<P, V, VSW, const C: usize, const N: usize, const D: usize>(
     token_id: Option<V::ScalarField>,
 ) -> Result<CircuitInputs<P>, CircuitError> {
@@ -87,27 +81,6 @@ pub fn build_random_inputs<P, V, VSW, const C: usize, const N: usize, const D: u
     check_inputs::<P, V, C, N, D>(&circuit_inputs)?;
 
     Ok(circuit_inputs)
-}
-
-#[client_circuit]
-pub fn transfer_with_random_inputs<P, V, VSW, const C: usize, const N: usize, const D: usize>(
-    token_id: Option<V::ScalarField>,
-) -> Result<PlonkCircuitParams<<P as CurveConfig>::BaseField>, CircuitError> {
-    let inputs = build_random_inputs::<P, V, _, C, N, D>(token_id)?;
-    let transfer_circuit = TransferCircuit::<C, N, D>::new().as_circuit::<P, V, _>();
-
-    let circuit = transfer_circuit.to_plonk_circuit(inputs)?;
-
-    let public_inputs = ClientPubInputs::new(
-        circuit.public_input()?,
-        transfer_circuit.get_commitment_and_nullifier_count(),
-    )
-    .map_err(|e| CircuitError::ParameterError(e.to_string()))?;
-
-    Ok(PlonkCircuitParams {
-        circuit,
-        public_inputs,
-    })
 }
 
 fn split_total_value<F, const C: usize>(total: F) -> Result<Vec<F>, String>

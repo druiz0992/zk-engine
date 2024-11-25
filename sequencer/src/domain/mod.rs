@@ -8,16 +8,16 @@ use common::crypto::poseidon::constants::PoseidonParams;
 use jf_plonk::nightfall::ipa_structs::{CommitKey, ProvingKey};
 use jf_primitives::rescue::RescueParameter;
 use jf_relation::gadgets::ecc::SWToTEConParam;
-use zk_macros::sequencer_circuit;
+use zk_macros::sequencer_bounds;
 
-#[sequencer_circuit]
+#[sequencer_bounds]
 #[derive(Debug, Default)]
 pub struct RollupCommitKeys<V, VSW, P, SW> {
     pub pallas_commit_key: CommitKey<P>,
     pub vesta_commit_key: CommitKey<V>,
 }
 
-#[sequencer_circuit]
+#[sequencer_bounds]
 impl<V, VSW, P, SW> Clone for RollupCommitKeys<V, VSW, P, SW> {
     fn clone(&self) -> Self {
         Self {
@@ -27,7 +27,7 @@ impl<V, VSW, P, SW> Clone for RollupCommitKeys<V, VSW, P, SW> {
     }
 }
 
-#[sequencer_circuit]
+#[sequencer_bounds]
 #[derive(Debug)]
 pub struct RollupProvingKeys<V, VSW, P, SW> {
     pub base_proving_key: ProvingKey<P>,
@@ -36,7 +36,7 @@ pub struct RollupProvingKeys<V, VSW, P, SW> {
     pub bounce_merge_proving_key: ProvingKey<V>,
 }
 
-#[sequencer_circuit]
+#[sequencer_bounds]
 impl<V, VSW, P, SW> Clone for RollupProvingKeys<V, VSW, P, SW> {
     fn clone(&self) -> Self {
         Self {
@@ -46,13 +46,4 @@ impl<V, VSW, P, SW> Clone for RollupProvingKeys<V, VSW, P, SW> {
             bounce_merge_proving_key: self.bounce_merge_proving_key.clone(),
         }
     }
-}
-#[derive(Debug, Clone, Eq, Hash, PartialEq)]
-pub enum CircuitType {
-    Mint,
-    Transfer,
-    BaseRollup,
-    BounceRollup,
-    MergeRollup,
-    BounceMergeRollup,
 }

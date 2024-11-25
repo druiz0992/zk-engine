@@ -38,7 +38,7 @@ pub enum BasePublicVarIndex {
 
 pub(super) fn create_initial_low_nullifier_vars<C1, const D: usize>(
     circuit: &mut PlonkCircuit<<C1 as Pairing>::BaseField>,
-    client_inputs: &ClientInput<C1, D>,
+    client_inputs: &ClientInput<C1>,
 ) -> Result<[usize; 3], CircuitError>
 where
     C1: Pairing<G1Affine = Affine<<<C1 as Pairing>::G1 as CurveGroup>::Config>>,
@@ -151,7 +151,7 @@ where
 
 pub(super) fn client_commitment_membership_check<C1, C2, const D: usize>(
     circuit: &mut PlonkCircuit<<C1 as Pairing>::BaseField>,
-    input: &ClientInput<C1, D>,
+    input: &ClientInput<C1>,
     global_commitment_root_var: usize,
     idx: usize,
 ) -> Result<(usize, usize), CircuitError>
@@ -169,7 +169,7 @@ where
     let commitment_tree_root_var = circuit.create_variable(commitment_tree_root_fq)?;
     let calc_commitment_root_var =
         // This <8> is the depth of the block level commitment tree
-        BinaryMerkleTreeGadget::<D, C1::BaseField>::calculate_root(
+        BinaryMerkleTreeGadget::<8, C1::BaseField>::calculate_root(
             circuit,
             commitment_tree_root_var,
             input.path_comm_tree_index[idx],

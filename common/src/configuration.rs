@@ -31,9 +31,8 @@ impl TryFrom<String> for Environment {
 #[derive(serde::Deserialize, Clone, Debug)]
 pub struct Settings {
     pub general: GeneralSettings,
-    pub application: ApplicationSettings,
-    pub sequencer: ClientSettings,
-    pub client: ClientSettings,
+    pub sequencer: ApplicationSettings,
+    pub client: ApplicationSettings,
 }
 
 impl Settings {
@@ -53,6 +52,7 @@ pub struct ApplicationSettings {
     pub port: u16,
     pub host: String,
     pub base_url: String,
+    pub timeout_milliseconds: u64,
 }
 
 pub fn get_configuration() -> Result<Settings, config::ConfigError> {
@@ -81,7 +81,7 @@ pub struct ClientSettings {
     pub timeout_milliseconds: u64,
 }
 
-impl ClientSettings {
+impl ApplicationSettings {
     pub fn timeout(&self) -> std::time::Duration {
         std::time::Duration::from_millis(self.timeout_milliseconds)
     }

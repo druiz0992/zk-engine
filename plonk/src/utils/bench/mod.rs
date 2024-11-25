@@ -14,7 +14,7 @@ use jf_primitives::rescue::RescueParameter;
 use jf_relation::{gadgets::ecc::SWToTEConParam, Arithmetization, Circuit, PlonkCircuit};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-use zk_macros::sequencer_circuit;
+use zk_macros::sequencer_bounds;
 
 pub mod base;
 pub mod bounce;
@@ -32,7 +32,7 @@ where
     pub vk: VerifyingKey<P>,
 }
 
-#[sequencer_circuit]
+#[sequencer_bounds]
 pub fn generate_rollup_circuit_artifacts_and_verify<P, V, SW, VSW>(
     rollup_circuit: &PlonkCircuit<P::ScalarField>,
     verify_flag: bool,
@@ -54,7 +54,7 @@ pub fn generate_rollup_circuit_artifacts_and_verify<P, V, SW, VSW>(
     })
 }
 
-#[sequencer_circuit]
+#[sequencer_bounds]
 pub fn generate_rollup_circuit_pks<P, V, SW, VSW>(
     rollup_circuit: &PlonkCircuit<P::ScalarField>,
 ) -> Result<(ProvingKey<P>, VerifyingKey<P>), String> {
@@ -74,7 +74,7 @@ pub fn generate_rollup_circuit_pks<P, V, SW, VSW>(
     Ok((rollup_ipa_pk, rollup_ipa_vk))
 }
 
-#[sequencer_circuit]
+#[sequencer_bounds]
 pub fn rollup_circuit_proof_and_verify<P, V, SW, VSW>(
     rollup_circuit: &PlonkCircuit<P::ScalarField>,
     rollup_ipa_pk: &ProvingKey<P>,
