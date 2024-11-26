@@ -1,19 +1,11 @@
+use crate::domain::{StoredPreimageInfo, StoredPreimageInfoVector};
 use ark_ec::{
     short_weierstrass::{Affine, SWCurveConfig},
     CurveConfig,
 };
 use ark_ff::PrimeField;
-use ark_serialize::{
-    CanonicalDeserialize, CanonicalSerialize, Compress, Read, SerializationError, Valid, Validate,
-    Write,
-};
 use common::{crypto::poseidon::constants::PoseidonParams, structs::Block};
-use derivative::Derivative;
-use serde::{Deserialize, Serialize};
 use trees::MembershipPath;
-
-use crate::domain::{ark_de, ark_de_std, ark_se, ark_se_std, Preimage};
-use crate::domain::{PreimageStatus, StoredPreimageInfo, StoredPreimageInfoVector};
 
 use super::keys::FullKey;
 
