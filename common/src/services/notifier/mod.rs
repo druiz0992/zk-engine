@@ -36,9 +36,12 @@ where
     async fn send_info(&self, transaction: Transaction<V>) -> anyhow::Result<()> {
         let base_url = self.base_url.clone();
         let client = reqwest::Client::new();
+        //let cbor_data = serde_cbor::to_vec(&transaction)
+        //   .map_err(|_| anyhow::anyhow!("Transaction couldnt be serialized"))?;
         let res = client
             .post(format!("{}/transactions", base_url))
             .json(&transaction)
+            //.body(cbor_data)
             .send()
             .await;
         ark_std::println!("Got response {:?} from {}", res, base_url);

@@ -1,9 +1,9 @@
 use crate::adapters::rest_api::structs::TransferInput;
+use crate::domain::{Preimage, StoredPreimageInfoVector};
 use crate::ports::committable::Committable;
 use crate::ports::keys::FullKey;
 use crate::ports::storage::{KeyDB, PreimageDB, TreeDB};
 use crate::services::user_keys::UserKeys;
-use crate::{domain::Preimage, ports::storage::StoredPreimageInfoVector};
 use ark_ec::{
     pairing::Pairing,
     short_weierstrass::{Affine, Projective, SWCurveConfig},
@@ -16,6 +16,7 @@ use common::keypair::PublicKey;
 use jf_primitives::rescue::RescueParameter;
 use jf_relation::gadgets::ecc::SWToTEConParam;
 use plonk_prover::client::circuits::circuit_inputs::CircuitInputs;
+use plonk_prover::client::circuits::transfer::check_inputs;
 use plonk_prover::primitives::circuits::kem_dem::KemDemParams;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -111,6 +112,13 @@ pub(crate) async fn build_transfer_inputs<
         .add_token_ids(vec![token_id])
         .add_old_token_values(old_token_values)
         .add_old_token_salts(old_token_salts)
+        .add_token_values(vec![transfer_details.transfer_amount])
         .build();
+    check_inputs::<P, V>(
+        &circuit_inputs,
+        circuit_inputs.token_values.len(),
+        circuit_inputs.old_token_values.len(),
+    )
+    .map_err(|e| anyhow::anyhow!(e.to_string()))?;
     Ok(circuit_inputs)
 }

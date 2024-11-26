@@ -65,14 +65,14 @@ impl MintRequestBody {
 impl ClientTestApp {
     pub async fn post_mint_request(&mut self, mint_values: &[MintParams]) -> Response {
         let user_keys = if let Some(keys) = &self.user_keys {
-            keys
+            keys.clone()
         } else {
             let user_keys = self
                 .default_user_keys()
                 .await
                 .expect("Error generating user keys");
             self.set_user_keys(user_keys);
-            self.user_keys.as_ref().unwrap()
+            self.get_user_keys().unwrap()
         };
 
         let mint_request: Vec<MintRequestBody> = mint_values

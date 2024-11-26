@@ -78,7 +78,7 @@ pub fn build_random_inputs<P, V, VSW, const C: usize, const N: usize, const D: u
         .add_root_key(root_key)
         .add_ephemeral_key(V::ScalarField::rand(&mut rng))
         .build();
-    check_inputs::<P, V, C, N, D>(&circuit_inputs)?;
+    check_inputs::<P, V>(&circuit_inputs, C, N)?;
 
     Ok(circuit_inputs)
 }

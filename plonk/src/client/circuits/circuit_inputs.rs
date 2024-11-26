@@ -4,9 +4,10 @@ use common::keypair::PublicKey;
 use derivative::Derivative;
 use trees::MembershipPath;
 
-#[derive(Derivative, Default, Debug)]
+#[derive(Derivative, Default)]
 #[derivative(
     Clone(bound = "E: SWCurveConfig"),
+    Debug(bound = "E: SWCurveConfig"),
     PartialEq(bound = "E: SWCurveConfig"),
     Eq(bound = "E: SWCurveConfig"),
     Hash(bound = "E: SWCurveConfig")

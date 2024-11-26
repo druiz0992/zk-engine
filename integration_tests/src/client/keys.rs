@@ -1,6 +1,8 @@
 use super::test_app::ClientTestApp;
 use anyhow::anyhow;
 use bip39::{Language, Mnemonic};
+use client::services::user_keys::UserKeys;
+use curves::pallas::PallasConfig;
 use itertools::Itertools;
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
@@ -30,7 +32,7 @@ impl Default for UserKeysRequestBody {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UserKeysResponseBody {
     pub root_key: String,
     pub private_key: String,
@@ -89,5 +91,20 @@ impl ClientTestApp {
 
     pub fn set_user_keys(&mut self, user_keys: UserKeysResponseBody) {
         self.user_keys = Some(user_keys);
+    }
+    pub fn get_user_keys(&self) -> Option<UserKeysResponseBody> {
+        self.user_keys.clone()
+    }
+
+    pub async fn set_default_user_keys(&mut self) -> Result<(), anyhow::Error> {
+        let keys = self.default_user_keys().await?;
+        self.set_user_keys(keys);
+        Ok(())
+    }
+
+    pub async fn get_user_keys_as_user_keys(&self) -> Result<UserKeys<PallasConfig>, String> {
+        let user_keys = self.get_user_keys().unwrap();
+        let user_keys = json!(user_keys).to_string();
+        serde_json::from_str::<UserKeys<PallasConfig>>(&user_keys).map_err(|e| e.to_string())
     }
 }

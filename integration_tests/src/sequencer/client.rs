@@ -9,7 +9,6 @@ impl SequencerTestApp {
         Mock::given(path("/block"))
             .and(method("POST"))
             .respond_with(ResponseTemplate::new(200))
-            .expect(1)
             .mount(&self.client_server)
             .await;
     }

@@ -3,7 +3,7 @@ use common::serialize::{ark_de, ark_se, vec_ark_de, vec_ark_se};
 use derivative::Derivative;
 use serde::{Deserialize, Serialize};
 
-use crate::ports::storage::StoredPreimageInfo;
+use crate::domain::StoredPreimageInfo;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MintInput {
@@ -18,9 +18,10 @@ pub struct MnemonicInput {
     pub mnemonic: String,
 }
 
-#[derive(Derivative, Default, Debug, Deserialize, Serialize)]
+#[derive(Derivative, Default, Deserialize, Serialize)]
 #[derivative(
     Clone(bound = "P: SWCurveConfig"),
+    Debug(bound = "P: SWCurveConfig"),
     PartialEq(bound = "P: SWCurveConfig"),
     Eq(bound = "P: SWCurveConfig"),
     Hash(bound = "P: SWCurveConfig")

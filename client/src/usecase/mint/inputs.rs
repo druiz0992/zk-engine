@@ -1,7 +1,7 @@
 use super::MintPreimage;
 use crate::domain::Preimage;
+use crate::domain::{PreimageStatus, StoredPreimageInfo};
 use crate::ports::committable::Committable;
-use crate::ports::storage::StoredPreimageInfo;
 use anyhow::Context;
 use ark_ec::{
     pairing::Pairing,
@@ -33,7 +33,7 @@ pub(crate) fn compute_mint_preimages<P, V, VSW>(
             nullifier: transaction.nullifiers[0].0,
             block_number: None,
             leaf_index: None,
-            spent: false,
+            status: PreimageStatus::Unspent,
         };
 
         let mint_preimage = MintPreimage {

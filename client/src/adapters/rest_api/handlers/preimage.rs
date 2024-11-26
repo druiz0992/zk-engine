@@ -1,9 +1,9 @@
 use axum::{extract::State, Json};
 use curves::pallas::PallasConfig;
 
+use crate::domain::StoredPreimageInfoVector;
 use crate::ports::committable::Committable;
 use crate::ports::storage::PreimageDB;
-use crate::ports::storage::StoredPreimageInfoVector;
 
 use crate::adapters::rest_api::rest_api_entry::{AppError, AppState};
 use crate::adapters::rest_api::structs::PreimageResponse;

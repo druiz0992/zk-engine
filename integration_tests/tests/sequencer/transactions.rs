@@ -34,6 +34,35 @@ async fn post_correct_mint_transactions_returns_200() {
 }
 
 #[tokio::test]
+async fn post_correct_transfer_transactions_returns_200() {
+    let app = spawn_app().await;
+
+    let transfer_transaction =
+        utils::read_transaction_from_file("./tests/data/transfer_transaction_c1_v10.dat").unwrap();
+    app.post_transaction(&transfer_transaction).await;
+
+    let transactions = app.get_transactions().await.unwrap();
+    assert_eq!(
+        transactions.len(),
+        1,
+        "Sequencer should have 1 transaction stored in memory and instead it has {}",
+        transactions.len()
+    );
+
+    let transfer_transaction =
+        utils::read_transaction_from_file("./tests/data/transfer_transaction_c1_v100.dat").unwrap();
+    app.post_transaction(&transfer_transaction).await;
+
+    let transactions = app.get_transactions().await.unwrap();
+    assert_eq!(
+        transactions.len(),
+        2,
+        "Sequencer should have 2 transaction stored in memory and instead it has {}",
+        transactions.len()
+    );
+}
+
+#[tokio::test]
 async fn post_empty_transactions_returns_415() {
     let app = spawn_app().await;
 

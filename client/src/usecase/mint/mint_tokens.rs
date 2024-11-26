@@ -21,8 +21,8 @@ pub(crate) fn mint_tokens<P, V, VSW, Proof: Prover<P, V, VSW>>(
     circuit_inputs: CircuitInputs<P>,
     proving_key: &ProvingKey<V>,
 ) -> Result<Transaction<V>, &'static str> {
-    let (proof, pub_inputs, g_polys) =
-        Proof::prove(&*mint_circuit, circuit_inputs, proving_key).unwrap();
+    let (proof, pub_inputs, g_polys) = Proof::prove(&*mint_circuit, circuit_inputs, proving_key)
+        .map_err(|_| "Error running Mint proof")?;
 
     let commitments_nullifiers_count = mint_circuit.get_commitment_and_nullifier_count();
     let client_pub_inputs: ClientPubInput<<V as Pairing>::ScalarField> =

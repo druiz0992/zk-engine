@@ -24,6 +24,9 @@ async fn post_sequence_after_posting_2_transactions() {
     assert_eq!(block.commitments.len(), 2);
     assert_eq!(block.nullifiers.len(), 0);
     assert_eq!(block.block_number, 0);
+
+    let client_requests = app.get_client_requests().await;
+    assert!(client_requests.is_ok());
 }
 
 #[tokio::test]

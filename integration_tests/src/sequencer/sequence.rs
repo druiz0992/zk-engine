@@ -20,9 +20,6 @@ impl SequencerTestApp {
             .await
             .map_err(|_| anyhow::anyhow!("Error serializing Block from sequencer"))?;
 
-        let client_requests = self.get_client_requests().await;
-
-        assert!(client_requests.is_ok());
 
         Ok(block)
     }

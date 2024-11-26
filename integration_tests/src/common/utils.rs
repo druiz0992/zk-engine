@@ -1,5 +1,5 @@
 use anyhow::Result;
-use client::ports::storage::StoredPreimageInfo;
+use client::domain::StoredPreimageInfo;
 use common::structs::Block;
 use common::structs::Transaction;
 use curves::pallas::PallasConfig;
