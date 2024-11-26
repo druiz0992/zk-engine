@@ -34,7 +34,8 @@ where
     Proof: Prover<P, V, VSW>,
 {
     let (proof, pub_inputs, g_polys) =
-        Proof::prove(&*transfer_circuit, circuit_inputs.clone(), proving_key).unwrap();
+        Proof::prove(&*transfer_circuit, circuit_inputs.clone(), proving_key)
+            .map_err(|_| "Error running Transfer proof")?;
 
     let commitment_nullifier_count = transfer_circuit.get_commitment_and_nullifier_count();
 

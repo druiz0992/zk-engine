@@ -1,5 +1,4 @@
-use crate::domain::Preimage;
-use crate::ports::storage::StoredPreimageInfo;
+use crate::domain::{Preimage, StoredPreimageInfo};
 use crate::ports::{prover::Prover, storage::PreimageDB};
 use crate::utils;
 use ark_ec::{

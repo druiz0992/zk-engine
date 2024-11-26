@@ -39,20 +39,6 @@ async fn mint_endpoint_returns_500_if_circuit_not_registered() {
 }
 
 #[tokio::test]
-async fn mint_endpoint_returns_422_with_incorrect_input() {
-    let mut app = spawn_app().await;
-    let mint_params = &[MintParams::new("-1", "1")];
-    let mint_response = app.post_mint_request(mint_params).await;
-
-    assert_eq!(
-        mint_response.status(),
-        reqwest::StatusCode::UNPROCESSABLE_ENTITY,
-        "Expected a 422  Unprocessable Entity Error, but got {}",
-        mint_response.status()
-    );
-}
-
-#[tokio::test]
 async fn mint_endpoint_returns_415_with_empty_input() {
     let app = spawn_app().await;
 

@@ -1,8 +1,7 @@
 use super::test_app::ClientTestApp;
+use client::domain::{StoredPreimageInfo, StoredPreimageInfoVector};
 use client::ports::committable::Committable;
 use client::ports::storage::PreimageDB;
-use client::ports::storage::StoredPreimageInfo;
-use client::ports::storage::StoredPreimageInfoVector;
 use curves::pallas::PallasConfig;
 
 impl ClientTestApp {

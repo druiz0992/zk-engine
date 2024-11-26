@@ -109,8 +109,12 @@ impl<P, V, VSW, const C: usize, const N: usize, const D: usize> ClientPlonkCircu
     }
 }
 
-fn check_inputs<P, V, const C: usize, const N: usize, const D: usize>(
+const D: usize = 8;
+#[allow(non_snake_case)]
+pub fn check_inputs<P, V>(
     circuit_inputs: &CircuitInputs<P>,
+    C: usize,
+    N: usize,
 ) -> Result<(), CircuitError>
 where
     P: SWCurveConfig,

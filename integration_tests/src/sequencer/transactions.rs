@@ -16,7 +16,7 @@ impl SequencerTestApp {
             .unwrap();
         assert!(
             response.status().is_success(),
-            "Sequencer should return Sucess on POST transction. Instead, it returned {}",
+            "Sequencer should return Success on POST transction. Instead, it returned {}",
             response.status()
         );
     }

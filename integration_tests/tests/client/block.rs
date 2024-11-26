@@ -1,4 +1,4 @@
-use client::ports::storage::StoredPreimageInfo;
+use client::domain::{PreimageStatus, StoredPreimageInfo};
 use curves::pallas::PallasConfig;
 use integration_tests::client::test_app::spawn_app;
 use integration_tests::common::utils::read_block_from_file;
@@ -76,9 +76,9 @@ async fn block_endpoint_updates_preimages_and_root() {
     assert!(response.status().is_success());
     assert_eq!(preimages[0].block_number, Some(0));
     assert_eq!(preimages[0].leaf_index, Some(0));
-    assert_eq!(preimages[0].spent, false);
+    assert_eq!(preimages[0].status, PreimageStatus::Unspent);
     assert_eq!(preimages[1].block_number, Some(0));
     assert_eq!(preimages[1].leaf_index, Some(1));
-    assert_eq!(preimages[1].spent, false);
+    assert_eq!(preimages[1].status, PreimageStatus::Unspent);
     assert!(root.is_some());
 }

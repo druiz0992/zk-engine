@@ -11,7 +11,8 @@ pub mod in_mem_storage {
     };
 
     use crate::{
-        ports::storage::{KeyDB, PreimageDB, StoredPreimageInfo, StoredPreimageInfoVector, TreeDB},
+        domain::{PreimageStatus, StoredPreimageInfo, StoredPreimageInfoVector},
+        ports::storage::{KeyDB, PreimageDB, TreeDB},
         services::user_keys::UserKeys,
     };
 
@@ -109,7 +110,7 @@ pub mod in_mem_storage {
             block.nullifiers.iter().for_each(|&n| {
                 if let Some(preimage) = self.preimage_db.get_mut(&n.to_string()) {
                     if preimage.nullifier == n {
-                        preimage.spent = true;
+                        preimage.status = PreimageStatus::Spent;
                     }
                 }
             });

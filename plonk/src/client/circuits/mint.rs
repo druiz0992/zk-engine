@@ -93,7 +93,8 @@ impl<P, V, VSW, const C: usize> ClientPlonkCircuit<P, V, VSW> for MintCircuit<C>
     }
 }
 
-fn check_inputs<P, V, const C: usize>(circuit_inputs: &CircuitInputs<P>) -> Result<(), CircuitError>
+#[allow(non_snake_case)]
+pub fn check_inputs<P, V>(circuit_inputs: &CircuitInputs<P>, C: usize) -> Result<(), CircuitError>
 where
     P: SWCurveConfig,
     <P as CurveConfig>::BaseField: PrimeField + PoseidonParams<Field = V::ScalarField>,

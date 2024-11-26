@@ -3,37 +3,19 @@ use ark_ec::{
     CurveConfig,
 };
 use ark_ff::PrimeField;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use ark_serialize::{
+    CanonicalDeserialize, CanonicalSerialize, Compress, Read, SerializationError, Valid, Validate,
+    Write,
+};
 use common::{crypto::poseidon::constants::PoseidonParams, structs::Block};
 use derivative::Derivative;
 use serde::{Deserialize, Serialize};
 use trees::MembershipPath;
 
 use crate::domain::{ark_de, ark_de_std, ark_se, ark_se_std, Preimage};
+use crate::domain::{PreimageStatus, StoredPreimageInfo, StoredPreimageInfoVector};
 
 use super::keys::FullKey;
-
-#[derive(
-    Derivative, Default, Debug, Serialize, Deserialize, CanonicalSerialize, CanonicalDeserialize,
-)]
-#[derivative(
-    Copy(bound = "E: SWCurveConfig"),
-    Clone(bound = "E: SWCurveConfig"),
-    PartialEq(bound = "E: SWCurveConfig"),
-    Eq(bound = "E: SWCurveConfig"),
-    Hash(bound = "E: SWCurveConfig")
-)]
-pub struct StoredPreimageInfo<E: SWCurveConfig> {
-    #[serde(serialize_with = "ark_se_std", deserialize_with = "ark_de_std")]
-    pub preimage: Preimage<E>,
-    pub block_number: Option<u64>,
-    pub leaf_index: Option<usize>,
-    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
-    pub nullifier: E::BaseField,
-    pub spent: bool,
-}
-
-pub type StoredPreimageInfoVector<E> = Vec<StoredPreimageInfo<E>>;
 
 pub trait PreimageDB {
     type E: SWCurveConfig;

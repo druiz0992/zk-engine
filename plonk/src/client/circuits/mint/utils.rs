@@ -46,7 +46,7 @@ pub fn build_random_inputs<P, V, VSW, const C: usize>(
         .add_token_salts(salts)
         .add_recipients(recipients)
         .build();
-    check_inputs::<P, V, C>(&circuit_inputs)?;
+    check_inputs::<P, V>(&circuit_inputs, C)?;
 
     Ok(circuit_inputs)
 }
@@ -65,7 +65,7 @@ pub fn build_inputs<P, V, VSW, const C: usize>(
         .add_token_salts(salts)
         .add_recipients(owners)
         .build();
-    check_inputs::<P, V, C>(&circuit_inputs)?;
+    check_inputs::<P, V>(&circuit_inputs, C)?;
 
     Ok(circuit_inputs)
 }
