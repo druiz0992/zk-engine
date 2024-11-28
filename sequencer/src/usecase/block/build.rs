@@ -85,7 +85,7 @@ where
     log::debug!("build_block");
     let block =
         tokio::task::spawn_blocking(move || -> Result<Block<V::ScalarField>, BuildBlockError> {
-            let res = Prover::rollup_proof(
+            Prover::rollup_proof(
                 client_inputs,
                 vk_tree_root,
                 global_nullifier_tree_root,
@@ -97,8 +97,6 @@ where
                 proving_keys,
             )
             .map_err(|_| BuildBlockError::BlockError("Error building block".to_string()))?;
-
-            log::debug!("res: {:?}", res);
 
             Ok(Block {
                 block_number: 0,

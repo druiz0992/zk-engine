@@ -1,11 +1,11 @@
-use std::marker::PhantomData;
-
 use crate::structs::Block;
 use crate::structs::Transaction;
 use crate::{configuration::ApplicationSettings, ports::notifier::Notifier};
 use ark_ec::{pairing::Pairing, short_weierstrass::SWCurveConfig, CurveGroup};
 use ark_ff::Field;
 use async_trait::async_trait;
+use reqwest::header::CONTENT_TYPE;
+use std::marker::PhantomData;
 
 #[derive(Clone, Debug)]
 pub struct HttpNotifier<V> {
@@ -32,16 +32,16 @@ where
 {
     type Info = Transaction<V>;
 
-    #[tracing::instrument(name = "Send notification", skip(transaction))]
+    #[tracing::instrument(name = "Send notification", skip(self, transaction))]
     async fn send_info(&self, transaction: Transaction<V>) -> anyhow::Result<()> {
         let base_url = self.base_url.clone();
         let client = reqwest::Client::new();
-        //let cbor_data = serde_cbor::to_vec(&transaction)
-        //   .map_err(|_| anyhow::anyhow!("Transaction couldnt be serialized"))?;
+        let cbor_data = serde_cbor::to_vec(&transaction)
+            .map_err(|_| anyhow::anyhow!("Transaction couldnt be serialized"))?;
         let res = client
             .post(format!("{}/transactions", base_url))
-            .json(&transaction)
-            //.body(cbor_data)
+            .header(CONTENT_TYPE, "application/cbor")
+            .body(cbor_data)
             .send()
             .await;
         ark_std::println!("Got response {:?} from {}", res, base_url);
@@ -56,7 +56,7 @@ where
 {
     type Info = Block<F>;
 
-    #[tracing::instrument(name = "Send notification", skip(block))]
+    #[tracing::instrument(name = "Send notification", skip(self, block))]
     async fn send_info(&self, block: Block<F>) -> anyhow::Result<()> {
         let base_url = self.base_url.clone();
         let client = reqwest::Client::new();

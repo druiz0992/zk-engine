@@ -1,6 +1,5 @@
 use integration_tests::client::mint::MintParams;
 use integration_tests::client::test_app::spawn_app;
-use integration_tests::common;
 use plonk_prover::client::circuits::mint::MintCircuit;
 
 #[tokio::test]
@@ -92,42 +91,4 @@ async fn mint_endpoint_returns_500_with_4_transactions_if_circuit_unregistered()
         "Expected a 500  Internal Server Error, but got {}",
         mint_response.status()
     );
-}
-
-#[tokio::test]
-#[ignore]
-async fn save_mints() {
-    let mut app = spawn_app().await;
-    let mint_params = vec![
-        MintParams::new("100", "1"),
-        MintParams::new("10", "1"),
-        MintParams::new("1000", "1"),
-        MintParams::new("2000", "1"),
-        MintParams::new("10000", "1"),
-    ];
-
-    app.add_client_circuits(&[Box::new(MintCircuit::<1>::new())])
-        .await
-        .expect("Error adding new circuit");
-
-    for i in 0..mint_params.len() {
-        app.post_mint_request(&[mint_params[i].clone()]).await;
-        let value = &mint_params[i].value;
-        let filename = format!("./tests/data/mint_transaction_c1_v{}.dat", value);
-        let body = app.get_sequencer_requests_as_bytes().await.unwrap();
-        common::utils::save_to_file(&filename, &body).unwrap();
-    }
-
-    let preimages = app.get_preimages().await;
-
-    let preimages_str = preimages
-        .iter()
-        .map(|p| serde_json::to_string(p).unwrap())
-        .collect::<Vec<_>>();
-
-    for i in 0..mint_params.len() {
-        let value = preimages[i].preimage.get_value().to_string();
-        let filename = format!("./tests/data/mint_preimage_c1_v{}.dat", value);
-        common::utils::save_to_file(&filename, preimages_str[i].as_bytes()).unwrap();
-    }
 }

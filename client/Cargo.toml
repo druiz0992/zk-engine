@@ -44,9 +44,7 @@ serde = {version = "1.0.192", features = ["derive"]}
 serde_json = "1.0.108"
 dotenvy = "0.15.7"
 derivative = "2.2.0"
-reqwest = {version = "0.11.22", features = ["json"]}
 anyhow = "1"
-async-trait = "0.1.83"
 
 
 [dev-dependencies]

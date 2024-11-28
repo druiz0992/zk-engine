@@ -31,10 +31,25 @@ pub fn read_from_file(path: &str) -> Result<String> {
     Ok(utf8_str.to_string())
 }
 
+pub fn read_from_binary_file(path: &str) -> Result<Vec<u8>> {
+    let mut file = File::open(path).map_err(|e| anyhow::anyhow!("Error opening file: {}", e))?;
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer)
+        .map_err(|e| anyhow::anyhow!("Error reading file: {}", e))?;
+    Ok(buffer)
+}
+
 pub fn read_transaction_from_file(path: &str) -> Result<Transaction<VestaConfig>> {
     let data = read_from_file(path)?;
 
     serde_json::from_str::<Transaction<VestaConfig>>(&data)
+        .map_err(|_| anyhow::anyhow!("Error deserializing Transaction received by sequencer"))
+}
+
+pub fn read_cbor_transaction_from_file(path: &str) -> Result<Transaction<VestaConfig>> {
+    let data = read_from_binary_file(path)?;
+
+    serde_cbor::from_slice::<Transaction<VestaConfig>>(&data)
         .map_err(|_| anyhow::anyhow!("Error deserializing Transaction received by sequencer"))
 }
 

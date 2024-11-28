@@ -28,17 +28,12 @@ pub struct StoredPreimageInfo<E: SWCurveConfig> {
     pub status: PreimageStatus,
 }
 
-#[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq, Debug, Copy)]
+#[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq, Debug, Copy, Default)]
 pub enum PreimageStatus {
+    #[default]
     Unspent,
     Locked,
     Spent,
-}
-
-impl Default for PreimageStatus {
-    fn default() -> Self {
-        PreimageStatus::Unspent
-    }
 }
 
 impl CanonicalSerialize for PreimageStatus {

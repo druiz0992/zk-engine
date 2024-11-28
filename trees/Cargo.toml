@@ -8,8 +8,6 @@ edition = "2021"
 [dependencies]
 ark-ff="0.4.2"
 ark-std="0.4.0"
-itertools = "0.11.0"
-anyhow = "1.0.75"
 rayon = "1.8.0"
 common = {path = "../common"}
 

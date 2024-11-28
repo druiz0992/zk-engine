@@ -13,7 +13,7 @@ impl ClientTestApp {
         transfer_amount: &str,
         preimages: Vec<StoredPreimageInfo<PallasConfig>>,
     ) -> Result<TransferInput<PallasConfig>, String> {
-        let user_keys = if let Some(_) = &self.user_keys {
+        let user_keys = if self.user_keys.is_some() {
             self.get_user_keys_as_user_keys().await?
         } else {
             self.set_default_user_keys()
