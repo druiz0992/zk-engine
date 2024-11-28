@@ -1,26 +1,23 @@
 use ark_ec::{pairing::Pairing, short_weierstrass::SWCurveConfig, CurveGroup};
-use ark_ff::{Field, PrimeField};
+use ark_ff::{BigInt, BigInteger, Field, PrimeField};
 use ark_poly::univariate::DensePolynomial;
 use jf_plonk::nightfall::ipa_structs::Proof;
-use serde::{Deserialize, Serialize};
-
-use crate::serialize::{ark_de, ark_de_std, ark_se, ark_se_std, vec_ark_de, vec_ark_se};
+use jf_utils::canonical;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Block<F: Field> {
     pub block_number: u64,
-    #[serde(serialize_with = "vec_ark_se", deserialize_with = "vec_ark_de")]
+    #[serde(with = "canonical")]
     pub commitments: Vec<F>,
-    #[serde(serialize_with = "vec_ark_se", deserialize_with = "vec_ark_de")]
+    #[serde(with = "canonical")]
     pub nullifiers: Vec<F>,
-    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
+    #[serde(with = "canonical")]
     pub commitment_root: F,
 }
 
-#[derive(Clone, Deserialize, Serialize, Default, Debug)]
-pub struct Commitment<F: PrimeField>(
-    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")] pub F,
-);
+#[derive(Clone, Deserialize, Serialize, Default, Debug, PartialEq)]
+pub struct Commitment<F: PrimeField>(#[serde(with = "canonical")] pub F);
 
 impl<F: PrimeField> From<F> for Commitment<F> {
     fn from(value: F) -> Self {
@@ -28,10 +25,8 @@ impl<F: PrimeField> From<F> for Commitment<F> {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
-pub struct Nullifier<F: PrimeField>(
-    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")] pub F,
-);
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq)]
+pub struct Nullifier<F: PrimeField>(#[serde(with = "canonical")] pub F);
 
 impl<F: PrimeField> From<F> for Nullifier<F> {
     fn from(value: F) -> Self {
@@ -40,22 +35,89 @@ impl<F: PrimeField> From<F> for Nullifier<F> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MyDensePolynomial {
+    pub coeffs: Vec<[u64; 4]>,
+}
+impl<F: PrimeField> From<MyDensePolynomial> for DensePolynomial<F>
+where
+    F: PrimeField,
+{
+    fn from(compact_poly: MyDensePolynomial) -> Self {
+        let coeffs: Vec<F> = compact_poly
+            .coeffs
+            .into_iter()
+            .map(|coeff| {
+                let b = BigInt::<4>::new(coeff).to_bytes_le();
+                F::from_le_bytes_mod_order(&b)
+            })
+            .collect();
+
+        DensePolynomial { coeffs }
+    }
+}
+
+impl<F: PrimeField> From<&DensePolynomial<F>> for MyDensePolynomial {
+    fn from(dense_poly: &DensePolynomial<F>) -> Self {
+        let coeffs = dense_poly
+            .coeffs
+            .iter()
+            .map(|coeff| {
+                let b = coeff.into_bigint();
+                b.as_ref().try_into().unwrap()
+            })
+            .collect();
+
+        MyDensePolynomial { coeffs }
+    }
+}
+
+// Serialization function
+pub fn serialize_dense_polynomial<S, F>(
+    polynomial: &DensePolynomial<F>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    F: PrimeField,
+    S: Serializer,
+{
+    let p: MyDensePolynomial = MyDensePolynomial::from(polynomial);
+    p.serialize(serializer)
+}
+
+// Deserialization function
+pub fn deserialize_dense_polynomial<'de, D, F>(
+    deserializer: D,
+) -> Result<DensePolynomial<F>, D::Error>
+where
+    F: PrimeField,
+    D: Deserializer<'de>,
+{
+    let p: MyDensePolynomial = MyDensePolynomial::deserialize(deserializer)?;
+    Ok(p.into())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Transaction<P: Pairing>
 where
     <<P as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig,
 {
     pub commitments: Vec<Commitment<P::ScalarField>>,
     pub nullifiers: Vec<Nullifier<P::ScalarField>>,
-    #[serde(serialize_with = "vec_ark_se", deserialize_with = "vec_ark_de")]
+    #[serde(with = "canonical")]
     pub ciphertexts: Vec<P::ScalarField>,
-    #[serde(serialize_with = "ark_se_std", deserialize_with = "ark_de_std")]
-    pub proof: Proof<P>,
-    #[serde(serialize_with = "ark_se_std", deserialize_with = "ark_de_std")]
-    pub g_polys: DensePolynomial<P::ScalarField>,
-    #[serde(serialize_with = "ark_se_std", deserialize_with = "ark_de_std")]
+    #[serde(with = "canonical")]
     pub eph_pub_key: Vec<P::ScalarField>,
     pub swap_field: bool,
     pub circuit_type: CircuitType,
+    #[serde(with = "canonical")]
+    pub proof: Proof<P>,
+    //#[serde(with = "canonical")]
+    //pub g_polys: MyDensePolynomial<P::ScalarField>,
+    #[serde(
+        serialize_with = "serialize_dense_polynomial",
+        deserialize_with = "deserialize_dense_polynomial"
+    )]
+    pub g_polys: DensePolynomial<P::ScalarField>,
 }
 
 impl<P: Pairing> Transaction<P>
@@ -87,23 +149,6 @@ where
         self.proof = proof;
         self
     }
-}
-
-#[derive(Serialize, Debug, Deserialize)]
-pub struct Tx<P>
-where
-    P: Pairing,
-    <<P as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig,
-{
-    pub ct: Vec<Commitment<P::ScalarField>>,
-    phantom: std::marker::PhantomData<P>,
-    pub nullifiers: Vec<Nullifier<P::ScalarField>>,
-    #[serde(serialize_with = "vec_ark_se", deserialize_with = "vec_ark_de")]
-    pub ciphertexts: Vec<P::ScalarField>,
-    #[serde(serialize_with = "ark_se_std", deserialize_with = "ark_de_std")]
-    pub proof: Proof<P>,
-    #[serde(serialize_with = "ark_se_std", deserialize_with = "ark_de_std")]
-    pub g_polys: DensePolynomial<P::ScalarField>,
 }
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq, Serialize, Deserialize)]

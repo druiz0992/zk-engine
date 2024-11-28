@@ -24,15 +24,6 @@ where
     s.serialize_bytes(&bytes)
 }
 
-pub fn ark_de_std<'de, D, A: CanonicalDeserialize>(data: D) -> Result<A, D::Error>
-where
-    D: serde::de::Deserializer<'de>,
-{
-    let s: Vec<u8> = serde::de::Deserialize::deserialize(data)?;
-    let a = A::deserialize_with_mode(s.as_slice(), Compress::Yes, Validate::Yes);
-    a.map_err(serde::de::Error::custom)
-}
-
 pub fn vec_ark_se<S, A: CanonicalSerialize>(a: &Vec<A>, s: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
@@ -44,6 +35,20 @@ where
             .map_err(serde::ser::Error::custom)?;
         let hex_s = BigUint::from_bytes_le(bytes.as_slice()).to_str_radix(16);
         seq.serialize_element(&hex_s)?;
+    }
+    seq.end()
+}
+
+pub fn vec_ark_se_std<S, A: CanonicalSerialize>(a: &Vec<A>, s: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    let mut seq = s.serialize_seq(None)?;
+    for e in a {
+        let mut bytes = vec![];
+        e.serialize_with_mode(&mut bytes, Compress::Yes)
+            .map_err(serde::ser::Error::custom)?;
+        seq.serialize_element(&bytes)?;
     }
     seq.end()
 }
@@ -90,5 +95,14 @@ where
     bytes.resize(33, 0); // Magic!
 
     let a = A::deserialize_with_mode(bytes.as_slice(), Compress::Yes, Validate::No);
+    a.map_err(serde::de::Error::custom)
+}
+
+pub fn ark_de_std<'de, D, A: CanonicalDeserialize>(data: D) -> Result<A, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    let s: Vec<u8> = serde::de::Deserialize::deserialize(data)?;
+    let a = A::deserialize_with_mode(s.as_slice(), Compress::Yes, Validate::Yes);
     a.map_err(serde::de::Error::custom)
 }

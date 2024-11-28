@@ -1,8 +1,6 @@
 pub mod handlers;
 
 pub mod sequencer_api {
-    use std::sync::Arc;
-
     use crate::adapters::rest_api::handlers::{sequence, transactions};
     use crate::services::{
         prover::in_mem_sequencer_prover::InMemProver,
@@ -11,6 +9,7 @@ pub mod sequencer_api {
     use crate::usecase::block::TransactionProcessor;
     use anyhow::anyhow;
     use axum::{
+        extract::DefaultBodyLimit,
         http::StatusCode,
         routing::{get, post},
         Router,
@@ -20,6 +19,7 @@ pub mod sequencer_api {
     use common::structs::Block;
     use curves::{pallas::PallasConfig, vesta::VestaConfig};
     use dotenvy::dotenv;
+    use std::sync::Arc;
     use tokio::sync::Mutex;
     use tracing_log::log;
 
@@ -110,6 +110,7 @@ pub mod sequencer_api {
             .route("/transactions", post(transactions::handle_tx))
             .route("/transactions", get(transactions::get_tx))
             .route("/sequence", post(sequence::make_block))
+            .layer(DefaultBodyLimit::disable())
             .with_state(state);
 
         axum::serve(listener, app)

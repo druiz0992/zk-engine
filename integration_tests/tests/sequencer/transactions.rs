@@ -8,8 +8,8 @@ async fn post_correct_mint_transactions_returns_200() {
 
     // Add first transaction
     let mint_transaction =
-        utils::read_transaction_from_file("./tests/data/mint_transaction_c1_v10.dat").unwrap();
-    app.post_transaction(&mint_transaction).await;
+        utils::read_cbor_transaction_from_file("./tests/data/mint_transaction_c1_v10.dat").unwrap();
+    app.post_transaction(&mint_transaction).await.unwrap();
 
     let transactions = app.get_transactions().await.unwrap();
     assert_eq!(
@@ -21,8 +21,9 @@ async fn post_correct_mint_transactions_returns_200() {
 
     // Add second transaction
     let mint_transaction =
-        utils::read_transaction_from_file("./tests/data/mint_transaction_c1_v100.dat").unwrap();
-    app.post_transaction(&mint_transaction).await;
+        utils::read_cbor_transaction_from_file("./tests/data/mint_transaction_c1_v100.dat")
+            .unwrap();
+    app.post_transaction(&mint_transaction).await.unwrap();
 
     let transactions = app.get_transactions().await.unwrap();
     assert_eq!(
@@ -38,8 +39,9 @@ async fn post_correct_transfer_transactions_returns_200() {
     let app = spawn_app().await;
 
     let transfer_transaction =
-        utils::read_transaction_from_file("./tests/data/transfer_transaction_c1_v10.dat").unwrap();
-    app.post_transaction(&transfer_transaction).await;
+        utils::read_cbor_transaction_from_file("./tests/data/transfer_transaction_c1_v10.dat")
+            .unwrap();
+    app.post_transaction(&transfer_transaction).await.unwrap();
 
     let transactions = app.get_transactions().await.unwrap();
     assert_eq!(
@@ -50,8 +52,9 @@ async fn post_correct_transfer_transactions_returns_200() {
     );
 
     let transfer_transaction =
-        utils::read_transaction_from_file("./tests/data/transfer_transaction_c1_v100.dat").unwrap();
-    app.post_transaction(&transfer_transaction).await;
+        utils::read_cbor_transaction_from_file("./tests/data/transfer_transaction_c1_v100.dat")
+            .unwrap();
+    app.post_transaction(&transfer_transaction).await.unwrap();
 
     let transactions = app.get_transactions().await.unwrap();
     assert_eq!(

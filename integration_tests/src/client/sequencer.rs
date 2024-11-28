@@ -19,12 +19,15 @@ impl ClientTestApp {
     pub async fn get_sequencer_requests(&self) -> Result<Transaction<VestaConfig>> {
         let body = self.get_sequencer_requests_as_bytes().await?;
 
+        /*
         let body = std::str::from_utf8(&body)
             .map_err(|_| anyhow::anyhow!("Error extracting sequencer response"))?;
+        */
 
-        let transaction = serde_json::from_str::<Transaction<VestaConfig>>(body).map_err(|_| {
-            anyhow::anyhow!("Error deserializing Transaction received by sequencer")
-        })?;
+        let transaction =
+            serde_cbor::from_slice::<Transaction<VestaConfig>>(&body).map_err(|_| {
+                anyhow::anyhow!("Error deserializing Transaction received by sequencer")
+            })?;
 
         Ok(transaction)
     }
