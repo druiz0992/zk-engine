@@ -58,7 +58,7 @@ pub fn benchmark_client_transactions<const D: usize>(c: &mut Criterion) {
          */
 
         let zk_trees =
-            tree_generator_from_client_inputs::<D>(&mut client_inputs, global_comm_roots).unwrap();
+            tree_generator_from_client_inputs::<D>(&mut client_inputs, &global_comm_roots).unwrap();
 
         let (vesta_commit_key, _pallas_commit_key) = build_commit_keys().unwrap();
 

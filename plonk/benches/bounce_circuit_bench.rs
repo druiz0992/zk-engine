@@ -12,7 +12,7 @@ pub fn benchmark_bounce<const D: usize>(c: &mut Criterion) {
         Box::new(TransferCircuit::<2, 2, 8>::new()),
     ];
 
-    let stored_proof_base = base::base_circuit_helper_generator::<D>(&client_circuits);
+    let stored_proof_base = base::base_circuit_helper_generator::<D>(&client_circuits, 1);
     let (global_public_inputs, subtree_public_inputs, passthrough_instance, _) =
         stored_proof_base.pub_inputs;
     let (bounce_circuit, _) = bounce_circuit::<PallasConfig, VestaConfig>(

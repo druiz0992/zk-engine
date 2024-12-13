@@ -24,6 +24,11 @@ jf-relation = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "te
 jf-utils = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test"}
 jf-primitives = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test"}
 curves = {git = "ssh://git@github.com/Torus-ZK/jellyfish.git", branch = "test"}
+ #jf-plonk = {path = "../../jellyfish/plonk", features = ["test-srs"]}
+ #jf-relation = {path = "../../jellyfish/relation"}
+ #jf-utils = {path = "../../jellyfish/utilities"}
+ #jf-primitives = {path = "../../jellyfish/primitives"}
+ #curves = {path = "../../jellyfish/curves"}
 
 common = {path = "../common"}
 trees = {path = "../trees"}

@@ -16,10 +16,9 @@ impl From<BuildBlockError> for StatusCode {
 pub async fn make_block(
     State(db): State<SequencerState>,
 ) -> Result<Json<Block<curves::vesta::Fr>>, StatusCode> {
-    let block =
-        usecase::block::build_block_process(db.state_db, db.prover, db.notifier, db.processor)
-            .await
-            .map_err(StatusCode::from)?;
+    let block = usecase::block::build_block_process(db.state_db, db.prover, db.notifier)
+        .await
+        .map_err(StatusCode::from)?;
 
     Ok(Json(block))
 }

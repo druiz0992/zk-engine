@@ -195,8 +195,8 @@ where
             // Unless the nullifier is zero, then we trivially return true
             let condition_select = circuit.conditional_select(
                 nullifier_is_zero,
-                condition_met.into(),
-                circuit.true_var().into(),
+                condition_met.into(),      // nullifier is not zero
+                circuit.true_var().into(), // nullifier is zero
             )?;
 
             // This section only applies after the first nullifier is inserted //
@@ -234,8 +234,8 @@ where
                 )?;
             let nullifier_root_select = circuit.conditional_select(
                 nullifier_is_zero,
-                calc_nullifier_root_var,
-                nullifier_new_root,
+                calc_nullifier_root_var, // nullifier is not zero
+                nullifier_new_root,      // nullifier is zero
             )?;
             let nullifier_root_equality =
                 circuit.is_equal(nullifier_new_root, nullifier_root_select)?;

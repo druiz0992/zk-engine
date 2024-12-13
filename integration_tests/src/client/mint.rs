@@ -1,10 +1,18 @@
 use crate::common::utils::decimal_to_hex;
 
 use super::test_app::ClientTestApp;
+use client::domain::Preimage;
+use client::ports::prover::Prover;
+use client::services::prover::in_memory_prover::InMemProver;
+use client::usecase::mint::inputs::build_mint_inputs;
+use client::utils;
+use common::structs::Transaction;
+use curves::{pallas::PallasConfig, vesta::VestaConfig};
+use jf_relation::constraint_system::Circuit;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use reqwest::Response;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::str::FromStr;
 
@@ -40,7 +48,7 @@ impl Default for MintParams {
     }
 }
 
-#[derive(Clone, Serialize, Debug)]
+#[derive(Clone, Serialize, Debug, Deserialize)]
 pub struct MintRequestBody {
     pub value: String,
     pub token_id: String,
@@ -63,7 +71,7 @@ impl MintRequestBody {
 }
 
 impl ClientTestApp {
-    pub async fn post_mint_request(&mut self, mint_values: &[MintParams]) -> Response {
+    pub async fn build_mint_request(&mut self, mint_values: &[MintParams]) -> Vec<MintRequestBody> {
         let user_keys = if let Some(keys) = &self.user_keys {
             keys.clone()
         } else {
@@ -75,11 +83,13 @@ impl ClientTestApp {
             self.get_user_keys().unwrap()
         };
 
-        let mint_request: Vec<MintRequestBody> = mint_values
+        mint_values
             .iter()
             .map(|m| MintRequestBody::new(&m.value, &m.token_id, user_keys.public_key.as_str()))
-            .collect();
+            .collect()
+    }
 
+    pub async fn post_mint_request(&mut self, mint_request: &[MintRequestBody]) -> Response {
         let body = json!(mint_request);
 
         self.api_client
@@ -116,5 +126,26 @@ impl ClientTestApp {
                 mint_params[i].token_id,
             );
         });
+    }
+
+    pub async fn verify_mint(
+        &self,
+        transaction: Transaction<VestaConfig>,
+        preimage: Vec<Preimage<PallasConfig>>,
+    ) -> bool {
+        let circuit =
+            utils::circuits::get_mint_circuit_from_params::<PallasConfig, VestaConfig, _>(
+                preimage.len(),
+            )
+            .unwrap();
+        let (_, vk) = circuit.generate_keys().unwrap();
+        let circuit_inputs = build_mint_inputs::<PallasConfig, VestaConfig, _>(preimage).unwrap();
+        let mint_circuit = circuit.to_plonk_circuit(circuit_inputs).unwrap();
+        let public_inputs = mint_circuit.public_input().unwrap();
+        <InMemProver<PallasConfig, VestaConfig, _> as Prover<_, _, _>>::verify(
+            vk,
+            public_inputs,
+            transaction.proof,
+        )
     }
 }

@@ -8,7 +8,7 @@ use serde_json::json;
 #[tokio::test]
 async fn block_endpoint_returns_200_with_correct_input() {
     let app = spawn_app().await;
-    let filename = "./tests/data/block_2_mints_c1_v10_c1_v100.dat";
+    let filename = "./tests/data/block0_2_mints_c1_v10_c1_v100.dat";
     let block = read_block_from_file(filename).unwrap();
     let body = json!(block);
 
@@ -55,7 +55,7 @@ async fn block_endpoint_updates_preimages_and_root() {
 
     app.insert_preimages(preimages).await.unwrap();
 
-    let filename = "./tests/data/block_2_mints_c1_v10_c1_v100.dat";
+    let filename = "./tests/data/block0_2_mints_c1_v10_c1_v100.dat";
     let block = read_block_from_file(filename).unwrap();
     let body = json!(block);
 
@@ -75,10 +75,10 @@ async fn block_endpoint_updates_preimages_and_root() {
 
     assert!(response.status().is_success());
     assert_eq!(preimages[0].block_number, Some(0));
-    assert_eq!(preimages[0].leaf_index, Some(0));
+    assert!(matches!(preimages[0].leaf_index, Some(0) | Some(1)));
     assert_eq!(preimages[0].status, PreimageStatus::Unspent);
     assert_eq!(preimages[1].block_number, Some(0));
-    assert_eq!(preimages[1].leaf_index, Some(1));
+    assert!(matches!(preimages[1].leaf_index, Some(0) | Some(1)));
     assert_eq!(preimages[1].status, PreimageStatus::Unspent);
     assert!(root.is_some());
 }

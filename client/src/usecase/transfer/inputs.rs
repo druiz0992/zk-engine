@@ -26,7 +26,7 @@ use trees::MembershipPath;
 use zk_macros::client_bounds;
 
 #[client_bounds]
-pub(crate) async fn build_transfer_inputs<
+pub async fn build_transfer_inputs<
     P,
     V,
     VSW,
@@ -89,8 +89,11 @@ pub(crate) async fn build_transfer_inputs<
         .get_private_key();
     circuit_inputs.add_root_key(root_key);
 
-    let mut rng = ChaChaRng::from_entropy();
-    circuit_inputs.add_ephemeral_key(<P as CurveConfig>::BaseField::rand(&mut rng));
+    let eph_key = transfer_details.eph_key.unwrap_or_else(|| {
+        let mut rng = ChaChaRng::from_entropy();
+        <P as CurveConfig>::BaseField::rand(&mut rng)
+    });
+    circuit_inputs.add_ephemeral_key(eph_key);
 
     circuit_inputs.add_recipients(vec![PublicKey(transfer_details.recipient)]);
 

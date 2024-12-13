@@ -6,15 +6,10 @@ use ark_ec::{
 use ark_ff::PrimeField;
 
 use super::circuit_inputs::CircuitInputs;
-use crate::client::structs::ClientPubInput;
 use crate::client::ClientPlonkCircuit;
 use crate::primitives::circuits::kem_dem::KemDemParams;
-use crate::rollup::circuits::client_input::LowNullifierInfo;
-use crate::rollup::circuits::client_input::{self, ClientInput};
 use common::crypto::poseidon::constants::PoseidonParams;
 use common::structs::CircuitType;
-use jf_plonk::nightfall::ipa_structs::Proof;
-use jf_plonk::nightfall::ipa_structs::VerifyingKey;
 use jf_primitives::rescue::RescueParameter;
 use jf_relation::gadgets::ecc::SWToTEConParam;
 use jf_relation::{errors::CircuitError, PlonkCircuit};
@@ -75,37 +70,6 @@ impl<P, V, VSW, const C: usize, const N: usize, const D: usize> ClientPlonkCircu
     }
     fn get_commitment_and_nullifier_count(&self) -> (usize, usize) {
         (C, N)
-    }
-
-    fn generate_client_input_for_sequencer(
-        &self,
-        proof: Proof<V>,
-        vk: VerifyingKey<V>,
-        public_inputs: &ClientPubInput<V::ScalarField>,
-        low_nullifier_info: &Option<LowNullifierInfo<V, 32>>,
-    ) -> ClientInput<V> {
-        let (c, n) =
-            <TransferCircuit<C, N, D> as ClientPlonkCircuit<P, V, VSW>>::get_commitment_and_nullifier_count(
-                self,
-            );
-        let mut client_input = ClientInput::<V>::new(proof, vk, c, n);
-
-        client_input
-            .set_nullifiers(&public_inputs.nullifiers)
-            .set_commitments(&public_inputs.commitments)
-            .set_commitment_tree_root(&public_inputs.commitment_root)
-            .set_eph_pub_key(
-                client_input::to_eph_key_array::<V>(public_inputs.ephemeral_public_key.clone())
-                    .unwrap(),
-            )
-            .set_ciphertext(
-                client_input::to_ciphertext_array::<V>(public_inputs.ciphertexts.clone()).unwrap(),
-            );
-
-        if let Some(info) = low_nullifier_info {
-            client_input.set_low_nullifier_info(info);
-        }
-        client_input
     }
 }
 

@@ -1,6 +1,3 @@
-use crate::client::structs::ClientPubInput;
-use crate::rollup::circuits::client_input::ClientInput;
-use crate::rollup::circuits::client_input::LowNullifierInfo;
 use crate::{
     client::circuits::circuit_inputs::CircuitInputs, client::ClientPlonkCircuit,
     primitives::circuits::kem_dem::KemDemParams,
@@ -13,8 +10,6 @@ use ark_ec::{
 use ark_ff::PrimeField;
 use common::crypto::poseidon::constants::PoseidonParams;
 use common::structs::CircuitType;
-use jf_plonk::nightfall::ipa_structs::Proof;
-use jf_plonk::nightfall::ipa_structs::VerifyingKey;
 use jf_primitives::rescue::RescueParameter;
 use jf_relation::{
     constraint_system::PlonkCircuit, errors::CircuitError, gadgets::ecc::SWToTEConParam,
@@ -75,21 +70,6 @@ impl<P, V, VSW, const C: usize> ClientPlonkCircuit<P, V, VSW> for MintCircuit<C>
     }
     fn get_commitment_and_nullifier_count(&self) -> (usize, usize) {
         (C, 1)
-    }
-    fn generate_client_input_for_sequencer(
-        &self,
-        proof: Proof<V>,
-        vk: VerifyingKey<V>,
-        public_inputs: &ClientPubInput<V::ScalarField>,
-        _low_nullifier_info: &Option<LowNullifierInfo<V, 32>>,
-    ) -> ClientInput<V> {
-        let (c, n) =
-            <MintCircuit<C> as ClientPlonkCircuit<P, V, VSW>>::get_commitment_and_nullifier_count(
-                self,
-            );
-        let mut client_inputs = ClientInput::<V>::new(proof, vk, c, n);
-        client_inputs.set_commitments(&public_inputs.commitments);
-        client_inputs
     }
 }
 

@@ -18,7 +18,7 @@ async fn transfer_endpoint_returns_200_with_correct_input() {
         "./tests/data/mint_preimage_c1_v10.dat",
         "./tests/data/mint_preimage_c1_v100.dat",
     ];
-    let block_files = vec!["./tests/data/block_2_mints_c1_v10_c1_v100.dat"];
+    let block_files = vec!["./tests/data/block0_2_mints_c1_v10_c1_v100.dat"];
     let preimage = app
         .set_initial_state(preimage_files, block_files)
         .await
@@ -32,9 +32,9 @@ async fn transfer_endpoint_returns_200_with_correct_input() {
         .await
         .unwrap();
     let response = app.post_transfer_request(&transfer_params).await;
-    let sequencer_requests = app.get_sequencer_requests().await;
-
     assert!(response.status().is_success());
+
+    let sequencer_requests = app.get_sequencer_requests().await;
     assert!(
         sequencer_requests.is_ok(),
         "Sequencer did not receive the transaction"
@@ -43,6 +43,10 @@ async fn transfer_endpoint_returns_200_with_correct_input() {
     app.get_sequencer_requests()
         .await
         .expect("Error retrieving transfer from sequencer");
+
+    let transaction = sequencer_requests.unwrap();
+    let is_valid = app.verify_transfer(transaction, transfer_params).await;
+    assert!(is_valid);
 }
 
 #[tokio::test]
@@ -57,7 +61,7 @@ async fn transfer_endpoint_returns_500_if_circuit_not_registered() {
         "./tests/data/mint_preimage_c1_v10.dat",
         "./tests/data/mint_preimage_c1_v100.dat",
     ];
-    let block_files = vec!["./tests/data/block_2_mints_c1_v10_c1_v100.dat"];
+    let block_files = vec!["./tests/data/block0_2_mints_c1_v10_c1_v100.dat"];
     let preimage = app
         .set_initial_state(preimage_files, block_files)
         .await
@@ -91,7 +95,7 @@ async fn transfer_endpoint_returns_500_with_incorrect_input() {
     .expect("Error adding new circuit");
 
     let preimage_files = vec!["./tests/data/mint_preimage_c1_v100.dat"];
-    let block_files = vec!["./tests/data/block_2_mints_c1_v10_c1_v100.dat"];
+    let block_files = vec!["./tests/data/block0_2_mints_c1_v10_c1_v100.dat"];
     let preimage = app
         .set_initial_state(preimage_files, block_files)
         .await

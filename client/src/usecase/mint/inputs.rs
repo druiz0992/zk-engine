@@ -46,7 +46,7 @@ pub(crate) fn compute_mint_preimages<P, V, VSW>(
 }
 
 #[client_bounds]
-pub(crate) fn build_mint_inputs<P, V, VSW>(
+pub fn build_mint_inputs<P, V, VSW>(
     preimage: Vec<Preimage<P>>,
 ) -> anyhow::Result<CircuitInputs<P>> {
     let values: Vec<_> = preimage.iter().map(|s| s.value).collect();
