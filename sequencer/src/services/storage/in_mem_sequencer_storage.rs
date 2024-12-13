@@ -42,6 +42,9 @@ impl TransactionStorage<VestaConfig> for InMemStorage {
         let mempool_txs = self.mempool.clone();
         past_txs.into_iter().chain(mempool_txs).collect()
     }
+    fn flush_mempool_transactions(&mut self) {
+        self.past_txs.append(&mut self.mempool);
+    }
 }
 
 impl BlockStorage<curves::vesta::Fr> for InMemStorage {
@@ -53,8 +56,8 @@ impl BlockStorage<curves::vesta::Fr> for InMemStorage {
         self.blocks.push(block);
     }
 
-    fn get_block_count(&self) -> u32 {
-        self.blocks.len() as u32
+    fn get_block_count(&self) -> u64 {
+        self.blocks.len() as u64
     }
 }
 
@@ -64,6 +67,9 @@ impl GlobalStateStorage for InMemStorage {
     type NullifierTree = IndexedMerkleTree<Fr, 32>;
     fn get_global_commitment_tree(&self) -> Self::CommitmentTree {
         self.commitment_tree.clone()
+    }
+    fn store_global_commitment_tree(&mut self, new_tree: Self::CommitmentTree) {
+        self.commitment_tree = new_tree;
     }
     fn get_global_nullifier_tree(&self) -> Self::NullifierTree {
         self.nullifier_tree.clone()

@@ -10,8 +10,6 @@ use sequencer::services::{
     prover::{generate_and_store_cks, generate_and_store_client_circuit_vks},
     storage::generate_and_store_vk_tree,
 };
-use sequencer::usecase::block::TransactionProcessor;
-use sequencer::utils::circuits::register_circuits;
 use std::sync::Arc;
 use tracing_log::log;
 
@@ -26,7 +24,6 @@ fn main() {
     let mut db: InMemStorage = InMemStorage::new();
     let mut prover = InMemProver::<VestaConfig, VestaConfig, PallasConfig, PallasConfig>::new();
     let notifier = HttpNotifier::new(configuration.client);
-    let mut processor = TransactionProcessor::new();
 
     let client_circuit_info: Vec<
         Box<dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>>,
@@ -37,12 +34,10 @@ fn main() {
     ark_std::println!("Generating srs_1");
     generate_and_store_cks(&mut prover);
     ark_std::println!("Ck ready");
-    register_circuits::<PallasConfig, VestaConfig, _>(&mut processor, client_circuit_info);
 
     let thread_safe_db = std::sync::Arc::new(tokio::sync::Mutex::new(db));
     let thread_safe_prover = std::sync::Arc::new(tokio::sync::Mutex::new(prover));
     let thread_safe_notifier = Arc::new(tokio::sync::Mutex::new(notifier));
-    let thread_safe_processor = Arc::new(tokio::sync::Mutex::new(processor));
 
     let async_rt = tokio::runtime::Builder::new_current_thread()
         .enable_io()
@@ -54,7 +49,6 @@ fn main() {
             thread_safe_db,
             thread_safe_prover,
             thread_safe_notifier,
-            thread_safe_processor,
             configuration.sequencer,
         )
         .await

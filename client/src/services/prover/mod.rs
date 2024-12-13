@@ -134,7 +134,7 @@ mod tests {
         let prover: InMemProver<PallasConfig, VestaConfig, _> = InMemProver::new();
         assert!(
             prover.key_storage.is_empty(),
-            "Key storage should be empty on initialization"
+            "Pk storage should be empty on initialization"
         );
     }
 
@@ -143,7 +143,7 @@ mod tests {
         let prover: InMemProver<PallasConfig, VestaConfig, _> = InMemProver::default();
         assert!(
             prover.key_storage.is_empty(),
-            "Key storage should be empty on initialization"
+            "Pk storage should be empty on initialization"
         );
     }
 
@@ -156,13 +156,13 @@ mod tests {
         let mut prover: InMemProver<PallasConfig, VestaConfig, _> = InMemProver::default();
         let mint_circuit =
             mint::MintCircuit::<C>::new().as_circuit::<PallasConfig, VestaConfig, _>();
-        let (mint_pk, _) = mint_circuit.generate_keys().expect(&format!(
+        let (mint_pk, _mint_vk) = mint_circuit.generate_keys().expect(&format!(
             "Error generating key for mint circuit from random inputs with C:{C}"
         ));
 
         let transfer_circuit =
             TransferCircuit::<C, N, D>::new().as_circuit::<PallasConfig, VestaConfig, _>();
-        let (transfer_pk, _) = transfer_circuit.generate_keys().expect(&format!(
+        let (transfer_pk, _transfer_vk) = transfer_circuit.generate_keys().expect(&format!(
             "Error generating key for transfer circuit from random inputs with C:{C}, N:{N}, D:{D}"
         ));
 
@@ -218,16 +218,17 @@ mod tests {
         circuits::init_client_circuits::<PallasConfig, VestaConfig, VestaConfig, _>(&mut prover)
             .expect("Error initializing client circuits");
 
+        let stored_pk = prover
+            .get_pk(
+                MintCircuit::<C>::new()
+                    .as_circuit::<PallasConfig, VestaConfig, VestaConfig>()
+                    .get_circuit_type(),
+            )
+            .unwrap();
         let result = <InMemProver<PallasConfig, VestaConfig, _> as Prover<_, _, _>>::prove(
             &*mint_circuit,
             inputs,
-            prover
-                .get_pk(
-                    MintCircuit::<C>::new()
-                        .as_circuit::<PallasConfig, VestaConfig, VestaConfig>()
-                        .get_circuit_type(),
-                )
-                .unwrap(),
+            &stored_pk,
         );
         assert!(
             result.is_ok(),
@@ -236,7 +237,7 @@ mod tests {
 
         let (proof, public_inputs, _) = result.unwrap();
         let is_valid = <InMemProver<PallasConfig, VestaConfig, _> as Prover<_, _, _>>::verify(
-            vk,
+            vk.clone(),
             public_inputs,
             proof,
         );

@@ -25,12 +25,13 @@ where
     fn get_mempool_transactions(&self) -> Vec<Transaction<P>>;
     fn get_block_transaction(&self) -> Vec<Transaction<P>>;
     fn get_all_transactions(&self) -> Vec<Transaction<P>>;
+    fn flush_mempool_transactions(&mut self);
 }
 
 pub trait BlockStorage<F: PrimeField> {
     fn get_block(&self, blocknumber: u64) -> Option<Block<F>>;
     fn insert_block(&mut self, block: Block<F>);
-    fn get_block_count(&self) -> u32;
+    fn get_block_count(&self) -> u64;
 }
 
 pub trait GlobalStateStorage {
@@ -38,6 +39,7 @@ pub trait GlobalStateStorage {
     type VkTree: MembershipTree<8> + AppendTree<8>;
     type NullifierTree: NonMembershipTree<32> + AppendTree<32>;
     fn get_global_commitment_tree(&self) -> Self::CommitmentTree;
+    fn store_global_commitment_tree(&mut self, new_tree: Self::CommitmentTree);
     fn get_global_nullifier_tree(&self) -> Self::NullifierTree;
     fn get_vk_tree(&self) -> Self::VkTree;
     fn store_vk_tree(&mut self, vk_tree: Self::VkTree);

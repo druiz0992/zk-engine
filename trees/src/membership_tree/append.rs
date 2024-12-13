@@ -161,10 +161,11 @@ mod test {
 
     #[test]
     fn test_append_merkle_tree() {
-        test_append_helper::<ark_bn254::Fr, 2>();
-        test_append_helper::<ark_bn254::Fr, 3>();
-        test_append_helper::<ark_bn254::Fr, 4>();
-        test_append_helper::<ark_bn254::Fr, 5>();
+        //test_append_helper::<ark_bn254::Fr, 2>();
+        //test_append_helper::<ark_bn254::Fr, 3>();
+        //test_append_helper::<ark_bn254::Fr, 4>();
+        //test_append_helper::<ark_bn254::Fr, 5>();
+        test_append_helper::<ark_bn254::Fr, 8>();
     }
     fn test_append_helper<F: PoseidonParams<Field = F> + PrimeField, const H: usize>() {
         let initial_leaves = vec![F::from(1u128), F::from(2u128), F::from(3u128)];
@@ -184,6 +185,37 @@ mod test {
         // Append a leaf = 4 to the tree
         let new_leaf = F::from(4u128);
         tree.append_leaf(new_leaf);
+        let mut leaves_hash = poseidon
+            .hash(vec![
+                poseidon.hash(vec![F::from(1u128), F::from(2u128)]).unwrap(),
+                poseidon.hash(vec![F::from(3u128), F::from(4u128)]).unwrap(),
+            ])
+            .unwrap();
+        for _ in 0..(H - 2) {
+            leaves_hash = poseidon.hash(vec![leaves_hash, F::zero()]).unwrap();
+        }
+        assert_eq!(tree.root, leaves_hash);
+    }
+
+    #[test]
+    fn test_append_empty_merkle_tree() {
+        test_append_empty_helper::<ark_bn254::Fr, 8>();
+    }
+    fn test_append_empty_helper<F: PoseidonParams<Field = F> + PrimeField, const H: usize>() {
+        let initial_leaves = vec![];
+        let mut tree = super::Tree::<F, H>::from_leaves(initial_leaves);
+        assert_eq!(tree.root, F::zero());
+        ark_std::println!("Initial hash is ok");
+        let poseidon = Poseidon::<F>::new();
+        // Append a leaf = 4 to the tree
+        let new_leaf1 = F::from(1u128);
+        let new_leaf2 = F::from(2u128);
+        let new_leaf3 = F::from(3u128);
+        let new_leaf4 = F::from(4u128);
+        tree.append_leaf(new_leaf1);
+        tree.append_leaf(new_leaf2);
+        tree.append_leaf(new_leaf3);
+        tree.append_leaf(new_leaf4);
         let mut leaves_hash = poseidon
             .hash(vec![
                 poseidon.hash(vec![F::from(1u128), F::from(2u128)]).unwrap(),

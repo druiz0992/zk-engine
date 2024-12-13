@@ -19,13 +19,13 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use zk_macros::client_bounds;
 
-mod inputs;
+pub mod inputs;
 mod mint_tokens;
 
 use inputs::*;
 use mint_tokens::*;
 
-struct MintPreimage<P>
+pub(crate) struct MintPreimage<P>
 where
     P: SWCurveConfig,
     <P as CurveConfig>::BaseField: PrimeField,

@@ -15,7 +15,7 @@ pub fn bounce_circuit_helper_generator<const D: usize>(
 ) -> StoredProof<VestaConfig, PallasConfig> {
     // Below taken from bounce_test_helper
     ark_std::println!("Creating Bounce Circuit");
-    let stored_proof_base = base::base_circuit_helper_generator::<D>(client_circuits);
+    let stored_proof_base = base::base_circuit_helper_generator::<D>(client_circuits, 1);
     let (global_public_inputs, subtree_public_inputs, passthrough_instance, _) =
         stored_proof_base.pub_inputs;
     let (bounce_circuit, public_outputs) = bounce_circuit::<PallasConfig, VestaConfig>(

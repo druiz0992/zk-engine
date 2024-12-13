@@ -34,6 +34,8 @@ pub struct TransferInput<P: SWCurveConfig> {
     #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
     pub transfer_amount: P::BaseField,
     #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
+    pub eph_key: Option<P::BaseField>,
+    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
     pub sender: Affine<P>,
 }
 

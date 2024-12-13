@@ -172,7 +172,7 @@ where
         BinaryMerkleTreeGadget::<8, C1::BaseField>::calculate_root(
             circuit,
             commitment_tree_root_var,
-            input.path_comm_tree_index[idx],
+            C1::BaseField::from(input.path_comm_tree_index[idx] as u32),
             input.path_comm_tree_root_to_global_tree_root[idx],
         )?;
 
@@ -185,8 +185,8 @@ where
     // If the nullifier is zero, then we need to trivially pass the root check
     let calc_commitment_root_select = circuit.conditional_select(
         nullifier_is_zero,
-        calc_commitment_root_var,
-        global_commitment_root_var,
+        calc_commitment_root_var,   // nullifer is not zero
+        global_commitment_root_var, // nullifier is zero
     )?;
     circuit.enforce_equal(calc_commitment_root_select, global_commitment_root_var)?;
 

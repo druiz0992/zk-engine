@@ -22,7 +22,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use zk_macros::client_bounds;
 
-mod inputs;
+pub mod inputs;
 pub mod transfer_tokens;
 
 use transfer_tokens::*;

@@ -6,8 +6,10 @@ use ark_ff::PrimeField;
 use common::crypto::poseidon::constants::PoseidonParams;
 use jf_plonk::nightfall::ipa_structs::{Proof, VerifyingKey};
 use jf_utils::field_switching;
-use trees::NonMembershipTree;
-use trees::{non_membership_tree::IndexedNode, IndexedMerkleTree};
+use trees::{
+    non_membership_tree::IndexedNode, AppendTree, IndexedMerkleTree, MembershipTree,
+    NonMembershipTree, Tree,
+};
 
 /*
 nullifiers: [E::ScalarField; N], // List of nullifiers in transaction
@@ -39,7 +41,7 @@ where
     pub commitments: Vec<E::ScalarField>, // List of commitments in transaction
     pub commitment_tree_root: Vec<E::ScalarField>, // Tree root for comm membership
     pub path_comm_tree_root_to_global_tree_root: Vec<[E::BaseField; D]>,
-    pub path_comm_tree_index: Vec<E::BaseField>,
+    pub path_comm_tree_index: Vec<usize>,
     pub low_nullifier: Vec<IndexedNode<E::BaseField>>,
     pub low_nullifier_indices: Vec<E::BaseField>,
     pub low_nullifier_mem_path: Vec<[E::BaseField; H]>, // Path for nullifier non membership
@@ -54,6 +56,7 @@ impl<E> ClientInput<E>
 where
     E: Pairing,
     <<E as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = E::BaseField>,
+    <E as Pairing>::BaseField: PrimeField + PoseidonParams<Field = E::BaseField>,
 {
     pub fn new(proof: Proof<E>, vk: VerifyingKey<E>, C: usize, N: usize) -> Self {
         ClientInput {
@@ -63,7 +66,7 @@ where
             commitments: vec![E::ScalarField::from(0u32); C],
             commitment_tree_root: vec![E::ScalarField::from(0u32); N],
             path_comm_tree_root_to_global_tree_root: vec![[E::BaseField::from(0u32); D]; N],
-            path_comm_tree_index: vec![E::BaseField::from(0u32); N],
+            path_comm_tree_index: vec![0; N],
             low_nullifier: vec![Default::default(); N],
             low_nullifier_indices: vec![E::BaseField::from(1u32); N],
             low_nullifier_mem_path: vec![[E::BaseField::from(0u32); H]; N],
@@ -91,6 +94,25 @@ where
     }
     pub fn set_commitment_tree_root(&mut self, root: &[E::ScalarField]) -> &mut Self {
         self.commitment_tree_root = root.to_vec();
+        self
+    }
+    pub fn set_commitment_path_index(&mut self, path_index: usize) -> &mut Self {
+        let N = self.path_comm_tree_root_to_global_tree_root.len();
+        self.path_comm_tree_index = vec![path_index; N];
+        self
+    }
+    pub fn set_commitment_path(&mut self, comm_roots_tree: &Tree<E::BaseField, 8>) -> &mut Self {
+        if comm_roots_tree.leaf_count() == 0 {
+            return self;
+        }
+        let N = self.path_comm_tree_root_to_global_tree_root.len();
+        let idx = self.path_comm_tree_index[0];
+        let global_root_path: [E::BaseField; 8] = comm_roots_tree
+            .membership_witness(idx)
+            .unwrap()
+            .try_into()
+            .unwrap();
+        self.path_comm_tree_root_to_global_tree_root = vec![global_root_path; N];
         self
     }
     pub fn set_low_nullifier_info(
@@ -176,17 +198,18 @@ where
 pub fn update_nullifier_tree<E, const H: usize>(
     nullifier_tree: &mut IndexedMerkleTree<E::BaseField, H>,
     nullifiers: &[E::ScalarField],
-) -> Option<LowNullifierInfo<E, H>>
+) -> Result<Option<LowNullifierInfo<E, H>>, String>
 where
     E: Pairing,
     <<E as Pairing>::G1 as CurveGroup>::Config: SWCurveConfig<BaseField = E::BaseField>,
     <E as Pairing>::BaseField: PrimeField + PoseidonParams<Field = E::BaseField>,
 {
     let mut lifted_nullifiers = Vec::new();
+    let mut temp_nullifier_tree = nullifier_tree.clone();
 
     for n in nullifiers {
         if *n == E::ScalarField::from(0u32) {
-            return None;
+            return Ok(None);
         }
         lifted_nullifiers.push(field_switching::<E::ScalarField, E::BaseField>(n));
     }
@@ -195,20 +218,25 @@ where
         vec![IndexedNode::new(E::BaseField::from(0u32), 0, E::BaseField::from(0u32)); N];
     let mut low_indices: Vec<E::BaseField> = vec![E::BaseField::from(0u32); N];
     let mut low_paths: Vec<[E::BaseField; H]> = vec![[E::BaseField::from(0u32); H]; N];
+    let mut leaves: Vec<&E::BaseField> = vec![];
     for (j, null) in lifted_nullifiers.iter().enumerate() {
-        let low_null = nullifier_tree.find_predecessor(*null);
+        let low_null = temp_nullifier_tree.find_predecessor(*null);
         low_nullifiers[j] = low_null.node;
-        low_paths[j] = nullifier_tree
-            .non_membership_witness(*null)
-            .unwrap()
-            .try_into()
-            .unwrap();
+        if let Some(non_membership_proof) = temp_nullifier_tree.non_membership_witness(*null) {
+            low_paths[j] = non_membership_proof.try_into().unwrap();
+        } else {
+            return Err("Duplicated nullifier".to_string());
+        }
         low_indices[j] = E::BaseField::from(low_null.tree_index as u32);
-        nullifier_tree.update_low_nullifier(*null);
+        temp_nullifier_tree.update_low_nullifier(*null);
+        leaves.push(null);
     }
-    Some(LowNullifierInfo {
+    for leaf in leaves {
+        nullifier_tree.update_low_nullifier(*leaf);
+    }
+    Ok(Some(LowNullifierInfo {
         nullifiers: low_nullifiers,
         indices: low_indices,
         paths: low_paths,
-    })
+    }))
 }

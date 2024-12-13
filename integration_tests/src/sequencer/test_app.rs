@@ -9,7 +9,6 @@ use sequencer::adapters::rest_api::sequencer_api::Application;
 use sequencer::services::{
     prover::in_mem_sequencer_prover::InMemProver, storage::in_mem_sequencer_storage::InMemStorage,
 };
-use sequencer::usecase::block::TransactionProcessor;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use wiremock::MockServer;
@@ -20,7 +19,6 @@ pub struct SequencerTestApp {
     pub prover: Arc<Mutex<InMemProver<VestaConfig, VestaConfig, PallasConfig, PallasConfig>>>,
     pub db: Arc<Mutex<InMemStorage>>,
     pub notifier: Arc<Mutex<HttpNotifier<Block<curves::vesta::Fr>>>>,
-    pub processor: Arc<Mutex<TransactionProcessor<PallasConfig, VestaConfig, VestaConfig>>>,
     pub api_client: reqwest::Client,
     pub client_server: MockServer,
 }
@@ -57,17 +55,14 @@ pub async fn spawn_sequencer_app() -> SequencerTestApp {
     let thread_safe_db = std::sync::Arc::new(tokio::sync::Mutex::new(db));
     let prover: InMemProver<VestaConfig, VestaConfig, PallasConfig, PallasConfig> =
         InMemProver::new();
-    let processor = TransactionProcessor::<PallasConfig, VestaConfig, VestaConfig>::new();
     let thread_safe_prover = Arc::new(tokio::sync::Mutex::new(prover));
     let notifier = HttpNotifier::new(configuration.client);
     let thread_safe_notifier = Arc::new(tokio::sync::Mutex::new(notifier));
-    let thread_safe_processor = Arc::new(tokio::sync::Mutex::new(processor));
 
     let application = Application::build(
         thread_safe_db.clone(),
         thread_safe_prover.clone(),
         thread_safe_notifier.clone(),
-        thread_safe_processor.clone(),
         configuration.sequencer.clone(),
     )
     .await
@@ -83,7 +78,6 @@ pub async fn spawn_sequencer_app() -> SequencerTestApp {
         prover: thread_safe_prover.clone(),
         db: thread_safe_db.clone(),
         notifier: thread_safe_notifier.clone(),
-        processor: thread_safe_processor.clone(),
         api_client: reqwest::Client::new(),
         client_server,
     };

@@ -1,6 +1,5 @@
 use crate::ports::prover::SequencerProver;
 use crate::ports::storage::{GlobalStateStorage, TransactionStorage};
-use crate::usecase::block::TransactionProcessor;
 use ark_ec::{
     pairing::Pairing,
     short_weierstrass::{Affine, Projective, SWCurveConfig},
@@ -17,6 +16,7 @@ use plonk_prover::{
     rollup::circuits::client_input::{self, ClientInput},
 };
 use tokio::sync::MutexGuard;
+use trees::AppendTree;
 use trees::{
     membership_tree::{MembershipTree, Tree},
     non_membership_tree::IndexedMerkleTree,
@@ -49,7 +49,7 @@ use super::BuildBlockError;
 //
 
 #[prover_bounds]
-pub async fn build_client_inputs<
+pub async fn build_client_inputs_and_update_nullifier_tree<
     P,
     V,
     SW,
@@ -62,16 +62,16 @@ pub async fn build_client_inputs<
         >,
     Proof: SequencerProver<V, VSW, P, SW>,
 >(
-    db_locked: MutexGuard<'_, Storage>,
-    prover: MutexGuard<'_, Proof>,
-    processor: MutexGuard<'_, TransactionProcessor<P, V, VSW>>,
-    transactions: Vec<Transaction<V>>,
+    db_locked: &MutexGuard<'_, Storage>,
+    prover: &MutexGuard<'_, Proof>,
+    transactions: &[Transaction<V>],
 ) -> Result<Vec<ClientInput<V>>, BuildBlockError> {
     let vk_tree = db_locked.get_vk_tree();
     let mut client_inputs = Vec::new();
     let mut nullifier_tree = db_locked.get_global_nullifier_tree();
-    let mut global_comm_roots: Vec<V::ScalarField> = Vec::new();
-    for transaction in &transactions {
+    // global_comm_roots is a vector with the roots of all transaction nullified commitments, one element per transaction
+    let mut global_comm_roots: Vec<<P as Pairing>::ScalarField> = Vec::new();
+    for (idx, transaction) in transactions.iter().enumerate() {
         let transaction_type = &transaction.circuit_type;
         let vk_info = prover
             .get_vk(transaction_type.clone())
@@ -80,28 +80,43 @@ pub async fn build_client_inputs<
         let low_nullifier_info = client_input::update_nullifier_tree::<V, 32>(
             &mut nullifier_tree,
             &public_input.nullifiers,
-        );
-        let dispatcher = processor
-            .get_dispatcher(transaction_type)
-            .ok_or(BuildBlockError::DispatcherNotFound)?;
+        )
+        .map_err(|_| BuildBlockError::InvalidNullifier)?;
         let (vk, vk_idx) = vk_info;
-        let mut client_input = dispatcher.generate_client_input_for_sequencer(
+        let mut client_input = ClientInput::<V>::new(
             transaction.proof.clone(),
-            vk,
-            &public_input,
-            &low_nullifier_info,
+            vk.clone(),
+            public_input.commitments.len(),
+            public_input.nullifiers.len(),
         );
-
+        client_input
+            .set_eph_pub_key(
+                client_input::to_eph_key_array::<V>(public_input.ephemeral_public_key.clone())
+                    .unwrap(),
+            )
+            .set_ciphertext(
+                client_input::to_ciphertext_array::<V>(public_input.ciphertexts.clone()).unwrap(),
+            )
+            .set_nullifiers(&public_input.nullifiers)
+            .set_commitments(&public_input.commitments)
+            .set_commitment_tree_root(&public_input.commitment_root);
         client_input.vk_paths = vk_tree
             .membership_witness(vk_idx)
             .ok_or(BuildBlockError::VksNotFound)?
             .as_vec();
         client_input.vk_path_index = V::BaseField::from(vk_idx as u32);
-        client_inputs.push(client_input);
-        if low_nullifier_info.is_some() {
+        if let Some(info) = low_nullifier_info {
             global_comm_roots.push(field_switching(&public_input.commitment_root[0]));
-            //TODO: this is principle is only fot transfers
+            client_input
+                .set_commitment_path_index(idx)
+                .set_low_nullifier_info(&info);
         }
+        client_inputs.push(client_input);
     }
+    let global_root_tree: Tree<V::BaseField, 8> = Tree::from_leaves(global_comm_roots.clone());
+    for client_input in &mut client_inputs {
+        client_input.set_commitment_path(&global_root_tree);
+    }
+
     Ok(client_inputs)
 }

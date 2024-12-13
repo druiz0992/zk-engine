@@ -33,46 +33,67 @@ use trees::tree::AppendTree;
 
 #[test]
 fn test_base_circuit_2_transactions() {
-    test_base_rollup_helper::<8>(&[
-        Box::new(MintCircuit::<1>::new()),
-        Box::new(MintCircuit::<2>::new()),
-    ]);
-    test_base_rollup_helper::<8>(&[
-        Box::new(TransferCircuit::<1, 1, 8>::new()),
-        Box::new(TransferCircuit::<2, 2, 8>::new()),
-    ]);
-    test_base_rollup_helper::<8>(&[
-        Box::new(MintCircuit::<1>::new()),
-        Box::new(TransferCircuit::<2, 2, 8>::new()),
-    ]);
-    test_base_rollup_helper::<8>(&[
-        Box::new(TransferCircuit::<2, 2, 8>::new()),
-        Box::new(MintCircuit::<1>::new()),
-    ]);
+    test_base_rollup_helper::<8>(
+        &[
+            Box::new(MintCircuit::<1>::new()),
+            Box::new(MintCircuit::<2>::new()),
+        ],
+        1,
+    );
+    test_base_rollup_helper::<8>(
+        &[
+            Box::new(TransferCircuit::<1, 1, 8>::new()),
+            Box::new(TransferCircuit::<2, 2, 8>::new()),
+        ],
+        1,
+    );
+    test_base_rollup_helper::<8>(
+        &[
+            Box::new(MintCircuit::<1>::new()),
+            Box::new(TransferCircuit::<2, 2, 8>::new()),
+        ],
+        1,
+    );
+    test_base_rollup_helper::<8>(
+        &[
+            Box::new(TransferCircuit::<2, 2, 8>::new()),
+            Box::new(MintCircuit::<1>::new()),
+        ],
+        1,
+    );
 }
 
 #[test]
 fn test_base_circuit_4_transactions() {
-    test_base_rollup_helper::<8>(&[
-        Box::new(MintCircuit::<1>::new()),
-        Box::new(MintCircuit::<2>::new()),
-        Box::new(MintCircuit::<1>::new()),
-        Box::new(MintCircuit::<2>::new()),
-    ]);
+    test_base_rollup_helper::<8>(
+        &[
+            Box::new(MintCircuit::<1>::new()),
+            Box::new(MintCircuit::<2>::new()),
+            Box::new(MintCircuit::<1>::new()),
+            Box::new(MintCircuit::<2>::new()),
+        ],
+        1,
+    );
 
-    test_base_rollup_helper::<8>(&[
-        Box::new(TransferCircuit::<1, 1, 8>::new()),
-        Box::new(TransferCircuit::<2, 2, 8>::new()),
-        Box::new(TransferCircuit::<2, 3, 8>::new()),
-        Box::new(TransferCircuit::<2, 4, 8>::new()),
-    ]);
+    test_base_rollup_helper::<8>(
+        &[
+            Box::new(TransferCircuit::<1, 1, 8>::new()),
+            Box::new(TransferCircuit::<2, 2, 8>::new()),
+            Box::new(TransferCircuit::<2, 3, 8>::new()),
+            Box::new(TransferCircuit::<2, 4, 8>::new()),
+        ],
+        1,
+    );
 
-    test_base_rollup_helper::<8>(&[
-        Box::new(MintCircuit::<1>::new()),
-        Box::new(TransferCircuit::<2, 2, 8>::new()),
-        Box::new(TransferCircuit::<2, 3, 8>::new()),
-        Box::new(MintCircuit::<2>::new()),
-    ]);
+    test_base_rollup_helper::<8>(
+        &[
+            Box::new(MintCircuit::<1>::new()),
+            Box::new(TransferCircuit::<2, 2, 8>::new()),
+            Box::new(TransferCircuit::<2, 3, 8>::new()),
+            Box::new(MintCircuit::<2>::new()),
+        ],
+        1,
+    );
 }
 
 #[test]
@@ -82,8 +103,9 @@ fn test_base_circuit_swap() {
 
 pub fn test_base_rollup_helper<const D: usize>(
     client_circuits: &[Box<dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>>],
+    n_blocks: usize,
 ) -> StoredProof<PallasConfig, VestaConfig> {
-    base::base_circuit_helper_generator::<D>(client_circuits)
+    base::base_circuit_helper_generator::<D>(client_circuits, n_blocks)
 }
 
 fn test_base_rollup_helper_swap<const D: usize>() -> StoredProof<PallasConfig, VestaConfig> {
@@ -234,7 +256,7 @@ fn test_base_rollup_helper_swap<const D: usize>() -> StoredProof<PallasConfig, V
 
     let zk_trees = tree_generator_from_client_inputs::<D>(
         &mut client_inputs,
-        vec![field_switching(&comm_tree.root())],
+        &vec![field_switching(&comm_tree.root())],
     )
     .unwrap();
 

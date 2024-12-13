@@ -1,7 +1,5 @@
 use crate::client::structs::ClientPubInput;
 use crate::primitives::circuits::kem_dem::KemDemParams;
-use crate::rollup::circuits::client_input::ClientInput;
-use crate::rollup::circuits::client_input::LowNullifierInfo;
 use ark_ec::{
     pairing::Pairing,
     short_weierstrass::{Affine, Projective, SWCurveConfig},
@@ -11,7 +9,6 @@ use ark_ff::PrimeField;
 use circuits::circuit_inputs::CircuitInputs;
 use common::crypto::poseidon::constants::PoseidonParams;
 use common::structs::CircuitType;
-use jf_plonk::nightfall::ipa_structs::Proof;
 use jf_plonk::{nightfall::ipa_structs::ProvingKey, nightfall::ipa_structs::VerifyingKey};
 use jf_plonk::{nightfall::PlonkIpaSnark, proof_system::UniversalSNARK};
 use jf_primitives::rescue::RescueParameter;
@@ -62,13 +59,6 @@ pub trait ClientPlonkCircuit<P, V, VSW>: Send + Sync + 'static + std::fmt::Debug
     ) -> Result<CircuitInputs<P>, CircuitError>;
     fn get_circuit_type(&self) -> CircuitType;
     fn get_commitment_and_nullifier_count(&self) -> (usize, usize);
-    fn generate_client_input_for_sequencer(
-        &self,
-        proof: Proof<V>,
-        vk: VerifyingKey<V>,
-        public_input: &ClientPubInput<V::ScalarField>,
-        low_nullifier_info: &Option<LowNullifierInfo<V, 32>>,
-    ) -> ClientInput<V>;
 }
 
 #[client_bounds]

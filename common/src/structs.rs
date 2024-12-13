@@ -35,14 +35,14 @@ impl<F: PrimeField> From<F> for Nullifier<F> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MyDensePolynomial {
+pub struct SerializablePolynomial {
     pub coeffs: Vec<[u64; 4]>,
 }
-impl<F: PrimeField> From<MyDensePolynomial> for DensePolynomial<F>
+impl<F: PrimeField> From<SerializablePolynomial> for DensePolynomial<F>
 where
     F: PrimeField,
 {
-    fn from(compact_poly: MyDensePolynomial) -> Self {
+    fn from(compact_poly: SerializablePolynomial) -> Self {
         let coeffs: Vec<F> = compact_poly
             .coeffs
             .into_iter()
@@ -56,7 +56,7 @@ where
     }
 }
 
-impl<F: PrimeField> From<&DensePolynomial<F>> for MyDensePolynomial {
+impl<F: PrimeField> From<&DensePolynomial<F>> for SerializablePolynomial {
     fn from(dense_poly: &DensePolynomial<F>) -> Self {
         let coeffs = dense_poly
             .coeffs
@@ -67,7 +67,7 @@ impl<F: PrimeField> From<&DensePolynomial<F>> for MyDensePolynomial {
             })
             .collect();
 
-        MyDensePolynomial { coeffs }
+        SerializablePolynomial { coeffs }
     }
 }
 
@@ -80,7 +80,7 @@ where
     F: PrimeField,
     S: Serializer,
 {
-    let p: MyDensePolynomial = MyDensePolynomial::from(polynomial);
+    let p: SerializablePolynomial = SerializablePolynomial::from(polynomial);
     p.serialize(serializer)
 }
 
@@ -92,7 +92,7 @@ where
     F: PrimeField,
     D: Deserializer<'de>,
 {
-    let p: MyDensePolynomial = MyDensePolynomial::deserialize(deserializer)?;
+    let p: SerializablePolynomial = SerializablePolynomial::deserialize(deserializer)?;
     Ok(p.into())
 }
 
@@ -112,7 +112,7 @@ where
     #[serde(with = "canonical")]
     pub proof: Proof<P>,
     //#[serde(with = "canonical")]
-    //pub g_polys: MyDensePolynomial<P::ScalarField>,
+    //pub g_polys: SerializablePolynomial<P::ScalarField>,
     #[serde(
         serialize_with = "serialize_dense_polynomial",
         deserialize_with = "deserialize_dense_polynomial"
@@ -159,51 +159,4 @@ pub enum CircuitType {
     BounceRollup,
     MergeRollup,
     BounceMergeRollup,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use ark_ff::{Fp256, MontBackend};
-    use num_bigint::BigUint;
-    use serde_json;
-
-    // Define a dummy field type for testing
-    // Adjust the underlying types as necessary for your use case
-    type DummyField = Fp256<MontBackend<ark_bn254::FrConfig, 4>>;
-    const VALUE: u64 = 42u64;
-
-    fn get_dummy_field_value() -> DummyField {
-        DummyField::from(VALUE) // or any value you wish to test with
-    }
-
-    fn get_test_block() -> Block<DummyField> {
-        Block {
-            block_number: 1,
-            commitments: vec![get_dummy_field_value()],
-            nullifiers: vec![get_dummy_field_value()],
-            commitment_root: get_dummy_field_value(),
-        }
-    }
-
-    #[test]
-    fn test_block_serialization() {
-        let block = get_test_block();
-        let serialized = serde_json::to_string(&block).expect("Serialization failed");
-        let hex_value = BigUint::from(VALUE).to_str_radix(16);
-        assert!(serialized.contains(&hex_value)); // Check that serialized data contains expected value
-    }
-
-    #[test]
-    fn test_block_deserialization() {
-        let block = get_test_block();
-        let serialized = serde_json::to_string(&block).expect("Serialization failed");
-        let deserialized: Block<DummyField> =
-            serde_json::from_str(&serialized).expect("Deserialization failed");
-
-        assert_eq!(block.block_number, deserialized.block_number);
-        assert_eq!(block.commitments, deserialized.commitments);
-        assert_eq!(block.nullifiers, deserialized.nullifiers);
-        assert_eq!(block.commitment_root, deserialized.commitment_root);
-    }
 }

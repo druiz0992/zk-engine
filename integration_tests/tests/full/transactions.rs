@@ -11,10 +11,12 @@ async fn send_2_mint_transactions() {
         .await
         .expect("Error adding new circuit");
 
-    let mint_response = app.client.post_mint_request(mint_params).await;
+    let mint_request = app.client.build_mint_request(mint_params).await;
+    let mint_response = app.client.post_mint_request(&mint_request).await;
     assert!(mint_response.status().is_success());
 
-    let mint_response = app.client.post_mint_request(mint_params).await;
+    let mint_request = app.client.build_mint_request(mint_params).await;
+    let mint_response = app.client.post_mint_request(&mint_request).await;
     assert!(mint_response.status().is_success());
 
     let transactions = app

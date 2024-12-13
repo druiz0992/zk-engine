@@ -175,7 +175,6 @@ where
             )?;
         circuit.set_variable_public(commitment_hash_var)?;
     }
-
     // Check the encryption of secret information to the recipient
     // This proves that they will be able to decrypt the information
     let gen = circuit.create_constant_sw_point_variable(P::GENERATOR.into())?;

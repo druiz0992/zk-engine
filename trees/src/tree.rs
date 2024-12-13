@@ -118,10 +118,10 @@ pub trait AppendTree<const H: usize> {
         let mut curr_height = 0;
         let mut curr_index = leaf_index;
         let mut curr_hash = poseidon.hash_unchecked(siblings.to_vec());
-        while curr_height <= H {
+        while curr_height < H {
             curr_height += 1;
             curr_index /= 2;
-            self.update_node(Position::new(curr_index, curr_height), curr_hash);
+            self.insert_node(Position::new(curr_index, curr_height), curr_hash);
             siblings = self.siblings(Position::new(curr_index, curr_height));
 
             curr_hash = poseidon.hash_unchecked(siblings.to_vec());

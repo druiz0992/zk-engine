@@ -19,8 +19,7 @@ use crate::{
         storage::{BlockStorage, GlobalStateStorage},
     },
 };
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::MutexGuard;
 use tracing_log::log;
 
 use super::BuildBlockError;
@@ -50,7 +49,7 @@ use super::BuildBlockError;
 
 #[sequencer_bounds]
 pub async fn build_block<P, V, SW, VSW, Storage, Prover>(
-    db: Arc<Mutex<Storage>>,
+    db_locked: &mut MutexGuard<'_, Storage>,
     client_inputs: Vec<ClientInput<V>>,
     nullifiers: Vec<V::ScalarField>,
     commitments: Vec<V::ScalarField>,
@@ -67,8 +66,6 @@ where
         > + BlockStorage<V::ScalarField>,
     Prover: SequencerProver<V, VSW, P, SW>,
 {
-    let mut db_locked = db.lock().await;
-
     // client_inputs: [ClientInput<V, 1, 1>; 2],
     // global_vk_root: P::ScalarField,
     // global_nullifier_root: P::ScalarField,
@@ -77,10 +74,13 @@ where
     // g_polys: [DensePolynomial<P::BaseField>; 2],
     // commit_key: CommitKey<V>,
     let vk_tree_root = db_locked.get_vk_tree().root();
-    let global_nullifier_tree_root = db_locked.get_global_nullifier_tree().root();
-    let global_nullifier_tree_leaf_count =
-        V::BaseField::from(db_locked.get_global_nullifier_tree().leaf_count());
+    // Global nullifier tree, updated with the latest transactions to be processed in this block
+    let global_nullifier_tree = db_locked.get_global_nullifier_tree();
+    let global_nullifier_tree_root = global_nullifier_tree.root();
+    let global_nullifier_tree_leaf_count = V::BaseField::from(global_nullifier_tree.leaf_count());
+    // Global commitment tree updated with root formed with all commitments processed in this block
     let global_commitment_tree_root = db_locked.get_global_commitment_tree().root();
+    let block_count = db_locked.get_block_count();
 
     log::debug!("build_block");
     let block =
@@ -92,14 +92,13 @@ where
                 global_nullifier_tree_leaf_count,
                 global_commitment_tree_root,
                 g_polys,
-                //vec![Default::default(); 2],
                 commit_keys,
                 proving_keys,
             )
-            .map_err(|_| BuildBlockError::BlockError("Error building block".to_string()))?;
+            .map_err(|e| BuildBlockError::BlockError(e.to_string()))?;
 
             Ok(Block {
-                block_number: 0,
+                block_number: block_count,
                 commitments,
                 nullifiers,
                 commitment_root: local_commitment_root,
@@ -113,7 +112,7 @@ where
             return Err(BuildBlockError::BlockError(format!(
                 "Task panicked: {:?}",
                 e
-            )))
+            )));
         }
     };
 

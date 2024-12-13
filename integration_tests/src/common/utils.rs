@@ -1,4 +1,5 @@
 use anyhow::Result;
+use client::adapters::rest_api::structs::TransferInput;
 use client::domain::StoredPreimageInfo;
 use common::structs::Block;
 use common::structs::Transaction;
@@ -44,6 +45,13 @@ pub fn read_transaction_from_file(path: &str) -> Result<Transaction<VestaConfig>
 
     serde_json::from_str::<Transaction<VestaConfig>>(&data)
         .map_err(|_| anyhow::anyhow!("Error deserializing Transaction received by sequencer"))
+}
+
+pub fn read_transfer_params_from_file(path: &str) -> Result<TransferInput<PallasConfig>> {
+    let data = read_from_file(path)?;
+
+    serde_json::from_str::<TransferInput<PallasConfig>>(&data)
+        .map_err(|_| anyhow::anyhow!("Error deserializing Trasfer Input received by sequencer"))
 }
 
 pub fn read_cbor_transaction_from_file(path: &str) -> Result<Transaction<VestaConfig>> {

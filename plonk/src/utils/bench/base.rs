@@ -39,76 +39,85 @@ pub enum TransactionType {
 
 pub fn base_circuit_helper_generator<const D: usize>(
     client_circuits: &[Box<dyn ClientPlonkCircuit<PallasConfig, VestaConfig, VestaConfig>>],
+    n_blocks: usize,
 ) -> StoredProof<PallasConfig, VestaConfig> {
     let mut rng = ChaChaRng::from_entropy();
     let mut client_inputs: Vec<ClientInput<VestaConfig>> = vec![];
     let mut global_comm_roots: Vec<Fr> = vec![];
     let mut nullifier_tree = IndexedMerkleTree::<Fr, 32>::new();
-    let init_nullifier_root = nullifier_tree.root();
     let mut g_polys = vec![];
     let initial_nullifier_tree = IndexedMerkleTree::<Fr, 32>::new();
+    let initial_nullifier_root = initial_nullifier_tree.root();
+    let mut stored_proofs: Vec<StoredProof<PallasConfig, VestaConfig>> =
+        Vec::with_capacity(n_blocks);
 
     let token_id = Some(Fq::rand(&mut rng));
 
-    #[allow(clippy::needless_range_loop)]
-    for i in 0..client_circuits.len() {
-        build_client_inputs(
-            &mut client_inputs,
-            &mut nullifier_tree,
-            &mut global_comm_roots,
-            &mut g_polys,
-            &*client_circuits[i],
-            token_id,
-        )
-        .unwrap();
-    }
+    for _j in 0..n_blocks {
+        #[allow(clippy::needless_range_loop)]
+        for i in 0..client_circuits.len() {
+            build_client_inputs(
+                &mut client_inputs,
+                &mut nullifier_tree,
+                &mut global_comm_roots,
+                &mut g_polys,
+                &*client_circuits[i],
+                token_id,
+            )
+            .unwrap();
+        }
 
-    /* ----------------------------------------------------------------------------------
-     * ---------------------------  Base Rollup Circuit ----------------------------------
-     * ----------------------------------------------------------------------------------
-     */
+        /* ----------------------------------------------------------------------------------
+         * ---------------------------  Base Rollup Circuit ----------------------------------
+         * ----------------------------------------------------------------------------------
+         */
 
-    let zk_trees =
-        tree::tree_generator_from_client_inputs::<8>(&mut client_inputs, global_comm_roots)
+        let zk_trees =
+            tree::tree_generator_from_client_inputs::<8>(&mut client_inputs, &global_comm_roots)
+                .unwrap();
+
+        let (vesta_commit_key, pallas_commit_key) = build_commit_keys().unwrap();
+
+        let (base_rollup_circuit, pi_star) =
+            base::base_rollup_circuit::<VestaConfig, PallasConfig, 8>(
+                client_inputs.clone(),
+                zk_trees.vk_tree.root(),
+                // initial_nullifier_tree.root,
+                initial_nullifier_root,
+                initial_nullifier_tree.leaf_count().into(),
+                zk_trees.global_root_tree.root(),
+                g_polys.clone(),
+                vesta_commit_key.clone(),
+            )
             .unwrap();
 
-    let (vesta_commit_key, pallas_commit_key) = build_commit_keys().unwrap();
+        ark_std::println!(
+            "Base rollup circuit constraints: {:?}",
+            base_rollup_circuit.num_gates()
+        );
 
-    let (base_rollup_circuit, pi_star) = base::base_rollup_circuit::<VestaConfig, PallasConfig, 8>(
-        client_inputs,
-        zk_trees.vk_tree.root(),
-        // initial_nullifier_tree.root,
-        init_nullifier_root,
-        initial_nullifier_tree.leaf_count().into(),
-        zk_trees.global_root_tree.root(),
-        g_polys,
-        vesta_commit_key.clone(),
-    )
-    .unwrap();
+        let base_artifacts =
+            generate_rollup_circuit_artifacts_and_verify::<PallasConfig, VestaConfig, _, _>(
+                &base_rollup_circuit,
+                true,
+            )
+            .unwrap();
 
-    ark_std::println!(
-        "Base rollup circuit constraints: {:?}",
-        base_rollup_circuit.num_gates()
-    );
-
-    let base_artifacts =
-        generate_rollup_circuit_artifacts_and_verify::<PallasConfig, VestaConfig, _, _>(
-            &base_rollup_circuit,
-            false,
-        )
-        .unwrap();
-
-    StoredProof::new_from_base(
-        &base_rollup_circuit,
-        base_artifacts.proof,
-        base_artifacts.vk,
-        pallas_commit_key,
-        vesta_commit_key,
-        base_artifacts.g_poly,
-        pi_star,
-        vec![],
-    )
-    .unwrap()
+        stored_proofs.push(
+            StoredProof::new_from_base(
+                &base_rollup_circuit,
+                base_artifacts.proof,
+                base_artifacts.vk,
+                pallas_commit_key,
+                vesta_commit_key,
+                base_artifacts.g_poly,
+                pi_star,
+                vec![],
+            )
+            .unwrap(),
+        );
+    }
+    stored_proofs[n_blocks - 1].clone()
 }
 
 pub struct ClientCircuitArtifacts<V>
@@ -187,18 +196,33 @@ pub fn build_client_inputs(
     let low_nullifier_info = client_input::update_nullifier_tree::<VestaConfig, 32>(
         nullifier_tree,
         &public_inputs.nullifiers,
-    );
+    )
+    .map_err(|e| e.to_string())?;
 
-    let client_input = client_circuit.generate_client_input_for_sequencer(
+    let mut client_input = ClientInput::<VestaConfig>::new(
         artifacts.proof,
         artifacts.vk,
-        &public_inputs,
-        &low_nullifier_info,
+        public_inputs.commitments.len(),
+        public_inputs.nullifiers.len(),
     );
+    client_input
+        .set_eph_pub_key(
+            client_input::to_eph_key_array::<VestaConfig>(
+                public_inputs.ephemeral_public_key.clone(),
+            )
+            .unwrap(),
+        )
+        .set_ciphertext(
+            client_input::to_ciphertext_array::<VestaConfig>(public_inputs.ciphertexts.clone())
+                .unwrap(),
+        )
+        .set_nullifiers(&public_inputs.nullifiers)
+        .set_commitments(&public_inputs.commitments)
+        .set_commitment_tree_root(&public_inputs.commitment_root);
     // TODO: This is only for transfers. Check if OK
-    if low_nullifier_info.is_some() {
+    if let Some(info) = low_nullifier_info {
         global_comm_roots.push(field_switching(&public_inputs.commitment_root[0]));
-        //TODO: this is principle is only fot transfers
+        client_input.set_low_nullifier_info(&info);
     }
 
     g_polys.push(artifacts.g_poly);
